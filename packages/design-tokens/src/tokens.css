@@ -1,0 +1,244 @@
+/* أوراد — رموز التصميم (مولَّدة من متغيّرات Figma). لا تُحرَّر يدويًا. */
+:root {
+  color-scheme: light;
+  --bg-canvas: #f3f6f4;
+  --bg-surface: #ffffff;
+  --bg-raised: #f8faf8;
+  --bg-sunken: #ecefed;
+  --bg-brand: #12392c;
+  --bg-brand-active: #f1e6c81a;
+  --bg-brand-raised: #f1e6c812;
+  --bg-scrim: #0b241c73;
+  --text-primary: #17201c;
+  --text-secondary: #56625c;
+  --text-tertiary: #626d68;
+  --text-on-brand: #f1e6c8;
+  --text-on-primary: #ffffff;
+  --text-link: #1e5b45;
+  --border-subtle: #dfe4e1;
+  --border-default: #c9d0cc;
+  --border-input: #858f8a;
+  --border-strong: #626d68;
+  --border-focus: #3f8a6a;
+  --action-primary: #1e5b45;
+  --action-primary-pressed: #174a38;
+  --action-primary-tint: #e3efe8;
+  --gold-gilt: #c49a3c;
+  --gold-text: #8a6420;
+  --gold-tint: #f7efdc;
+  --gold-on-brand: #c49a3c;
+  --status-done: #1e5b45;
+  --status-done-fill: #1e5b45;
+  --status-done-tint: #e3efe8;
+  --status-done-hatch: #679d82;
+  --status-notdone: #8e3341;
+  --status-notdone-tint: #f7e8ea;
+  --status-neutral: #56625c;
+  --status-neutral-tint: #ecefed;
+  --status-missing: #626d68;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-full: 999px;
+  --font-ui: "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif;
+  --font-display: "Markazi Text", "Noto Naskh Arabic", serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-canvas: #0f1613;
+  --bg-surface: #16201c;
+  --bg-raised: #1c2823;
+  --bg-sunken: #0b110f;
+  --bg-brand: #0b241c;
+  --bg-brand-active: #f1e6c81a;
+  --bg-brand-raised: #f1e6c812;
+  --bg-scrim: #00000099;
+  --text-primary: #e9e6dc;
+  --text-secondary: #a3aca6;
+  --text-tertiary: #7f8983;
+  --text-on-brand: #f1e6c8;
+  --text-on-primary: #ffffff;
+  --text-link: #6dae8e;
+  --border-subtle: #24302b;
+  --border-default: #2f3d37;
+  --border-input: #626d68;
+  --border-strong: #7f8983;
+  --border-focus: #95c1a9;
+  --action-primary: #2c7558;
+  --action-primary-pressed: #1e5b45;
+  --action-primary-tint: #173328;
+  --gold-gilt: #d8b460;
+  --gold-text: #e0c17a;
+  --gold-tint: #2e2617;
+  --gold-on-brand: #d8b460;
+  --status-done: #6dae8e;
+  --status-done-fill: #2c7558;
+  --status-done-tint: #173328;
+  --status-done-hatch: #2c7558;
+  --status-notdone: #e59aa4;
+  --status-notdone-tint: #3a1f25;
+  --status-neutral: #a3aca6;
+  --status-neutral-tint: #26302c;
+  --status-missing: #7f8983;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg-canvas: #0f1613;
+    --bg-surface: #16201c;
+    --bg-raised: #1c2823;
+    --bg-sunken: #0b110f;
+    --bg-brand: #0b241c;
+    --bg-brand-active: #f1e6c81a;
+    --bg-brand-raised: #f1e6c812;
+    --bg-scrim: #00000099;
+    --text-primary: #e9e6dc;
+    --text-secondary: #a3aca6;
+    --text-tertiary: #7f8983;
+    --text-on-brand: #f1e6c8;
+    --text-on-primary: #ffffff;
+    --text-link: #6dae8e;
+    --border-subtle: #24302b;
+    --border-default: #2f3d37;
+    --border-input: #626d68;
+    --border-strong: #7f8983;
+    --border-focus: #95c1a9;
+    --action-primary: #2c7558;
+    --action-primary-pressed: #1e5b45;
+    --action-primary-tint: #173328;
+    --gold-gilt: #d8b460;
+    --gold-text: #e0c17a;
+    --gold-tint: #2e2617;
+    --gold-on-brand: #d8b460;
+    --status-done: #6dae8e;
+    --status-done-fill: #2c7558;
+    --status-done-tint: #173328;
+    --status-done-hatch: #2c7558;
+    --status-notdone: #e59aa4;
+    --status-notdone-tint: #3a1f25;
+    --status-neutral: #a3aca6;
+    --status-neutral-tint: #26302c;
+    --status-missing: #7f8983;
+  }
+}
+
+.t-display-brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 52px;
+}
+.t-display-hijri {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 42px;
+}
+.t-display-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 38px;
+}
+.t-display-section {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 30px;
+}
+.t-display-number {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 34px;
+  line-height: 38px;
+}
+.t-title-lg {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 30px;
+}
+.t-title-md {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 26px;
+}
+.t-body-md {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 26px;
+}
+.t-body-strong {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 26px;
+}
+.t-body-sm {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 22px;
+}
+.t-label-md {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 22px;
+}
+.t-label-sm {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 20px;
+}
+.t-caption {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 20px;
+}
+.t-micro {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 16px;
+}
+.t-number-lg {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 34px;
+  font-variant-numeric: tabular-nums;
+}
+.t-number-md {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.t-number-sm {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
