@@ -89,7 +89,7 @@ awrad/
 
 ## المرحلة 0 — التأسيس
 
-### T0.1: هيكل الـ Monorepo والأدوات و CI
+### Task 0.1: هيكل الـ Monorepo والأدوات و CI
 
 **الملفات:**
 - إنشاء: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.nvmrc`, `.gitignore`, `README.md`, `AGENTS.md` (نسخة من `docs/03-agents-guide.md`)
@@ -106,7 +106,7 @@ awrad/
 - [ ] **الخطوة 5:** تحقّق: `pnpm turbo run lint typecheck test` تنجح على مستودع بلا حزم (مخرجات: `No tasks were executed` أو نجاح فارغ).
 - [ ] **الخطوة 6:** commit: `chore: scaffold monorepo with turborepo, shared config and CI`
 
-### T0.2: Supabase محلي وبيئة التطوير
+### Task 0.2: Supabase محلي وبيئة التطوير
 
 **الملفات:**
 - إنشاء: `supabase/config.toml` (عبر `supabase init`), `.env.example`, `docs/dev-setup.md`
@@ -120,7 +120,7 @@ awrad/
 - [ ] **الخطوة 3:** تحقّق: `supabase status` يعرض `API URL` و`DB URL`؛ `pnpm db:reset` تنجح بلا ترحيلات.
 - [ ] **الخطوة 4:** commit: `chore: add local supabase setup and env template`
 
-### T0.3: حزمة رموز التصميم `@awrad/design-tokens` ووثيقة التصميم
+### Task 0.3: حزمة رموز التصميم `@awrad/design-tokens` ووثيقة التصميم
 
 **الملفات:**
 - إنشاء: `packages/design-tokens/{package.json,tsconfig.json}`, `packages/design-tokens/src/{tokens.json,tokens.css,theme.ts,index.ts}`, `packages/design-tokens/src/__tests__/tokens.test.ts`, `docs/design/DESIGN.md`
@@ -138,7 +138,7 @@ awrad/
 
 > تُنفَّذ بالترتيب. اختبارات قاعدة البيانات تعمل بـ Vitest ضدّ Supabase المحلي عبر `pg` (كـ superuser للتحقّق من البنية) و`@supabase/supabase-js` (كمستخدمين مختلفين للتحقّق من RLS).
 
-### T1.1: الترحيل 0001 — الأنواع، المجموعات، الملفات، الإعدادات، التدقيق (F-81) + مُشغِّل إنشاء الملف
+### Task 1.1: الترحيل 0001 — الأنواع، المجموعات، الملفات، الإعدادات، التدقيق (F-81) + مُشغِّل إنشاء الملف
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0001_core.sql`
@@ -171,7 +171,7 @@ test('admin without invitation defaults is_tracked=false; student defaults true'
 - [ ] **الخطوة 5:** إضافة مهمة `db-tests` في `ci.yml` باستخدام `supabase/setup-cli` action.
 - [ ] **الخطوة 6:** commit: `db: core schema (groups, profiles, settings, audit) with profile provisioning trigger`
 
-### T1.2: الترحيل 0002 — العادات وبنودها + البذرة + `active_habits_on`
+### Task 1.2: الترحيل 0002 — العادات وبنودها + البذرة + `active_habits_on`
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0002_habits.sql`, `supabase/seed.sql`, `supabase/tests/0002_habits.test.ts`
@@ -193,7 +193,7 @@ test('habits check rejects active_to < active_from', ...);
 - [ ] **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `db: habits and items with seed and active_habits_on`
 
-### T1.3: الترحيل 0003 — السجلّات ودوال التاريخ (BR-06, BR-08, BR-12)
+### Task 1.3: الترحيل 0003 — السجلّات ودوال التاريخ (BR-06, BR-08, BR-12)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0003_logs.sql`, `supabase/tests/0003_logs.test.ts`
@@ -215,7 +215,7 @@ test('logs unique (user_id, period, period_start)', ...);
 - [ ] **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `db: logs tables and date helpers (week_start, local_today)`
 
-### T1.4: الترحيل 0004 — المجالس والحضور ورموز الإشعارات وطلبات الحذف
+### Task 1.4: الترحيل 0004 — المجالس والحضور ورموز الإشعارات وطلبات الحذف
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0004_sessions.sql`, `supabase/tests/0004_sessions.test.ts`
@@ -227,7 +227,7 @@ test('logs unique (user_id, period, period_start)', ...);
 - [ ] **الخطوة 2:** تشغيل → فشل. **الخطوة 3:** اكتب الترحيل. **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `db: sessions, attendance with set_attendance rpc, push tokens`
 
-### T1.5: الترحيل 0005 — سياسات RLS الكاملة (BR-11)
+### Task 1.5: الترحيل 0005 — سياسات RLS الكاملة (BR-11)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0005_rls.sql`, `supabase/tests/0005_rls.test.ts`
@@ -255,7 +255,7 @@ test('every public table has rowsecurity = true', ...);
 - [ ] **الخطوة 2:** تشغيل → فشل. **الخطوة 3:** اكتب السياسات. **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `db: row level security policies for all tables`
 
-### T1.6: الترحيل 0006 — RPC `save_log` (BR-05, BR-06, BR-07, BR-08, BR-10, BR-12, BR-14)
+### Task 1.6: الترحيل 0006 — RPC `save_log` (BR-05, BR-06, BR-07, BR-08, BR-10, BR-12, BR-14)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0006_save_log.sql`, `supabase/tests/0006_save_log.test.ts`
@@ -296,7 +296,7 @@ test('inactive (is_active=false) user → INACTIVE_USER', ...);
 - [ ] **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `db: save_log rpc with window, habit and checklist validation`
 
-### T1.7: الترحيل 0007 — `v_day_status` ودوال الملخّص والتقويم ونظرة المجموعة (BR-01, BR-02, BR-03, BR-04, BR-13)
+### Task 1.7: الترحيل 0007 — `v_day_status` ودوال الملخّص والتقويم ونظرة المجموعة (BR-01, BR-02, BR-03, BR-04, BR-13)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0007_summary.sql`, `supabase/tests/0007_summary.test.ts`, `supabase/tests/fixtures.ts` (محمّل fixtures من `packages/domain/fixtures/*.json`)
@@ -325,7 +325,7 @@ test('inactive (is_active=false) user → INACTIVE_USER', ...);
 - [ ] **الخطوة 3:** تشغيل → فشل. **الخطوة 4:** اكتب العرض والدوال (gaps-and-islands بـ window functions؛ `neutral` لا يقطع ولا يُحسب). **الخطوة 5:** تشغيل → نجاح.
 - [ ] **الخطوة 6:** commit: `db: day status view, student summary, calendar and group overview`
 
-### T1.8: الحزمة المشتركة `@awrad/domain` (BR-01, BR-02, BR-04, BR-06, BR-08, BR-09)
+### Task 1.8: الحزمة المشتركة `@awrad/domain` (BR-01, BR-02, BR-04, BR-06, BR-08, BR-09)
 
 **الملفات:**
 - إنشاء: `packages/domain/{package.json,tsconfig.json,vitest.config.ts}`, `src/{types,schemas,dates,hijri,dayStatus,streaks,index}.ts`, `src/__tests__/{dates,hijri,dayStatus,streaks,schemas}.test.ts`
@@ -370,7 +370,7 @@ test('saveLogSchema rejects period_start not YYYY-MM-DD and empty entries');
 - [ ] **الخطوة 2:** تشغيل → فشل. **الخطوة 3:** نفّذ (`@umalqura/core` للهجري؛ `@date-fns/tz` لـ `todayIn`). **الخطوة 4:** تشغيل → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(domain): shared types, schemas, date/hijri utils, day status and streak rules`
 
-### T1.9: الحزمة `@awrad/supabase-client` والأنواع المولَّدة
+### Task 1.9: الحزمة `@awrad/supabase-client` والأنواع المولَّدة
 
 **الملفات:**
 - إنشاء: `packages/supabase-client/{package.json,tsconfig.json}`, `src/{database.types.ts,client.ts,rpc.ts,index.ts}`, `src/__tests__/rpc.test.ts`
@@ -391,7 +391,7 @@ test('saveLogSchema rejects period_start not YYYY-MM-DD and empty entries');
 
 > كل مهمة واجهة تنتهي بتحقّق على ثلاث منصّات: `expo start` على iOS Simulator و Android Emulator، و`expo start --web`. اختبارات المكوّنات بـ React Native Testing Library مع mock لعميل Supabase (`src/lib/__mocks__/supabase.ts`).
 
-### T2.1: هيكل تطبيق Expo، RTL، الخط، السمة، عميل Supabase
+### Task 2.1: هيكل تطبيق Expo، RTL، الخط، السمة، عميل Supabase
 
 **الملفات:**
 - إنشاء: `apps/mobile/{app.json,package.json,tsconfig.json,babel.config.js,metro.config.js,tailwind.config.js,global.css}`, `app/_layout.tsx`, `app/(tabs)/_layout.tsx` (5 تبويبات فارغة), `src/lib/supabase.ts`, `src/lib/theme.ts`, `src/messages/ar.ts`, `src/lib/rtl.ts`, `__tests__/rtl.test.ts`
@@ -406,7 +406,7 @@ test('saveLogSchema rejects period_start not YYYY-MM-DD and empty entries');
 - [ ] **الخطوة 5:** تحقّق يدوي: التبويبات تظهر من اليمين بأسماء Figma (`TabBar`)؛ الخطّان محمَّلان (التاريخ الهجري بـ Markazi Text)؛ `pnpm --filter mobile exec expo export -p web` ينجح وينتج `dist/`.
 - [ ] **الخطوة 6:** commit: `feat(mobile): expo scaffold with rtl, arabic font, theme and supabase client`
 
-### T2.2: الدخول برمز البريد (F-01..F-03)
+### Task 2.2: الدخول برمز البريد (F-01..F-03)
 
 **الملفات:**
 - إنشاء: `app/(auth)/login.tsx`, `app/(auth)/verify.tsx`, `src/hooks/useSession.ts`, `src/components/OtpInput.tsx`, `__tests__/login.test.tsx`
@@ -420,7 +420,7 @@ test('saveLogSchema rejects period_start not YYYY-MM-DD and empty entries');
 - [ ] **الخطوة 2:** تشغيل → فشل. **الخطوة 3:** نفّذ الشاشات والحارس. **الخطوة 4:** تشغيل → نجاح + تحقّق يدوي بحساب من بذرة الاختبار (رموز OTP تظهر في Inbucket المحلي: `supabase status` → `Inbucket URL`).
 - [ ] **الخطوة 5:** commit: `feat(mobile): email otp sign-in and session guard`
 
-### T2.3: شاشة «اليوم» (F-10..F-15)
+### Task 2.3: شاشة «اليوم» (F-10..F-15)
 
 **الملفات:**
 - إنشاء: `app/(tabs)/today.tsx`, `src/components/{DateHeader,RubMark,HabitRow,Tristate,HabitChecklist,ChecklistChip,DayStatusBanner,SaveBar,StreakChip}.tsx`, `src/hooks/{useActiveHabits,useLog,useSaveLog,useSettings,useDraft}.ts`, `__tests__/today.test.tsx`
@@ -446,7 +446,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2:** تشغيل → فشل. **الخطوة 3:** نفّذ. **الخطوة 4:** تشغيل → نجاح + تحقّق على المنصّات الثلاث (RTL، الخط، الأزرار ≥ 44pt).
 - [ ] **الخطوة 5:** commit: `feat(mobile): today screen with tri-state habits, checklist and save`
 
-### T2.4: شاشة «أسبوعي» (F-20..F-24)
+### Task 2.4: شاشة «أسبوعي» (F-20..F-24)
 
 **الملفات:**
 - إنشاء: `app/(tabs)/weekly.tsx`, `src/components/WeekHeader.tsx`, `src/hooks/useWeek.ts`, `__tests__/weekly.test.tsx`
@@ -460,7 +460,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(mobile): weekly review screen`
 
-### T2.5: شاشة «ملخّصي» (F-30..F-33)
+### Task 2.5: شاشة «ملخّصي» (F-30..F-33)
 
 **الملفات:**
 - إنشاء: `app/(tabs)/summary.tsx`, `src/components/{StatCard,RangeTabs,MonthCalendar,CalendarCell,HabitBar,EmptyState}.tsx`, `src/hooks/{useSummary,useCalendar}.ts`, `__tests__/summary.test.tsx`
@@ -474,7 +474,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(mobile): summary screen with stats, calendar and per-habit bars`
 
-### T2.6: شاشة «السجلّ» وصفحة اليوم/الأسبوع (F-40)
+### Task 2.6: شاشة «السجلّ» وصفحة اليوم/الأسبوع (F-40)
 
 **الملفات:**
 - إنشاء: `app/(tabs)/history.tsx`, `app/log/[period]/[date].tsx`, `src/components/{HistoryRow,StatusChip}.tsx`, `src/hooks/useLogList.ts`, `__tests__/history.test.tsx` (المرجع البصري: m22، m23)
@@ -486,7 +486,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(mobile): history list and read-only/editable log detail`
 
-### T2.7: الإعدادات والإشعارات (F-50..F-52)
+### Task 2.7: الإعدادات والإشعارات (F-50..F-52)
 
 **الملفات:**
 - إنشاء: `app/(tabs)/settings.tsx`, `src/components/{ListRow,Toggle}.tsx`, `src/lib/notifications.ts`, `src/hooks/useProfileSettings.ts`, `__tests__/settings.test.tsx` (المرجع البصري: m24، m25، d24)
@@ -498,7 +498,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح (الويب: `registerForPush` يُرجع `null` ويُخفي خيار الإشعارات).
 - [ ] **الخطوة 5:** commit: `feat(mobile): settings with reminder time and push registration`
 
-### T2.8: بناء الويب واختبار دخاني + فحص وصولية
+### Task 2.8: بناء الويب واختبار دخاني + فحص وصولية
 
 **الملفات:**
 - إنشاء: `apps/mobile/e2e/web-smoke.spec.ts` (Playwright على مخرجات `expo export -p web`), `apps/mobile/playwright.config.ts`
@@ -518,7 +518,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 
 > Playwright e2e يعمل ضدّ Supabase المحلي ببذرة الاختبار (مدير، مشرفان، طلاب). كل صفحة تُبنى بـ Server Components للقراءة و Server Actions للكتابة (عبر `createServerClient`).
 
-### T3.1: هيكل Next.js، RTL، الحارس حسب الدور
+### Task 3.1: هيكل Next.js، RTL، الحارس حسب الدور
 
 **الملفات:**
 - إنشاء: `apps/admin/{package.json,next.config.ts,tailwind.config.ts,components.json,playwright.config.ts}`, `app/layout.tsx`, `app/(dash)/layout.tsx` (شريط جانبي), `app/(dash)/page.tsx` (مؤقّت), `app/(auth)/login/page.tsx`, `app/(auth)/verify/page.tsx`, `app/unauthorized/page.tsx`, `middleware.ts`, `src/lib/supabase/{server,client}.ts`, `src/messages/ar.ts`, `e2e/auth.spec.ts`
@@ -530,7 +530,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): next.js scaffold with rtl layout and role guard`
 
-### T3.2: دالة `invite-user` وصفحات الطلاب (F-61)
+### Task 3.2: دالة `invite-user` وصفحات الطلاب (F-61)
 
 **الملفات:**
 - إنشاء: `supabase/functions/invite-user/index.ts`, `supabase/functions/_shared/{auth.ts,cors.ts}`, `supabase/functions/invite-user/index.test.ts` (Deno)
@@ -545,7 +545,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح (`supabase functions serve` محليًا).
 - [ ] **الخطوة 5:** commit: `feat(admin): invite-user function and students management`
 
-### T3.3: نظرة عامة (F-60)
+### Task 3.3: نظرة عامة (F-60)
 
 **الملفات:**
 - إنشاء: `app/(dash)/page.tsx` (استبدال المؤقّت), `src/components/overview/{KpiCards,ActivityGrid,GroupFilter}.tsx`, `src/lib/queries/overview.ts`, `e2e/overview.spec.ts`
@@ -558,7 +558,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): overview grid and kpis`
 
-### T3.4: الحضور (F-62)
+### Task 3.4: الحضور (F-62)
 
 **الملفات:**
 - إنشاء: `app/(dash)/attendance/{page,[sessionId]/page}.tsx`, `src/components/attendance/{SessionList,NewSessionDialog,AttendanceGrid}.tsx`, `src/actions/attendance.ts`, `e2e/attendance.spec.ts`
@@ -570,7 +570,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): sessions and attendance marking`
 
-### T3.5: إدارة العادات ومسار الأرشفة والاستبدال (F-63, BR-07)
+### Task 3.5: إدارة العادات ومسار الأرشفة والاستبدال (F-63, BR-07)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0008_habit_admin.sql`, `supabase/tests/0008_habit_admin.test.ts`
@@ -583,7 +583,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): habits management with archive-and-replace`
 
-### T3.6: صندوق طلبات الدعم (F-64)
+### Task 3.6: صندوق طلبات الدعم (F-64)
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0009_support.sql`, `supabase/tests/0009_support.test.ts`, `app/(dash)/support/page.tsx`, `src/components/support/{SupportList,HandleDialog}.tsx`, `src/actions/support.ts`, `e2e/support.spec.ts`
@@ -595,7 +595,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): support requests inbox`
 
-### T3.7: التقارير والتصدير (F-65)
+### Task 3.7: التقارير والتصدير (F-65)
 
 **الملفات:**
 - إنشاء: `app/(dash)/reports/page.tsx`, `app/api/export/route.ts`, `src/lib/csv.ts`, `src/lib/__tests__/csv.test.ts`, `e2e/reports.spec.ts`
@@ -607,7 +607,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): csv export with bom and rls scoping`
 
-### T3.8: الإعدادات (F-66)
+### Task 3.8: الإعدادات (F-66)
 
 **الملفات:**
 - إنشاء: `app/(dash)/settings/page.tsx`, `src/components/settings/{AppSettingsForm,GroupsTable,GroupForm}.tsx`, `src/actions/settings.ts`, `e2e/settings.spec.ts`
@@ -619,7 +619,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح.
 - [ ] **الخطوة 5:** commit: `feat(admin): app and group settings`
 
-### T3.9: صفحة سياسة الخصوصية وحذف الحساب (F-80)
+### Task 3.9: صفحة سياسة الخصوصية وحذف الحساب (F-80)
 
 **الملفات:**
 - إنشاء: `app/(public)/privacy/page.tsx`, `docs/privacy-policy.md` (المصدر العربي), `e2e/privacy.spec.ts`
@@ -635,7 +635,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 
 ## المرحلة 4 — الإشعارات والترحيل
 
-### T4.1: التذكيرات: `reminder_log` + دالة `send-reminders` + جدولة `pg_cron`
+### Task 4.1: التذكيرات: `reminder_log` + دالة `send-reminders` + جدولة `pg_cron`
 
 **الملفات:**
 - إنشاء: `supabase/migrations/0010_reminders.sql`, `supabase/tests/0010_reminders.test.ts`, `supabase/functions/send-reminders/{index.ts,select.ts,select.test.ts}`
@@ -648,7 +648,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] **الخطوة 2–4:** فشل → تنفيذ → نجاح؛ تحقّق يدوي بإشعار حقيقي على جهاز عبر `supabase functions serve` + Expo Go/بناء تطوير.
 - [ ] **الخطوة 5:** commit: `feat: hourly reminder job with expo push`
 
-### T4.2: سكربت ترحيل بيانات Google Sheets
+### Task 4.2: سكربت ترحيل بيانات Google Sheets
 
 **الملفات:**
 - إنشاء: `scripts/import-legacy/{package.json,tsconfig.json}`, `src/{parse,map,run,report,index}.ts`, `src/__tests__/{parse,map,run}.test.ts`, `fixtures/{daily.sample.csv,weekly.sample.csv,attendance.sample.csv}`, `mapping.example.json`, `README.md`
@@ -669,7 +669,7 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 
 ## المرحلة 5 — التجربة والإطلاق
 
-### T5.1: البيئات والنشر (staging/production)
+### Task 5.1: البيئات والنشر (staging/production)
 - [ ] إنشاء مشروعَي Supabase (staging, production)؛ `supabase link` و`supabase db push` لـ staging من CI على `main`، وللإنتاج يدويًا بموافقة (`workflow_dispatch`).
 - [ ] أسرار الدوال: `supabase secrets set CRON_SECRET=… RESEND_API_KEY=…`؛ ضبط SMTP مخصّص (Resend) في Auth settings؛ قالب بريد OTP بالعربية (`supabase/templates/otp.html`).
 - [ ] `app.functions_url` و`app.cron_secret` كـ database settings (`alter database postgres set app.functions_url = '…'`).
@@ -678,22 +678,22 @@ test('"تعليم الكل تم" sets every tristate to done and checks all chec
 - [ ] تحقّق: الدخول على staging ببريد حقيقي، إشعار تجريبي يصل، اللوحة تعمل على الرابط الإنتاجي.
 - [ ] commit: `chore: environments, deployment workflows and eas profiles`
 
-### T5.2: الهوية البصرية وأصول المتاجر (يعتمد على D18)
+### Task 5.2: الهوية البصرية وأصول المتاجر (يعتمد على D18)
 - [ ] تصدير الأصول من Figma (الهوية `8:45`، الإقلاع `33:138`، لقطات المتجر `33:154` و`33:184` و`33:305`): أيقونة التطبيق بكل المقاسات (مفتاح ذهبي على أخضر بلا نص)، شاشة البداية، ثلاث لقطات متجر 1320×2868 ثم مقاسات Android؛ اسم التطبيق «أوراد — مفاتيح العلوم» بعد تأكيد D18؛ وصف عربي قصير وطويل.
 - [ ] commit: `chore(mobile): app icons, splash and store assets`
 
-### T5.3: التجربة مع مجموعة واحدة (أسبوعان)
+### Task 5.3: التجربة مع مجموعة واحدة (أسبوعان)
 - [ ] إنشاء المجموعة ودعوة طلابها؛ ترحيل بياناتهم القديمة.
 - [ ] قناة ملاحظات واحدة (مجموعة واتساب/نموذج) ⇒ تذاكر في المستودع بتسمية `pilot:`.
 - [ ] معايير الخروج: ≥ 80% من الطلاب سجّلوا ≥ 5 أيام/أسبوع؛ صفر خلل خصوصية؛ لا خلل يمنع الحفظ؛ الشيخ سجّل حضور مجلسَين من اللوحة.
 - [ ] إصلاح ما يظهر، ثم `eas update` للإصلاحات JS و`eas build` إن لزم.
 
-### T5.4: نشر المتاجر
+### Task 5.4: نشر المتاجر
 - [ ] App Store Connect: حساب مراجعة تجريبي (`reviewer@…` بطالب ببيانات)، ملاحظات المراجع بالعربية والإنجليزية، إعلان الخصوصية (App Privacy) مطابق لـ F-80، رابط حذف الحساب (مطلب Apple).
 - [ ] Google Play: نموذج Data safety، الفئة «نمط حياة/تعليم»، الإصدار عبر Internal → Closed → Production.
 - [ ] `eas submit` للمنصّتين؛ متابعة المراجعة؛ الردّ على الملاحظات.
 
-### T5.5: الوثائق والتسليم
+### Task 5.5: الوثائق والتسليم
 - [ ] `docs/admin-manual.md`: دليل الشيخ/المشرف بالعربية مع لقطات (دعوة طالب، الحضور، استبدال عادة، طلبات الدعم، التصدير، الاستيراد، الإعدادات).
 - [ ] `docs/student-guide.md`: نسخة محدَّثة من «دليل الطالب» الحالي تحلّ فيه «حسابك» محلّ «روابطك الثلاثة».
 - [ ] `docs/runbook.md`: النسخ الاحتياطي والاستعادة، تدوير الأسرار، إضافة مجموعة، ترقية الإصدارات، ما يُفعل إذا لم تصل الإشعارات/البريد.
