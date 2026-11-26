@@ -108,6 +108,9 @@ begin
   if not can_view_user(v_user) then
     raise exception using message = 'FORBIDDEN', errcode = '42501';
   end if;
+  if p_from > p_to then
+    raise exception using message = 'INVALID_ITEM', errcode = '22023';
+  end if;
   select joined_at into v_joined from profiles where id = v_user;
   v_today := local_today(v_user);
 
@@ -163,7 +166,8 @@ begin
     ) x
     join habits h on h.id = x.habit_id;
 
-  -- 5) الأسبوعي: null إن لم توجد سجلّات أسبوعية في المدى
+  -- 5) الأسبوعي: null إن لم توجد سجلّات أسبوعية في المدى. السجلّ الأسبوعي يُختار بـ period_start
+  --    (بداية أسبوعه) داخل [p_from, p_to]: الأسبوع الذي بدأ قبل p_from ويتداخل مع أول المدى مستبعَد.
   select case when count(*) = 0 then null else jsonb_build_object(
            'weeks_logged', count(*),
            'completion_pct', (
@@ -243,6 +247,7 @@ as $$
 #variable_conflict use_column
 declare
   v_timezone text;
+  v_end      date;
   v_now      timestamptz := coalesce(nullif(current_setting('app.test_now', true), '')::timestamptz, now());
 begin
   if auth.uid() is null or not (is_admin() or is_supervisor_of(p_group_id)) then
@@ -256,13 +261,25 @@ begin
     raise exception using message = 'INVALID_ITEM', errcode = '22023';
   end if;
 
+  v_end := least(p_to, (v_now at time zone v_timezone)::date);
+
+  -- لكل عضو استعلام فرعي واحد محصور بـ (user_id، [p_from, v_end]) يصل إلى فهرس
+  -- logs(user_id, period, period_start) قبل التجميع في العرض. offset 0 يمنع دمج الاستعلام الفرعي
+  -- في الاستعلام الأعلى (فيُجمَّع العرض كله لكل السجلّات ثم يُربط — كما كان قبل هذا الإصلاح).
   return query
-    select p.id, p.full_name, g::date, coalesce(v.state, 'missing')
+    select p.id, p.full_name, v.day, coalesce(v.state, 'missing')
       from profiles p
-     cross join generate_series(p_from, least(p_to, (v_now at time zone v_timezone)::date),
-                                interval '1 day') g
-      left join v_day_status v on v.user_id = p.id and v.log_date = g::date
+     cross join lateral (
+       select g::date as day, d.state
+         from generate_series(p_from, v_end, interval '1 day') g
+         left join (
+           select ds.log_date, ds.state
+             from v_day_status ds
+            where ds.user_id = p.id and ds.log_date between p_from and v_end
+           offset 0
+         ) d on d.log_date = g::date
+     ) v
      where p.group_id = p_group_id and p.is_tracked and p.is_active
-     order by p.full_name, p.id, g;
+     order by p.full_name, p.id, v.day;
 end
 $$;

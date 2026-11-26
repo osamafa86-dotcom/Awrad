@@ -2,18 +2,13 @@
 // The same files drive the @awrad/domain TypeScript tests, so the SQL and the TS rules cannot drift.
 // Everything is written through save_log as the admin (p_user_id), with app.test_now pinned to the
 // case's "today"; attendance goes straight into the tables via the superuser connection.
-import { readFileSync } from "node:fs";
-import type pg from "pg";
-import {
-  clientAs,
-  createTestGroup,
-  createTestUser,
-  type UserClient,
-} from "./helpers";
+import { readFileSync } from 'node:fs';
+import type pg from 'pg';
+import { clientAs, createTestGroup, createTestUser, type UserClient } from './helpers';
 
-export type DayState = "achieved" | "failed" | "neutral";
-export type EntryStatus = "done" | "not_done" | "not_required";
-export type AttendanceStatus = "present" | "absent" | "excused";
+export type DayState = 'achieved' | 'failed' | 'neutral';
+export type EntryStatus = 'done' | 'not_done' | 'not_required';
+export type AttendanceStatus = 'present' | 'absent' | 'excused';
 
 /** A tristate entry gives `status`; a checklist entry gives `checkedCount` or `status: not_required`. */
 export interface FixtureEntry {
@@ -71,16 +66,13 @@ export interface StudentSummary {
 }
 
 function load<T>(file: string): T {
-  const url = new URL(
-    `../../packages/domain/fixtures/${file}`,
-    import.meta.url,
-  );
-  return JSON.parse(readFileSync(url, "utf8")) as T;
+  const url = new URL(`../../packages/domain/fixtures/${file}`, import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8')) as T;
 }
 
-export const streakCases = load<StreakCase[]>("streaks.json");
-export const dayStatusCases = load<DayStatusCase[]>("day-status.json");
-export const summaryCases = load<SummaryCase[]>("summary.json");
+export const streakCases = load<StreakCase[]>('streaks.json');
+export const dayStatusCases = load<DayStatusCase[]>('day-status.json');
+export const summaryCases = load<SummaryCase[]>('summary.json');
 
 /** Noon UTC on `date` = 15:00 in Asia/Riyadh: unambiguously that local day. */
 export function noonOf(date: string): string {
@@ -96,7 +88,7 @@ export function minusDays(date: string, days: number): string {
 interface DailyHabit {
   id: string;
   slug: string;
-  kind: "tristate" | "checklist";
+  kind: 'tristate' | 'checklist';
 }
 
 /**
@@ -113,8 +105,8 @@ export class FixtureLoader {
   ) {}
 
   static async open(db: pg.Client): Promise<FixtureLoader> {
-    const group = await createTestGroup("FX", { timezone: "Asia/Riyadh" });
-    return new FixtureLoader(db, await clientAs("admin@test"), group.id);
+    const group = await createTestGroup('FX', { timezone: 'Asia/Riyadh' });
+    return new FixtureLoader(db, await clientAs('admin@test'), group.id);
   }
 
   end(): Promise<void> {
@@ -126,33 +118,28 @@ export class FixtureLoader {
     this.seq += 1;
     const { id } = await createTestUser({
       email: `fx-student-${this.seq}@test`,
-      fullName: `FX Student ${String(this.seq).padStart(3, "0")}`,
-      role: "student",
+      fullName: `FX Student ${String(this.seq).padStart(3, '0')}`,
+      role: 'student',
       groupId: this.groupId,
     });
-    await this.db.query("update profiles set joined_at = $2 where id = $1", [
-      id,
-      joinedAt,
-    ]);
+    await this.db.query('update profiles set joined_at = $2 where id = $1', [id, joinedAt]);
     return id;
   }
 
   private async dailyHabits(date: string): Promise<DailyHabit[]> {
     const result = await this.db.query<DailyHabit>(
-      `select id, slug, kind::text as kind from active_habits_on($1, 'daily')`,
+      `select id, slug, kind::text as kind from active_habits_on($1, 'daily')
+        order by sort_order, slug`,
       [date],
     );
     return result.rows;
   }
 
-  private async activeItemIds(
-    habitId: string,
-    date: string,
-  ): Promise<string[]> {
-    const result = await this.db.query<{ id: string }>(
-      "select id from active_items_on($1, $2)",
-      [habitId, date],
-    );
+  private async activeItemIds(habitId: string, date: string): Promise<string[]> {
+    const result = await this.db.query<{ id: string }>('select id from active_items_on($1, $2)', [
+      habitId,
+      date,
+    ]);
     return result.rows.map((row) => row.id);
   }
 
@@ -167,11 +154,8 @@ export class FixtureLoader {
     const payload = [];
     for (const entry of entries) {
       const habit = habits.find((h) => h.slug === entry.slug);
-      if (!habit)
-        throw new Error(
-          `fixture: no daily habit ${entry.slug} active on ${date}`,
-        );
-      if (habit.kind === "checklist" && entry.status !== "not_required") {
+      if (!habit) throw new Error(`fixture: no daily habit ${entry.slug} active on ${date}`);
+      if (habit.kind === 'checklist' && entry.status !== 'not_required') {
         const items = await this.activeItemIds(habit.id, date);
         const count = entry.checkedCount ?? 0;
         if (count > items.length)
@@ -179,94 +163,88 @@ export class FixtureLoader {
         // save_log derives the checklist status from the checked items; 'done' is just a placeholder.
         payload.push({
           habit_id: habit.id,
-          status: "done",
+          status: 'done',
           checked_item_ids: items.slice(0, count),
         });
       } else {
-        if (!entry.status)
-          throw new Error(`fixture: ${entry.slug} needs a status`);
+        if (!entry.status) throw new Error(`fixture: ${entry.slug} needs a status`);
         payload.push({ habit_id: habit.id, status: entry.status });
       }
     }
     await this.admin.rpc(
-      "save_log",
+      'save_log',
       {
-        p_period: "daily",
+        p_period: 'daily',
         p_period_start: date,
         p_entries: JSON.stringify(payload),
         p_user_id: userId,
       },
-      { settings: { "app.test_now": noonOf(today) } },
+      { settings: { 'app.test_now': noonOf(today) } },
     );
   }
 
   /**
    * Materializes a day state (README): achieved = every active daily habit done (checklists fully
    * checked); failed = the same but the first tristate habit by sort_order (quran_wird) not_done;
-   * neutral = every habit not_required.
+   * neutral = every habit not_required. `overrides` sets a tristate habit's status by slug.
    */
   async saveState(
     userId: string,
     date: string,
     state: DayState,
     today: string,
+    overrides: Record<string, EntryStatus> = {},
   ): Promise<void> {
+    // dailyHabits() is ordered by sort_order, so this is the first tristate habit (quran_wird)
     const habits = await this.dailyHabits(date);
-    const failing = habits.find((h) => h.kind === "tristate");
+    const failing = habits.find((h) => h.kind === 'tristate');
     const entries: FixtureEntry[] = [];
     for (const habit of habits) {
-      if (state === "neutral") {
-        entries.push({ slug: habit.slug, status: "not_required" });
-      } else if (habit.kind === "checklist") {
+      if (state === 'neutral') {
+        entries.push({ slug: habit.slug, status: 'not_required' });
+      } else if (habit.kind === 'checklist') {
         const items = await this.activeItemIds(habit.id, date);
         entries.push({ slug: habit.slug, checkedCount: items.length });
       } else {
-        const status =
-          state === "failed" && habit === failing ? "not_done" : "done";
-        entries.push({ slug: habit.slug, status });
+        const status = state === 'failed' && habit === failing ? 'not_done' : 'done';
+        entries.push({
+          slug: habit.slug,
+          status: overrides[habit.slug] ?? status,
+        });
       }
     }
     await this.saveDay(userId, date, entries, today);
   }
 
   /** One attendance row per status, at a shared session dated `today - i` (README). */
-  async addAttendance(
-    userId: string,
-    statuses: AttendanceStatus[],
-    today: string,
-  ): Promise<void> {
+  async addAttendance(userId: string, statuses: AttendanceStatus[], today: string): Promise<void> {
     for (const [i, status] of statuses.entries()) {
       const session = await this.db.query<{ id: string }>(
-        "insert into sessions (group_id, session_date, title) values (null, $1, $2) returning id",
-        [minusDays(today, i), "fixture session"],
+        'insert into sessions (group_id, session_date, title) values (null, $1, $2) returning id',
+        [minusDays(today, i), 'fixture session'],
       );
       await this.db.query(
-        "insert into attendance (session_id, user_id, status) values ($1, $2, $3)",
+        'insert into attendance (session_id, user_id, status) values ($1, $2, $3)',
         [session.rows[0]!.id, userId, status],
       );
     }
   }
 
   /** Runs `fn` with app setting streak_threshold_pct = pct, restoring the old value afterwards. */
-  async withThreshold<T>(
-    pct: number | undefined,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async withThreshold<T>(pct: number | undefined, fn: () => Promise<T>): Promise<T> {
     if (pct === undefined) return fn();
     const old = await this.db.query<{ value: unknown }>(
       `select value from app_settings where key = 'streak_threshold_pct'`,
     );
-    await this.db.query(
-      `update app_settings set value = $1 where key = 'streak_threshold_pct'`,
-      [JSON.stringify(pct)],
-    );
+    await this.db.query(`update app_settings set value = $1 where key = 'streak_threshold_pct'`, [
+      JSON.stringify(pct),
+    ]);
     try {
       return await fn();
     } finally {
-      await this.db.query(
-        `update app_settings set value = $1 where key = 'streak_threshold_pct'`,
-        [JSON.stringify(old.rows[0]!.value)],
-      );
+      await this.db.query(`update app_settings set value = $1 where key = 'streak_threshold_pct'`, [
+        JSON.stringify(old.rows[0]!.value),
+      ]);
     }
   }
 
@@ -276,9 +254,9 @@ export class FixtureLoader {
     range: { from?: string; to?: string } = {},
   ): Promise<StudentSummary> {
     return this.admin.rpc<StudentSummary>(
-      "get_student_summary",
+      'get_student_summary',
       { p_user_id: userId, p_from: range.from ?? null, p_to: range.to ?? null },
-      { settings: { "app.test_now": noonOf(today) } },
+      { settings: { 'app.test_now': noonOf(today) } },
     );
   }
 
@@ -290,16 +268,15 @@ export class FixtureLoader {
     const result = await this.admin.query<{
       state: string;
       completion_pct: string | null;
-    }>(
-      "select state, completion_pct from v_day_status where user_id = $1 and log_date = $2",
-      [userId, date],
-    );
+    }>('select state, completion_pct from v_day_status where user_id = $1 and log_date = $2', [
+      userId,
+      date,
+    ]);
     const row = result.rows[0];
     if (!row) return null;
     return {
       state: row.state,
-      completion_pct:
-        row.completion_pct === null ? null : Number(row.completion_pct),
+      completion_pct: row.completion_pct === null ? null : Number(row.completion_pct),
     };
   }
 }

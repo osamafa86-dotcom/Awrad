@@ -82,7 +82,8 @@ number of `achieved` days in it. `longest` = the longest run (0 if none).
   yesterday is `failed` or `missing`.
 
 The SQL loader materializes each state as a real daily log:
-`achieved` = all five habits done (adhkar 13/13); `failed` = the same but `quran_wird` not_done
+`achieved` = all five habits done (adhkar 13/13); `failed` = the same but the first tristate
+daily habit in `sort_order` (`quran_wird`) not_done
 (4/5 = 80%); `neutral` = all five `not_required`. Pure TypeScript tests use the states directly.
 
 ## `summary.json` — `get_student_summary` over a few logged days
