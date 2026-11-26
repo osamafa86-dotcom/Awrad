@@ -71,9 +71,15 @@ State: Σrequired = 0 ⇒ `neutral`; else `achieved` if completionPct ≥ thresh
 
 Days not listed are `missing`. Rules (BR-04): over the calendar days `[joinedAt, today]`, a run is
 a maximal sequence of consecutive days whose state is `achieved` or `neutral`; its length is the
-number of `achieved` days in it. `longest` = the longest run (0 if none). `current` = the run
-containing today if today is `achieved`/`neutral`, else the run containing yesterday if yesterday
-is `achieved`/`neutral`, else 0.
+number of `achieved` days in it. `longest` = the longest run (0 if none).
+
+`current` (ruling STREAK-1; BR-04: «السلسلة الحالية = طول المقطع الذي يحوي أمس، أو اليوم إن سُجِّل اليوم»):
+
+- If today has a log of ANY state (achieved, failed or neutral): current_streak = length of the run
+  that contains today — which is 0 when today is `failed` (a failed today breaks the run), and the
+  run's achieved-count when today is `achieved` or `neutral`.
+- If today has no log (missing): current_streak = length of the run that contains yesterday; 0 if
+  yesterday is `failed` or `missing`.
 
 The SQL loader materializes each state as a real daily log:
 `achieved` = all five habits done (adhkar 13/13); `failed` = the same but `quran_wird` not_done

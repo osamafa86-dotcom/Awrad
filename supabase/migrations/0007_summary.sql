@@ -9,6 +9,7 @@
 
 -- ───────────── وزن كل مدخل (BR-02) ─────────────
 -- صف لكل مدخل في سجلّ (يومي أو أسبوعي) لعادة نشطة في تاريخ السجلّ (BR-07):
+-- (مدخل عادة لم تعد نشطة في تاريخ سجلّه — بعد تقديم active_to لاحقًا — يُستبعد من الأوزان.)
 --   tristate: done ⇒ 1/1، not_done ⇒ 1/0، not_required ⇒ 0/0 (مستثنى من المقام).
 --   checklist: not_required ⇒ 0/0؛ وإلا 1 / (البنود المعلَّمة النشطة ÷ البنود النشطة في التاريخ).
 --   checklist بلا بنود نشطة ⇒ 1/1، كما يشتقّ save_log حالتها done (لا بند غير معلَّم).
@@ -40,6 +41,7 @@ where h.active_from <= l.period_start
 -- ───────────── حالة اليوم (BR-01) ─────────────
 -- صف لكل سجلّ يومي فقط؛ missing = غياب الصفّ. completion_pct مقرَّبة لعدد صحيح، و null لـ neutral.
 -- achieved إن كانت النسبة المقرَّبة ≥ streak_threshold_pct، وإلا failed. سجلّ بلا مدخلات = neutral.
+-- المقارنة بالنسبة المقرَّبة لا الخام (قرار المراقب): 99.5% تُعدّ achieved عند عتبة 100.
 create view v_day_status with (security_invoker = true) as
 select s.user_id,
        s.log_date,
@@ -94,6 +96,7 @@ declare
   v_longest    int := 0;
   v_yesterday  int := 0;
   v_ok         boolean := false;
+  v_logged     boolean := false;
   v_day        record;
   v_days       int;
   v_completion int;
@@ -109,7 +112,8 @@ begin
   v_today := local_today(v_user);
 
   -- 2) السلاسل (BR-04): مقطع = أيام متتالية حالتها achieved أو neutral، طوله = عدد achieved فيه.
-  --    الحالية = مقطع اليوم إن كان اليوم achieved/neutral، وإلا مقطع أمس (يُصفَّر إن انقطع أمس).
+  --    الحالية (STREAK-1): إن سُجِّل اليوم بأي حالة فطول مقطع اليوم (0 إن كان failed)؛
+  --    وإن لم يُسجَّل اليوم فطول مقطع أمس (0 إن كان أمس failed أو missing).
   for v_day in
     select g::date as d, coalesce(v.state, 'missing') as state
       from generate_series(v_joined, v_today, interval '1 day') g
@@ -117,6 +121,7 @@ begin
      order by 1
   loop
     v_ok := v_day.state in ('achieved', 'neutral');
+    v_logged := v_day.state <> 'missing';
     if v_ok then
       v_run := v_run + (v_day.state = 'achieved')::int;
     else
@@ -127,7 +132,7 @@ begin
       v_yesterday := v_run;
     end if;
   end loop;
-  -- بعد الحلقة v_ok حالة اليوم (أو false إن لم تبدأ الحلقة: joined_at بعد اليوم)
+  -- بعد الحلقة v_logged/v_run تخصّان اليوم (false/0 إن لم تبدأ الحلقة: joined_at بعد اليوم)
 
   -- 3) الأيام المسجَّلة (كل سجلّ يومي في المدى) ونسبة الإنجاز (BR-03): الأيام missing خارج المقام
   select count(*) into v_days
@@ -193,7 +198,7 @@ begin
     'completion_pct', v_completion,
     'attendance_pct', v_attendance,
     'longest_streak', v_longest,
-    'current_streak', case when v_ok then v_run else v_yesterday end,
+    'current_streak', case when v_logged then v_run else v_yesterday end,
     'per_habit',      v_per_habit,
     'weekly',         v_weekly);
 end

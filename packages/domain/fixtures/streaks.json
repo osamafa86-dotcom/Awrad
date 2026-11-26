@@ -4,83 +4,286 @@
     "today": "2026-11-26",
     "joinedAt": "2026-11-01",
     "days": [
-      { "date": "2026-11-18", "state": "achieved" },
-      { "date": "2026-11-19", "state": "achieved" },
-      { "date": "2026-11-20", "state": "achieved" },
-      { "date": "2026-11-21", "state": "achieved" },
-      { "date": "2026-11-22", "state": "achieved" },
-      { "date": "2026-11-23", "state": "failed" },
-      { "date": "2026-11-24", "state": "achieved" },
-      { "date": "2026-11-25", "state": "achieved" },
-      { "date": "2026-11-26", "state": "achieved" }
+      {
+        "date": "2026-11-18",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-19",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-20",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-21",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-22",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "failed"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "achieved"
+      }
     ],
-    "expect": { "longest": 5, "current": 3 }
+    "expect": {
+      "longest": 5,
+      "current": 3
+    }
   },
   {
     "name": "B: neutral neither breaks nor counts",
     "today": "2026-11-26",
     "joinedAt": "2026-11-01",
     "days": [
-      { "date": "2026-11-24", "state": "achieved" },
-      { "date": "2026-11-25", "state": "neutral" },
-      { "date": "2026-11-26", "state": "achieved" }
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "neutral"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "achieved"
+      }
     ],
-    "expect": { "longest": 2, "current": 2 }
+    "expect": {
+      "longest": 2,
+      "current": 2
+    }
   },
   {
     "name": "C: unlogged today keeps the streak ending yesterday",
     "today": "2026-11-26",
     "joinedAt": "2026-11-01",
     "days": [
-      { "date": "2026-11-22", "state": "achieved" },
-      { "date": "2026-11-23", "state": "achieved" },
-      { "date": "2026-11-24", "state": "achieved" },
-      { "date": "2026-11-25", "state": "achieved" }
+      {
+        "date": "2026-11-22",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "achieved"
+      }
     ],
-    "expect": { "longest": 4, "current": 4 }
+    "expect": {
+      "longest": 4,
+      "current": 4
+    }
   },
   {
     "name": "D: unlogged yesterday breaks the streak",
     "today": "2026-11-26",
     "joinedAt": "2026-11-01",
     "days": [
-      { "date": "2026-11-20", "state": "achieved" },
-      { "date": "2026-11-21", "state": "achieved" },
-      { "date": "2026-11-22", "state": "achieved" },
-      { "date": "2026-11-23", "state": "achieved" },
-      { "date": "2026-11-24", "state": "achieved" },
-      { "date": "2026-11-26", "state": "achieved" }
+      {
+        "date": "2026-11-20",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-21",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-22",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "achieved"
+      }
     ],
-    "expect": { "longest": 5, "current": 1 }
+    "expect": {
+      "longest": 5,
+      "current": 1
+    }
   },
   {
     "name": "E: all neutral gives no streak",
     "today": "2026-11-26",
     "joinedAt": "2026-11-01",
     "days": [
-      { "date": "2026-11-22", "state": "neutral" },
-      { "date": "2026-11-23", "state": "neutral" },
-      { "date": "2026-11-24", "state": "neutral" },
-      { "date": "2026-11-25", "state": "neutral" },
-      { "date": "2026-11-26", "state": "neutral" }
+      {
+        "date": "2026-11-22",
+        "state": "neutral"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "neutral"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "neutral"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "neutral"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "neutral"
+      }
     ],
-    "expect": { "longest": 0, "current": 0 }
+    "expect": {
+      "longest": 0,
+      "current": 0
+    }
   },
   {
     "name": "F: days before joinedAt do not count",
     "today": "2026-11-26",
     "joinedAt": "2026-11-24",
     "days": [
-      { "date": "2026-11-18", "state": "achieved" },
-      { "date": "2026-11-19", "state": "achieved" },
-      { "date": "2026-11-20", "state": "achieved" },
-      { "date": "2026-11-21", "state": "achieved" },
-      { "date": "2026-11-22", "state": "achieved" },
-      { "date": "2026-11-23", "state": "achieved" },
-      { "date": "2026-11-24", "state": "achieved" },
-      { "date": "2026-11-25", "state": "achieved" },
-      { "date": "2026-11-26", "state": "achieved" }
+      {
+        "date": "2026-11-18",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-19",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-20",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-21",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-22",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "achieved"
+      }
     ],
-    "expect": { "longest": 3, "current": 3 }
+    "expect": {
+      "longest": 3,
+      "current": 3
+    }
+  },
+  {
+    "name": "G: a failed today breaks the streak",
+    "today": "2026-11-26",
+    "joinedAt": "2026-11-01",
+    "days": [
+      {
+        "date": "2026-11-22",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "failed"
+      }
+    ],
+    "expect": {
+      "longest": 4,
+      "current": 0
+    }
+  },
+  {
+    "name": "H: a neutral today keeps the streak",
+    "today": "2026-11-26",
+    "joinedAt": "2026-11-01",
+    "days": [
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-25",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-26",
+        "state": "neutral"
+      }
+    ],
+    "expect": {
+      "longest": 3,
+      "current": 3
+    }
+  },
+  {
+    "name": "I: yesterday and today missing",
+    "today": "2026-11-26",
+    "joinedAt": "2026-11-01",
+    "days": [
+      {
+        "date": "2026-11-23",
+        "state": "achieved"
+      },
+      {
+        "date": "2026-11-24",
+        "state": "achieved"
+      }
+    ],
+    "expect": {
+      "longest": 2,
+      "current": 0
+    }
   }
 ]
