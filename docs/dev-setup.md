@@ -13,9 +13,14 @@ supabase status     # يعرض API URL وDB URL والمفاتيح؛ انسخه�
 supabase db reset   # الترحيلات ثم supabase/seed.sql
 ```
 في هذا المسار لا حاجة إلى ملف المحاكاة (shim) لأن Supabase توفّر `auth` والأدوار.
-اضبط `SUPABASE_DB_URL` على عنوان القاعدة الذي يعرضه `supabase status` (عادةً المنفذ 54322).
+استخدم `supabase db reset` فقط؛ لا تشغّل `pnpm db:reset` على قاعدة Supabase Docker.
+مشاريع السحابة تُنشأ على PostgreSQL 16 ليتطابق مع العنقود المحلي (`major_version = 16` في `supabase/config.jsonc`)، أو تُرقّى الاثنتان معًا.
 
 ## المسار ب: بلا Docker (حاويات التطوير وCI)
+> **تحذير:** `pnpm db:reset` للمسار ب فقط ويحذف القاعدة ثم ينشئها. يرفض أي هدف غير `127.0.0.1:54329/awrad`
+> (إلا مع `--force` صريح). لا توجّهه أبدًا إلى Supabase Docker أو إلى مشروع سحابي.
+
+يحتاج هذا المسار صلاحية root (أو sudo) لأن `pg_createcluster` و`su postgres` يتطلبانها.
 يعتمد على عنقود PostgreSQL 16 مستقل باسم `awrad` على المنفذ **54329** (لا يمسّ العنقود `main`).
 
 ```bash
@@ -41,7 +46,7 @@ psql "$SUPABASE_DB_URL" -Atc "select auth.uid() is null, auth.role() is null"   
 ### توليد الأنواع
 `pnpm db:types` يشغّل `supabase gen types typescript --db-url "$SUPABASE_DB_URL" --schema public`
 ويكتب `packages/supabase-client/src/database.types.ts`. هذه الحزمة تُنشأ في مهمة لاحقة،
-فيفشل الأمر الآن برسالة واضحة، وهذا متوقّع.
+فيفشل الأمر الآن برسالة واضحة، وهذا متوقّع. قد يتطلب `supabase gen types --db-url` وجود Docker في بعض إصدارات CLI؛ يُحسم القرار في المهمة 1.9.
 
 ## استكشاف الأخطاء
 - **العنقود موجود لكنه متوقّف:** `pnpm db:start` يشغّله؛ وللتشخيص `pg_lsclusters` وسجل

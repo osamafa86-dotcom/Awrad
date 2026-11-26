@@ -34,8 +34,8 @@
 ## 4. الأوامر
 ```bash
 pnpm install
-pnpm db:start        # Supabase محلي (Docker)
-pnpm db:reset        # الترحيلات + البذرة
+pnpm db:start        # عنقود PostgreSQL 16 محلي باسم awrad على المنفذ 54329 (بلا Docker)
+pnpm db:reset        # shim + الترحيلات + البذرة على العنقود المحلي فقط (يرفض أي هدف آخر)
 pnpm db:types        # توليد أنواع TypeScript من المخطّط
 pnpm lint && pnpm typecheck && pnpm test
 pnpm --filter supabase test        # اختبارات قاعدة البيانات و RLS
@@ -44,7 +44,7 @@ pnpm --filter admin dev            # Next.js
 pnpm --filter admin e2e            # Playwright
 supabase functions serve           # Edge Functions محليًا
 ```
-رموز OTP المحلية تظهر في Inbucket (`supabase status` → `Inbucket URL`). مستخدمو الاختبار: `admin@test`, `sup1@test`, `sup2@test`, `p1@test`, `p2@test` (كلمة المرور في `supabase/tests/helpers.ts`).
+لا Inbucket محليًا: تدفقات OTP تُحاكى في الاختبارات المحلية، والمصادقة الحقيقية تحتاج مشروع Supabase. مستخدمو الاختبار: `admin@test`, `sup1@test`, `sup2@test`, `p1@test`, `p2@test` (كلمة المرور في `supabase/tests/helpers.ts`).
 
 ## 5. الهيكل
 ```

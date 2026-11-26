@@ -8,6 +8,7 @@ if (!state) {
   run('pg_createcluster', [PG_VERSION, CLUSTER, '--port', PORT]);
   console.log(`created cluster ${PG_VERSION} ${CLUSTER} on port ${PORT}`);
   state = clusterStatus();
+  if (!state) throw new Error(`cluster ${PG_VERSION} ${CLUSTER} is not listed by pg_lsclusters after creation`);
 }
 if (state.port !== PORT) {
   throw new Error(`cluster ${CLUSTER} uses port ${state.port}, expected ${PORT}`);
