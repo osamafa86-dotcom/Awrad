@@ -4,7 +4,7 @@
     "lint": {},
     "format": { "cache": false },
     "typecheck": { "dependsOn": ["^typecheck"] },
-    "test": {},
+    "test": { "env": ["SUPABASE_DB_URL"] },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", ".expo/**"]
