@@ -38,13 +38,13 @@ pnpm db:start        # عنقود PostgreSQL 16 محلي باسم awrad على �
 pnpm db:reset        # shim + الترحيلات + البذرة على العنقود المحلي فقط (يرفض أي هدف آخر)
 pnpm db:types        # توليد أنواع TypeScript من المخطّط
 pnpm lint && pnpm typecheck && pnpm test
-pnpm --filter supabase test        # اختبارات قاعدة البيانات و RLS
+pnpm --filter @awrad/db test       # اختبارات قاعدة البيانات و RLS
 pnpm --filter mobile start         # Expo
 pnpm --filter admin dev            # Next.js
 pnpm --filter admin e2e            # Playwright
 supabase functions serve           # Edge Functions محليًا
 ```
-لا Inbucket محليًا: تدفقات OTP تُحاكى في الاختبارات المحلية، والمصادقة الحقيقية تحتاج مشروع Supabase. مستخدمو الاختبار: `admin@test`, `sup1@test`, `sup2@test`, `p1@test`, `p2@test` (كلمة المرور في `supabase/tests/helpers.ts`).
+لا Inbucket محليًا: تدفقات OTP تُحاكى في الاختبارات المحلية، والمصادقة الحقيقية تحتاج مشروع Supabase. أدوات اختبار قاعدة البيانات في `supabase/tests/helpers.ts`: `createTestUser` و`createTestGroup` و`clientAs(email)`؛ يُدرَج المستخدمون مباشرة في `auth.users` (ومُشغِّل `handle_new_user` يُنشئ الملف من الدعوة)، ويُضبط الدور `authenticated` ومطالبات JWT لكل معاملة؛ لا كلمات مرور.
 
 ## 5. الهيكل
 ```

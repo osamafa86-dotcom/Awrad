@@ -80,6 +80,51 @@ describe('0001 core schema', () => {
       is_active: false,
       is_tracked: true,
     });
+
+    // An empty metadata name falls back to the email.
+    const blank = await insertAuthUser('blank.name@test', '');
+    expect((await profileOf(blank)).full_name).toBe('blank.name@test');
+  });
+
+  test('with several pending invitations for one email, the latest wins and only it is accepted', async () => {
+    const inv = await db.query<{ id: string; role: string }>(
+      `insert into invitations (email, full_name, role, group_id, created_at) values
+         ('twice@test', 'الدعوة القديمة', 'student', $1, now() - interval '2 days'),
+         ('TWICE@test', 'الدعوة الأحدث', 'supervisor', $2, now() - interval '1 day')
+       returning id, role`,
+      [g1, g2],
+    );
+    const id = await insertAuthUser('twice@test');
+
+    expect(await profileOf(id)).toMatchObject({
+      full_name: 'الدعوة الأحدث',
+      role: 'supervisor',
+      group_id: g2,
+    });
+    const accepted = await db.query(
+      'select role, accepted_at is not null as accepted from invitations where id = any($1)',
+      [inv.rows.map((row) => row.id)],
+    );
+    expect(Object.fromEntries(accepted.rows.map((r) => [r.role, r.accepted]))).toEqual({
+      student: false,
+      supervisor: true,
+    });
+  });
+
+  test('an already-accepted invitation is ignored: the new user gets an inactive student profile', async () => {
+    await db.query(
+      `insert into invitations (email, full_name, role, group_id, accepted_at)
+       values ('used@test', 'دعوة مستعملة', 'admin', $1, now())`,
+      [g1],
+    );
+    const id = await insertAuthUser('used@test', 'مستخدم جديد');
+
+    expect(await profileOf(id)).toMatchObject({
+      full_name: 'مستخدم جديد',
+      role: 'student',
+      group_id: null,
+      is_active: false,
+    });
   });
 
   test('non-admin cannot change own role/group_id/full_name/is_active/is_tracked/joined_at', async () => {
@@ -127,6 +172,26 @@ describe('0001 core schema', () => {
       await asStudent.end();
       await asAdmin.end();
     }
+  });
+
+  test('anon requests get no system bypass: changing a profile role raises FORBIDDEN', async () => {
+    const { id } = await createTestUser({
+      email: 'anon.target@test',
+      fullName: 'هدف',
+      role: 'student',
+      groupId: g1,
+    });
+    await db.query('begin');
+    try {
+      await db.query('set local role anon');
+      await db.query(`select set_config('request.jwt.claims', '{"role":"anon"}', true)`);
+      await expect(
+        db.query(`update profiles set role = 'admin' where id = $1`, [id]),
+      ).rejects.toThrow('FORBIDDEN');
+    } finally {
+      await db.query('rollback');
+    }
+    expect((await profileOf(id)).role).toBe('student');
   });
 
   test('new profile gets reminder_time = default_reminder_time (21:00) and joined_at/is_tracked from invitation', async () => {
@@ -194,6 +259,37 @@ describe('0001 core schema', () => {
       await asAdmin.end();
       await asStudent.end();
     }
+  });
+
+  test('a deactivated admin is no longer is_admin()', async () => {
+    const { id } = await createTestUser({
+      email: 'retired.admin@test',
+      fullName: 'مدير سابق',
+      role: 'admin',
+    });
+    await db.query('update profiles set is_active = false where id = $1', [id]);
+    const asRetired = await clientAs('retired.admin@test');
+    try {
+      expect(await asRetired.rpc('is_admin')).toBe(false);
+      expect(await asRetired.rpc('current_user_role')).toBe('admin');
+    } finally {
+      await asRetired.end();
+    }
+  });
+
+  test('createTestUser refuses to reuse an email with a different role or group', async () => {
+    const first = await createTestUser({
+      email: 'reused@test',
+      fullName: 'طالب',
+      role: 'student',
+      groupId: g1,
+    });
+    await expect(
+      createTestUser({ email: 'Reused@test', fullName: 'طالب', role: 'student', groupId: g1 }),
+    ).resolves.toEqual(first);
+    await expect(
+      createTestUser({ email: 'reused@test', fullName: 'طالب', role: 'supervisor', groupId: g1 }),
+    ).rejects.toThrow(/already exists/);
   });
 
   test('is_supervisor_of() is true only for groups listed in group_supervisors', async () => {

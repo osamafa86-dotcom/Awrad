@@ -32,7 +32,8 @@ async function withAdmin<T>(fn: (db: pg.Client) => Promise<T>): Promise<T> {
  * Creates an auth user the way production does: a pending invitation, then the `auth.users` row
  * (the `handle_new_user` trigger provisions the profile from the invitation), then optional
  * `group_supervisors` rows. `isTracked` defaults per spec §5: true, except false for admins.
- * Idempotent per email: an existing user is returned unchanged.
+ * Idempotent per email: an existing user is returned unchanged if its role, group_id and
+ * is_tracked match the options; a mismatch throws (two tests disagreeing about one email).
  */
 export async function createTestUser(opts: {
   email: string;
@@ -44,11 +45,28 @@ export async function createTestUser(opts: {
   supervises?: string[];
 }): Promise<{ id: string }> {
   const email = opts.email.toLowerCase();
+  const wanted = {
+    role: opts.role,
+    group_id: opts.groupId ?? null,
+    is_tracked: opts.isTracked ?? opts.role !== 'admin',
+  };
   return withAdmin(async (db) => {
-    const existing = await db.query<{ id: string }>('select id from auth.users where email = $1', [
-      email,
-    ]);
-    if (existing.rows[0]) return { id: existing.rows[0].id };
+    const existing = await db.query<{ id: string } & typeof wanted>(
+      `select u.id, p.role, p.group_id, p.is_tracked
+       from auth.users u left join profiles p on p.id = u.id where u.email = $1`,
+      [email],
+    );
+    const found = existing.rows[0];
+    if (found) {
+      const { id, ...actual } = found;
+      if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
+        throw new Error(
+          `createTestUser: ${email} already exists as ${JSON.stringify(actual)}, ` +
+            `not ${JSON.stringify(wanted)}`,
+        );
+      }
+      return { id };
+    }
 
     await db.query('begin');
     try {
@@ -58,9 +76,9 @@ export async function createTestUser(opts: {
         [
           email,
           opts.fullName,
-          opts.role,
-          opts.groupId ?? null,
-          opts.isTracked ?? opts.role !== 'admin',
+          wanted.role,
+          wanted.group_id,
+          wanted.is_tracked,
           opts.joinedAt ?? null,
         ],
       );

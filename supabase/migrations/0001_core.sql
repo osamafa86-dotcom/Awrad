@@ -99,7 +99,8 @@ $$;
 -- ───────────── مساعدات RLS (§10.3) ─────────────
 -- security definer حتى لا تمرّ بسياسات RLS على profiles/group_supervisors (تجنّبًا للتكرار اللانهائي).
 
--- دور المستدعي من ملفه (null إن لم يكن له ملف).
+-- دور المستدعي من ملفه (null إن لم يكن له ملف)، فعّالًا كان أو معطَّلًا.
+-- policies must use is_admin()/is_supervisor_of(); never compare current_user_role() to 'admin'.
 create or replace function current_user_role() returns user_role
 language sql stable security definer set search_path = public as $$
   select role from profiles where id = auth.uid()
@@ -157,7 +158,7 @@ begin
   else
     insert into profiles (id, full_name, role, joined_at, is_tracked, is_active,
                           reminder_time, weekly_reminder)
-    values (new.id, coalesce(new.raw_user_meta_data ->> 'full_name', new.email), 'student',
+    values (new.id, coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), new.email), 'student',
             current_date, true, false, v_reminder, true);
   end if;
   return new;
@@ -170,11 +171,13 @@ create or replace trigger on_auth_user_created
 
 -- ───────────── حماية حقول الملف ─────────────
 -- غير المدير لا يغيّر إلا timezone و reminder_time و weekly_reminder.
--- سياق النظام (لا auth.uid(): الترحيلات والبذرة ومفتاح الخدمة والاختبارات) مسموح له.
+-- سياق النظام مسموح له: بلا sub وبدور ليس anon ولا authenticated (المستخدم الأعلى في الترحيلات
+-- والبذرة والاختبارات بلا مطالبات، و service_role عبر PostgREST). أما anon فلا يُستثنى.
 create or replace function protect_profile_fields() returns trigger
 language plpgsql set search_path = public as $$
 begin
-  if auth.uid() is null or is_admin() then
+  if (auth.uid() is null and coalesce(auth.role(), '') not in ('anon', 'authenticated'))
+     or is_admin() then
     return new;
   end if;
   if (to_jsonb(new) - array['timezone', 'reminder_time', 'weekly_reminder'])

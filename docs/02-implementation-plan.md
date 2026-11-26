@@ -143,7 +143,7 @@ awrad/
 **الملفات:**
 - إنشاء: `supabase/migrations/0001_core.sql`
 - إنشاء: `supabase/tests/helpers.ts`, `supabase/tests/vitest.config.ts`, `supabase/package.json`, `supabase/tests/0001_core.test.ts`
-- تعديل: `.github/workflows/ci.yml` (مهمة `db-tests`: `supabase start` → `supabase db reset` → `pnpm --filter supabase test`)
+- تعديل: `.github/workflows/ci.yml` (مهمة `db-tests`: `supabase start` → `supabase db reset` → `pnpm --filter @awrad/db test`)
 
 **الواجهات:**
 - يُنتج: الأنواع المعدودة الستة، الجداول `groups`, `group_supervisors`, `profiles`, `invitations`, `app_settings`, `audit_log` كما في المواصفة §10.2 (بما فيها `profiles.weekly_reminder`, `profiles.is_tracked`, `profiles.joined_at`, `invitations.joined_at`, `invitations.is_tracked`)؛ الدوال `current_user_role() returns user_role`, `is_admin() returns boolean`, `is_supervisor_of(p_group uuid) returns boolean`, `setting_int(p_key text) returns int`, `setting_bool(p_key text) returns boolean`, `setting_text(p_key text) returns text`؛ المُشغِّل `handle_new_user()` على `auth.users` بعد الإدراج.
@@ -165,9 +165,9 @@ test('non-admin cannot change own role/group_id/full_name/is_active/is_tracked/j
 test('new profile gets reminder_time = default_reminder_time (21:00) and joined_at/is_tracked from invitation', ...);
 test('admin without invitation defaults is_tracked=false; student defaults true', ...);
 ```
-- [ ] **الخطوة 2:** `pnpm --filter supabase test` → فشل (الجداول غير موجودة).
+- [ ] **الخطوة 2:** `pnpm --filter @awrad/db test` → فشل (الجداول غير موجودة).
 - [ ] **الخطوة 3:** اكتب `0001_core.sql`: الأنواع والجداول (§10.2)، إدراج الافتراضيات الستة في `app_settings`، الدوال المساعدة (`security definer`, `stable`)، `handle_new_user()` (يبحث في `invitations` بالبريد غير حساس لحالة الأحرف؛ عند عدم وجودها ينشئ ملفًا `role='student', is_active=false, full_name = coalesce(raw_user_meta_data->>'full_name', email)`), ومُشغِّل `protect_profile_fields()` قبل التحديث يرفع `FORBIDDEN` إذا غيّر غير المدير أي حقل خارج `timezone, reminder_time, weekly_reminder`. `handle_new_user` يضبط `joined_at` و`is_tracked` من الدعوة، و`reminder_time = setting_text('default_reminder_time')::time`، وعند غياب الدعوة `is_tracked = (role <> 'admin')`. جدول `invitations` يُنشأ هنا لأن المُشغِّل يعتمد عليه. `is_supervisor_of(p_group)` تقرأ `group_supervisors`.
-- [ ] **الخطوة 4:** `pnpm db:reset && pnpm --filter supabase test` → نجاح.
+- [ ] **الخطوة 4:** `pnpm db:reset && pnpm --filter @awrad/db test` → نجاح.
 - [ ] **الخطوة 5:** إضافة مهمة `db-tests` في `ci.yml` باستخدام `supabase/setup-cli` action.
 - [ ] **الخطوة 6:** commit: `db: core schema (groups, profiles, settings, audit) with profile provisioning trigger`
 
