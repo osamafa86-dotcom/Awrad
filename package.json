@@ -9,7 +9,11 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "format": "turbo run format"
+    "format": "turbo run format",
+    "db:start": "node scripts/db/start.mjs",
+    "db:stop": "node scripts/db/stop.mjs",
+    "db:reset": "node scripts/db/reset.mjs",
+    "db:types": "node scripts/db/types.mjs"
   },
   "devDependencies": {
     "eslint": "^9.39.5",
