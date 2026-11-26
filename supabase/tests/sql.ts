@@ -6,7 +6,8 @@ const IDENT = /^[a-z_][a-z0-9_]*$/;
 
 /**
  * Runs one statement inside its own transaction as the given auth user:
- * BEGIN; SET LOCAL ROLE authenticated; set request.jwt.claims; <statement>; COMMIT.
+ * BEGIN; SET LOCAL ROLE authenticated; set request.jwt.claims; [settings]; <statement>; COMMIT.
+ * `settings` are transaction-local GUCs (`set_config(k, v, true)`), e.g. `{ 'app.test_now': iso }`.
  * On error it rolls back and rethrows the original pg error (assert on `message`, e.g. 'FORBIDDEN').
  */
 export async function queryAsUser<T extends pg.QueryResultRow>(
@@ -14,12 +15,16 @@ export async function queryAsUser<T extends pg.QueryResultRow>(
   userId: string,
   sql: string,
   params: unknown[] = [],
+  settings: Record<string, string> = {},
 ): Promise<pg.QueryResult<T>> {
   const claims = JSON.stringify({ sub: userId, role: 'authenticated' });
   await client.query('begin');
   try {
     await client.query('set local role authenticated');
     await client.query(`select set_config('request.jwt.claims', $1, true)`, [claims]);
+    for (const [key, value] of Object.entries(settings)) {
+      await client.query('select set_config($1, $2, true)', [key, value]);
+    }
     const result = await client.query<T>(sql, params);
     await client.query('commit');
     return result;
@@ -43,7 +48,10 @@ export function rpcStatement(
   const keys = Object.keys(args);
   for (const key of keys) if (!IDENT.test(key)) throw new Error(`invalid argument name: ${key}`);
   const list = keys.map((key, i) => `${key} => $${i + 1}`).join(', ');
-  return { sql: `select * from ${fn}(${list})`, params: keys.map((key) => args[key]) };
+  return {
+    sql: `select * from ${fn}(${list})`,
+    params: keys.map((key) => args[key]),
+  };
 }
 
 /**

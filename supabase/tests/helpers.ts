@@ -117,19 +117,25 @@ export async function createTestGroup(
   });
 }
 
+/** Per-call options: transaction-local settings, e.g. `{ 'app.test_now': '2026-11-26T10:00:00Z' }`. */
+export interface CallOptions {
+  settings?: Record<string, string>;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any -- why: SQL rows are untyped unless the caller picks a shape, as in pg itself */
 export interface UserClient {
   /** Runs one statement in its own transaction as this user (role `authenticated` + JWT claims). */
   query<T extends pg.QueryResultRow = any>(
     sql: string,
     params?: unknown[],
+    opts?: CallOptions,
   ): Promise<pg.QueryResult<T>>;
   /**
    * Calls `select * from <fn>(name => value, ...)` as this user. Returns the bare value for a
    * scalar-returning function (e.g. `is_admin` → boolean; `null` if no row), otherwise the rows
    * array (set-returning / `returns table` functions).
    */
-  rpc<T = any>(fn: string, args?: Record<string, unknown>): Promise<T>;
+  rpc<T = any>(fn: string, args?: Record<string, unknown>, opts?: CallOptions): Promise<T>;
   end(): Promise<void>;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -146,10 +152,10 @@ export async function clientAs(email: string): Promise<UserClient> {
     throw new Error(`clientAs: no auth user with email ${email}`);
   }
   return {
-    query: (sql, params) => queryAsUser(client, userId, sql, params),
-    rpc: async (fn, args) => {
+    query: (sql, params, opts) => queryAsUser(client, userId, sql, params, opts?.settings),
+    rpc: async (fn, args, opts) => {
       const { sql, params } = rpcStatement(fn, args);
-      return rpcResult(fn, await queryAsUser(client, userId, sql, params));
+      return rpcResult(fn, await queryAsUser(client, userId, sql, params, opts?.settings));
     },
     end: () => client.end(),
   };
