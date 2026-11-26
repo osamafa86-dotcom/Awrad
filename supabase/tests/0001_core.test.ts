@@ -192,6 +192,17 @@ describe('0001 core schema', () => {
     } finally {
       await db.query('rollback');
     }
+    // The guard trigger itself: as the table owner (RLS bypassed) with anon claims and no
+    // `set role`, the system-context exemption must not apply → FORBIDDEN.
+    await db.query('begin');
+    try {
+      await db.query(`select set_config('request.jwt.claims', '{"role":"anon"}', true)`);
+      await expect(
+        db.query(`update profiles set role = 'admin' where id = $1`, [id]),
+      ).rejects.toThrow('FORBIDDEN');
+    } finally {
+      await db.query('rollback');
+    }
     expect((await profileOf(id)).role).toBe('student');
   });
 

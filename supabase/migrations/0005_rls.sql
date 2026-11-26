@@ -8,6 +8,37 @@
 -- (handle_new_user، set_attendance، request_account_deletion، save_log لاحقًا) والبذرة عاملة.
 -- SQL عادي صالح على Supabase Cloud، بلا grant/revoke.
 
+-- ───────────── الإشراف يتبع الدور (§5: الدور يحدّد الصلاحيات) ─────────────
+-- صف group_supervisors وحده لا يكفي: يلزم أن يكون ملف المستدعي فعّالًا بدور supervisor أو admin،
+-- فمن خُفِّض إلى طالب يفقد الإشراف حتى لو بقي صفّه.
+create or replace function is_supervisor_of(p_group uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from group_supervisors gs
+    join profiles p on p.id = gs.user_id
+    where gs.group_id = p_group
+      and gs.user_id = auth.uid()
+      and p.is_active
+      and p.role in ('supervisor', 'admin')
+  )
+$$;
+
+-- عند تخفيض الدور إلى ما دون المشرف تُحذف صفوف إشرافه (security definer ليعمل أيًّا كان المُعدِّل).
+create or replace function drop_supervisions_on_demotion() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.role not in ('supervisor', 'admin') then
+    delete from group_supervisors where user_id = new.id;
+  end if;
+  return new;
+end
+$$;
+
+create or replace trigger drop_supervisions_on_demotion
+  after update of role on profiles
+  for each row execute function drop_supervisions_on_demotion();
+
 -- ───────────── تفعيل RLS على الجداول الخمسة عشر ─────────────
 alter table groups            enable row level security;
 alter table group_supervisors enable row level security;

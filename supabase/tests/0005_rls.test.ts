@@ -162,7 +162,10 @@ describe('0005_rls', () => {
   test('admin sees all profiles', async () => {
     const admin = await as('admin@test');
     const result = await admin.query<{ id: string }>('select id from profiles');
-    expect(result.rowCount).toBe(5);
+    // Ordering-independent: the admin sees exactly what the superuser sees (at least the fixture's 5).
+    const all = await db.query<{ id: string }>('select id from profiles');
+    expect(ids(result.rows)).toEqual(ids(all.rows));
+    expect(result.rowCount).toBeGreaterThanOrEqual(5);
     expect((await admin.query('select * from logs')).rowCount).toBe(2);
     expect((await admin.query('select * from log_entries')).rowCount).toBe(2);
     expect((await admin.query('select * from log_entry_items')).rowCount).toBe(2);
@@ -380,6 +383,14 @@ describe('0005_rls', () => {
     expect((await sup1.query('delete from sessions where id = $1', [sessions.g1])).rowCount).toBe(
       0,
     );
+    // Positive update: own-group session title; another group's session is filtered (0 rows).
+    expect(
+      (await sup1.query(`update sessions set title = 'G1 title' where id = $1`, [sessions.g1]))
+        .rowCount,
+    ).toBe(1);
+    expect(
+      (await sup1.query(`update sessions set title = 'x' where id = $1`, [sessions.g2])).rowCount,
+    ).toBe(0);
     const p1 = await as('p1@test');
     expect((await failure(p1.query(insert, [f.g1]))).code).toBe('42501');
     const admin = await as('admin@test');
@@ -436,5 +447,46 @@ describe('0005_rls', () => {
     const next = await p1.rpc<string>('request_account_deletion');
     expect(next).not.toBe(requests.p1);
     expect(await p1.rpc<string>('request_account_deletion')).toBe(next);
+  });
+
+  test('a supervisor demoted to student loses group access and supervision rows', async () => {
+    // Dedicated user (no group membership) so the other tests' visibility sets are unaffected.
+    const sup3 = await createTestUser({
+      email: 'sup3@test',
+      fullName: 'Sup 3',
+      role: 'supervisor',
+      isTracked: false,
+      supervises: [f.g1],
+    });
+    const client = await as('sup3@test');
+    expect(await client.rpc<boolean>('is_supervisor_of', { p_group: f.g1 })).toBe(true);
+    expect((await client.query('select id from profiles')).rowCount).toBeGreaterThan(1);
+
+    await db.query(`update profiles set role = 'student' where id = $1`, [sup3.id]);
+
+    expect(await client.rpc<boolean>('is_supervisor_of', { p_group: f.g1 })).toBe(false);
+    const seen = await client.query<{ id: string }>('select id from profiles');
+    expect(ids(seen.rows)).toEqual([sup3.id]);
+    expect((await client.query('select * from logs')).rowCount).toBe(0);
+    const rows = await db.query('select 1 from group_supervisors where user_id = $1', [sup3.id]);
+    expect(rows.rowCount).toBe(0);
+  });
+
+  test('is_supervisor_of requires the supervisor role even if a group_supervisors row exists', async () => {
+    // A student given a stray group_supervisors row (bypassing the trigger) still gets nothing.
+    await db.query('insert into group_supervisors (group_id, user_id) values ($1, $2)', [
+      f.g2,
+      f.p1,
+    ]);
+    try {
+      const p1 = await as('p1@test');
+      expect(await p1.rpc<boolean>('is_supervisor_of', { p_group: f.g2 })).toBe(false);
+      expect(ids((await p1.query<{ id: string }>('select id from profiles')).rows)).toEqual([f.p1]);
+    } finally {
+      await db.query('delete from group_supervisors where group_id = $1 and user_id = $2', [
+        f.g2,
+        f.p1,
+      ]);
+    }
   });
 });
