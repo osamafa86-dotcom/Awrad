@@ -1,0 +1,37 @@
+[
+  {
+    "name": "two-days",
+    "today": "2026-11-26",
+    "joinedAt": "2026-11-01",
+    "days": [
+      {
+        "date": "2026-11-25",
+        "entries": [
+          { "slug": "quran_wird", "status": "done" },
+          { "slug": "adhkar", "checkedCount": 13 },
+          { "slug": "qiyam", "status": "done" },
+          { "slug": "tafsir_ibn_juzayy", "status": "not_done" },
+          { "slug": "sahihayn", "status": "not_required" }
+        ]
+      },
+      {
+        "date": "2026-11-26",
+        "entries": [
+          { "slug": "quran_wird", "status": "done" },
+          { "slug": "adhkar", "checkedCount": 13 },
+          { "slug": "qiyam", "status": "done" },
+          { "slug": "tafsir_ibn_juzayy", "status": "done" },
+          { "slug": "sahihayn", "status": "done" }
+        ]
+      }
+    ],
+    "attendance": ["present", "present", "absent", "excused"],
+    "expect": {
+      "daysLogged": 2,
+      "completionPct": 89,
+      "attendancePct": 67,
+      "longestStreak": 1,
+      "currentStreak": 1
+    }
+  }
+]

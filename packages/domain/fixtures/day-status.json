@@ -1,0 +1,67 @@
+[
+  {
+    "name": "1: all done",
+    "date": "2026-11-26",
+    "thresholdPct": 100,
+    "entries": [
+      { "slug": "quran_wird", "status": "done" },
+      { "slug": "adhkar", "checkedCount": 13 },
+      { "slug": "qiyam", "status": "done" },
+      { "slug": "tafsir_ibn_juzayy", "status": "done" },
+      { "slug": "sahihayn", "status": "done" }
+    ],
+    "expect": { "state": "achieved", "completionPct": 100 }
+  },
+  {
+    "name": "2: checklist 10/13, rest done, threshold 100",
+    "date": "2026-11-26",
+    "thresholdPct": 100,
+    "entries": [
+      { "slug": "quran_wird", "status": "done" },
+      { "slug": "adhkar", "checkedCount": 10 },
+      { "slug": "qiyam", "status": "done" },
+      { "slug": "tafsir_ibn_juzayy", "status": "done" },
+      { "slug": "sahihayn", "status": "done" }
+    ],
+    "expect": { "state": "failed", "completionPct": 95 }
+  },
+  {
+    "name": "2b: checklist 10/13, rest done, threshold 90",
+    "date": "2026-11-26",
+    "thresholdPct": 90,
+    "entries": [
+      { "slug": "quran_wird", "status": "done" },
+      { "slug": "adhkar", "checkedCount": 10 },
+      { "slug": "qiyam", "status": "done" },
+      { "slug": "tafsir_ibn_juzayy", "status": "done" },
+      { "slug": "sahihayn", "status": "done" }
+    ],
+    "expect": { "state": "achieved", "completionPct": 95 }
+  },
+  {
+    "name": "3: all not required",
+    "date": "2026-11-26",
+    "thresholdPct": 100,
+    "entries": [
+      { "slug": "quran_wird", "status": "not_required" },
+      { "slug": "adhkar", "status": "not_required" },
+      { "slug": "qiyam", "status": "not_required" },
+      { "slug": "tafsir_ibn_juzayy", "status": "not_required" },
+      { "slug": "sahihayn", "status": "not_required" }
+    ],
+    "expect": { "state": "neutral", "completionPct": null }
+  },
+  {
+    "name": "4: three done, two not required (incl. the checklist)",
+    "date": "2026-11-26",
+    "thresholdPct": 100,
+    "entries": [
+      { "slug": "quran_wird", "status": "done" },
+      { "slug": "adhkar", "status": "not_required" },
+      { "slug": "qiyam", "status": "done" },
+      { "slug": "tafsir_ibn_juzayy", "status": "done" },
+      { "slug": "sahihayn", "status": "not_required" }
+    ],
+    "expect": { "state": "achieved", "completionPct": 100 }
+  }
+]
