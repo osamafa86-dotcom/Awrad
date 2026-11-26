@@ -174,7 +174,9 @@ describe('0001 core schema', () => {
     }
   });
 
-  test('anon requests get no system bypass: changing a profile role raises FORBIDDEN', async () => {
+  // Since 0005 RLS filters the row away from anon before the profile guard trigger can run, so the
+  // update affects 0 rows (BR-11: zero rows, not an error); the trigger's anon rule stays as depth.
+  test('anon requests get no system bypass: changing a profile role changes nothing', async () => {
     const { id } = await createTestUser({
       email: 'anon.target@test',
       fullName: 'هدف',
@@ -185,9 +187,8 @@ describe('0001 core schema', () => {
     try {
       await db.query('set local role anon');
       await db.query(`select set_config('request.jwt.claims', '{"role":"anon"}', true)`);
-      await expect(
-        db.query(`update profiles set role = 'admin' where id = $1`, [id]),
-      ).rejects.toThrow('FORBIDDEN');
+      const result = await db.query(`update profiles set role = 'admin' where id = $1`, [id]);
+      expect(result.rowCount).toBe(0);
     } finally {
       await db.query('rollback');
     }

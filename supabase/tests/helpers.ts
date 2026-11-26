@@ -172,3 +172,74 @@ export async function resetTestData(): Promise<void> {
     await db.query(`truncate table ${names.join(', ')} restart identity cascade`);
   });
 }
+
+export interface Fixture {
+  g1: string;
+  g2: string;
+  admin: string;
+  sup1: string;
+  sup2: string;
+  p1: string;
+  p2: string;
+}
+
+/** Returns the id of the group with this name, creating it (with defaults) if it does not exist. */
+async function ensureGroup(name: string): Promise<string> {
+  const found = await withAdmin((db) =>
+    db.query<{ id: string }>('select id from groups where name = $1 order by created_at limit 1', [
+      name,
+    ]),
+  );
+  return found.rows[0]?.id ?? (await createTestGroup(name)).id;
+}
+
+/**
+ * The shared RLS fixture (idempotent; call after `resetTestData()`): groups G1, G2; an admin with
+ * no group (not tracked); supervisors sup1 (member and supervisor of G1) and sup2 (of G2); students
+ * p1 (G1) and p2 (G2). Emails are `<name>@test`; returns the ids.
+ */
+export async function seedFixture(): Promise<Fixture> {
+  const g1 = await ensureGroup('G1');
+  const g2 = await ensureGroup('G2');
+  const admin = await createTestUser({
+    email: 'admin@test',
+    fullName: 'Admin',
+    role: 'admin',
+    isTracked: false,
+  });
+  const sup1 = await createTestUser({
+    email: 'sup1@test',
+    fullName: 'Sup 1',
+    role: 'supervisor',
+    groupId: g1,
+    supervises: [g1],
+  });
+  const sup2 = await createTestUser({
+    email: 'sup2@test',
+    fullName: 'Sup 2',
+    role: 'supervisor',
+    groupId: g2,
+    supervises: [g2],
+  });
+  const p1 = await createTestUser({
+    email: 'p1@test',
+    fullName: 'P1',
+    role: 'student',
+    groupId: g1,
+  });
+  const p2 = await createTestUser({
+    email: 'p2@test',
+    fullName: 'P2',
+    role: 'student',
+    groupId: g2,
+  });
+  return {
+    g1,
+    g2,
+    admin: admin.id,
+    sup1: sup1.id,
+    sup2: sup2.id,
+    p1: p1.id,
+    p2: p2.id,
+  };
+}
