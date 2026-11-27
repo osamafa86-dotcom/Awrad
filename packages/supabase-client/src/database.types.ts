@@ -743,6 +743,18 @@ export type Database = {
       setting_bool: { Args: { p_key: string }; Returns: boolean };
       setting_int: { Args: { p_key: string }; Returns: number };
       setting_text: { Args: { p_key: string }; Returns: string };
+      setting_value_is_valid: { Args: { p_key: string; p_value: Json }; Returns: boolean };
+      update_app_settings: { Args: { p_values: Json }; Returns: undefined };
+      upsert_group: {
+        Args: {
+          p_id: string;
+          p_name: string;
+          p_supervisor_ids: string[];
+          p_timezone: string;
+          p_week_starts_on: number;
+        };
+        Returns: string;
+      };
       user_timezone: { Args: { p_user: string }; Returns: string };
       user_week_starts_on: { Args: { p_user: string }; Returns: number };
       week_start: { Args: { p_date: string; p_week_starts_on: number }; Returns: string };
