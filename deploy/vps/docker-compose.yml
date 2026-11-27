@@ -1,0 +1,225 @@
+# «أوراد» — staging stack on the owner's VPS (Task D1). Project name: awrad.
+#   docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml …
+# No Kong, no Studio, and NO published ports: the main Caddy (deploy-caddy-1, on the external network
+# deploy_default) is the only way in, by the awrad-* service names below. The secrets come from the --env-file
+# (written once on the server by the ops task; see README.md).
+#
+# Names: compose registers every service name as a DNS alias on every network the service joins, and
+# deploy_default is shared by every site. So the services that join it are themselves named awrad-* (RUNBOOK
+# §2: «اسم صريح لا اسم الخدمة العام»); db, migrate and web-build stay on the project network only.
+name: awrad
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *restart
+    image: supabase/postgres:17.12.0.002
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: "5432"
+      POSTGRES_PORT: "5432"
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:?}
+      JWT_EXP: "3600"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - dbconfig:/etc/postgresql-custom
+      # Must be superuser to alter the reserved roles; runs once on an empty volume.
+      - ./db-init/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./db-init/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      - ./db-init/auth-grants.sql:/docker-entrypoint-initdb.d/init-scripts/99-auth-grants.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1g
+    networks:
+      default:
+        aliases: [awrad-db]
+
+  # One-shot: `docker compose run --rm migrate` (migrations, then seed.sql once, then NOTIFY pgrst).
+  migrate:
+    image: postgres:17-alpine
+    entrypoint: ["sh", "/work/migrate.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PGHOST: awrad-db
+    volumes:
+      - ./migrate.sh:/work/migrate.sh:ro
+      - ../../supabase/migrations:/work/migrations:ro
+      - ../../supabase/seed.sql:/work/seed.sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [default]
+    profiles: [tools]
+
+  awrad-auth:
+    <<: *restart
+    image: supabase/gotrue:v2.198.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: https://awrad-api.emdatra.org
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:?}@awrad-db:5432/postgres
+      GOTRUE_SITE_URL: https://awrad.emdatra.org
+      GOTRUE_URI_ALLOW_LIST: https://awrad.emdatra.org,https://awrad-app.emdatra.org
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_OTP_EXP: "600"
+      GOTRUE_SMTP_HOST: awrad-mail
+      GOTRUE_SMTP_PORT: "1025"
+      GOTRUE_SMTP_ADMIN_EMAIL: noreply@awrad.emdatra.org
+      GOTRUE_SMTP_SENDER_NAME: أوراد
+      GOTRUE_SMTP_MAX_FREQUENCY: 1s
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "60"
+      # The 6-digit code in the email (the app signs in with signInWithOtp + verifyOtp type=email).
+      GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: https://awrad-api.emdatra.org/auth-templates/magic-link.html
+      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: رمز الدخول إلى أوراد
+      # Without Kong in front, GoTrue answers browser preflights itself; supabase-js sends these headers.
+      GOTRUE_CORS_ALLOWED_HEADERS: apikey,x-client-info,x-supabase-api-version,content-type,authorization
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    networks:
+      default: {}
+      web: {}
+
+  awrad-rest:
+    <<: *restart
+    # supabase/postgrest:v16.6 does not exist on Docker Hub (measured 2026-11-27); PostgREST's own image does.
+    image: postgrest/postgrest:v16.6
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:?}@awrad-db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:?}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:?}
+      PGRST_APP_SETTINGS_JWT_EXP: "3600"
+    mem_limit: 256m
+    networks:
+      default: {}
+      web: {}
+
+  awrad-functions:
+    <<: *restart
+    image: supabase/edge-runtime:v1.79.5
+    # The main router lives outside the read-only functions mount (a nested bind mount cannot create its
+    # mount point inside a read-only one); it serves /home/deno/functions/<name>.
+    command: ["start", "--main-service", "/home/deno/main"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SUPABASE_URL: https://awrad-api.emdatra.org
+      SUPABASE_ANON_KEY: ${ANON_KEY:?}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?}
+      JWT_SECRET: ${JWT_SECRET:?}
+      VERIFY_JWT: "true"
+    volumes:
+      - ../../supabase/functions:/home/deno/functions:ro
+      - ./functions-main/index.ts:/home/deno/main/index.ts:ro
+    mem_limit: 768m
+    networks:
+      default: {}
+      web: {}
+
+  awrad-mail:
+    <<: *restart
+    image: axllent/mailpit:v1.34.0
+    environment:
+      # Nothing is kept: messages live in memory and vanish on restart.
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      # The web UI and API need the same user/password as Caddy's basic_auth (Caddy forwards the header), so
+      # no other container on deploy_default can read the sign-in codes. htpasswd (bcrypt), written by the ops task.
+      MP_UI_AUTH_FILE: /run/secrets/mail-ui.htpasswd
+    volumes:
+      - ${AWRAD_SECRETS:-/opt/sites/awrad/secrets}/mail-ui.htpasswd:/run/secrets/mail-ui.htpasswd:ro
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    networks:
+      default: {}
+      web: {}
+
+  awrad-admin:
+    <<: *restart
+    image: awrad-admin:latest
+    build:
+      context: ../..
+      dockerfile: deploy/vps/Dockerfile.admin
+      target: admin
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: https://awrad-api.emdatra.org
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?}
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: https://awrad-api.emdatra.org
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?}
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    user: node
+    mem_limit: 512m
+    networks:
+      web: {}
+
+  # One-shot: `docker compose --profile build run --rm web-build` — the Expo web export, swapped atomically
+  # into /srv/sites/www/awrad-app/current (see web-build.sh).
+  web-build:
+    image: awrad-workspace:latest
+    build:
+      context: ../..
+      dockerfile: deploy/vps/Dockerfile.admin
+      target: workspace
+    command: ["sh", "deploy/vps/web-build.sh"]
+    environment:
+      EXPO_PUBLIC_SUPABASE_URL: https://awrad-api.emdatra.org
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?}
+      EXPO_PUBLIC_ADMIN_URL: https://awrad.emdatra.org
+      # Sized by the ops task from the memory free right before the export (WEB_BUILD_MEM ≤ 3g, heap ≈ 75%).
+      NODE_OPTIONS: --max-old-space-size=${WEB_BUILD_HEAP:-1536}
+    volumes:
+      - /srv/sites/www/awrad-app:/out
+    mem_limit: ${WEB_BUILD_MEM:-2048m}
+    networks: [default]
+    profiles: [build]
+
+volumes:
+  pgdata:
+  dbconfig:
+
+networks:
+  default: {}
+  web:
+    external: true
+    name: deploy_default
