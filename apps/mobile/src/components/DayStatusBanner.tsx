@@ -3,7 +3,8 @@ import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Lock from 'lucide-react-native/icons/lock';
 import WifiOff from 'lucide-react-native/icons/wifi-off';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
@@ -75,6 +76,14 @@ export function DayStatusBanner({
     }
   })();
   const Icon = look.icon;
+  const announcement = look.body ? `${look.title}. ${look.body}` : look.title;
+
+  // iOS VoiceOver ignores accessibilityLiveRegion (Android-only): announce new banners explicitly.
+  useEffect(() => {
+    if (Platform.OS === 'ios' && state !== 'readOnly') {
+      AccessibilityInfo.announceForAccessibility(announcement);
+    }
+  }, [announcement, state]);
 
   return (
     <View

@@ -1,4 +1,4 @@
-import Svg, { Circle, Polygon } from 'react-native-svg';
+import Svg, { Circle, Line, Polygon } from 'react-native-svg';
 
 import { useTheme, type ThemeColors } from '../../lib/theme';
 
@@ -8,6 +8,9 @@ export interface RubMarkProps {
   filled?: boolean;
   /** Outline colour of the empty mark (a colour token value). */
   color: string;
+  /** Centre cue so states differ by shape, not colour alone: ring (default), dash or cross. */
+  inner?: 'ring' | 'dash' | 'cross';
+  testID?: string;
 }
 
 const VIEWBOX = 24;
@@ -25,15 +28,29 @@ export const STAR_POINTS = Array.from({ length: 16 }, (_, i) => {
 
 /** Gold only when completed (DESIGN.md §2 rule: gold is for completion alone). */
 export function rubMarkPaint(filled: boolean, color: string, colors: ThemeColors) {
-  return filled ? { fill: colors.goldGilt, stroke: colors.goldText } : { fill: 'none', stroke: color };
+  return filled
+    ? { fill: colors.goldGilt, stroke: colors.goldText }
+    : { fill: 'none', stroke: color };
 }
 
 /** ۞ — the rub' al-hizb rosette: the daily wird mark (DESIGN.md §2). */
-export function RubMark({ size = 24, filled = false, color }: RubMarkProps) {
+export function RubMark({
+  size = 24,
+  filled = false,
+  color,
+  inner = 'ring',
+  testID,
+}: RubMarkProps) {
   const { colors } = useTheme();
   const { fill, stroke } = rubMarkPaint(filled, color, colors);
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`} accessible={false}>
+    <Svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
+      accessible={false}
+      testID={testID}
+    >
       <Polygon
         points={STAR_POINTS}
         fill={fill}
@@ -41,7 +58,42 @@ export function RubMark({ size = 24, filled = false, color }: RubMarkProps) {
         strokeWidth={STROKE}
         strokeLinejoin="round"
       />
-      <Circle cx={CENTER} cy={CENTER} r={3} fill="none" stroke={stroke} strokeWidth={STROKE} />
+      {inner === 'ring' ? (
+        <Circle cx={CENTER} cy={CENTER} r={3} fill="none" stroke={stroke} strokeWidth={STROKE} />
+      ) : null}
+      {inner === 'dash' ? (
+        <Line
+          x1={CENTER - 3.5}
+          y1={CENTER}
+          x2={CENTER + 3.5}
+          y2={CENTER}
+          stroke={stroke}
+          strokeWidth={STROKE + 0.5}
+          strokeLinecap="round"
+        />
+      ) : null}
+      {inner === 'cross' ? (
+        <>
+          <Line
+            x1={CENTER - 3}
+            y1={CENTER - 3}
+            x2={CENTER + 3}
+            y2={CENTER + 3}
+            stroke={stroke}
+            strokeWidth={STROKE + 0.5}
+            strokeLinecap="round"
+          />
+          <Line
+            x1={CENTER + 3}
+            y1={CENTER - 3}
+            x2={CENTER - 3}
+            y2={CENTER + 3}
+            stroke={stroke}
+            strokeWidth={STROKE + 0.5}
+            strokeLinecap="round"
+          />
+        </>
+      ) : null}
     </Svg>
   );
 }

@@ -18,6 +18,11 @@ import {
 } from './helpers/today-fixture';
 
 const TODAY = '2026-11-26';
+/** The counter text exactly as rendered: bidi-isolated (LRI…PDI), no spaces. */
+/** Matches a banner body that starts with the given error copy (a draft note may follow). */
+const escapeRe = (copy: string) => copy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const startsWith = (copy: string) => new RegExp(`^${escapeRe(copy)}`);
+const counter = (done: number, total = 13) => `\u2066${done}/${total}\u2069`;
 
 jest.mock('../src/lib/supabase', () => ({
   supabase: jest.requireActual('./helpers/today-fixture').fakeSupabase,
@@ -113,26 +118,40 @@ describe('today screen', () => {
 
   test('checklist counter shows "10/13" (no spaces) after checking 10 items', async () => {
     await renderToday();
-    expect(screen.getByText('0/13')).toBeTruthy();
+    expect(screen.getByText(counter(0))).toBeTruthy();
     await checkItems(10);
-    expect(screen.getByText('10/13')).toBeTruthy();
-    expect(screen.queryByText('10 / 13')).toBeNull();
+    expect(ar.today.counter(10, 13)).toBe(counter(10));
+    expect(screen.getByText(counter(10))).toBeTruthy();
+    expect(ar.today.counter(10, 13)).toContain('10/13');
+    expect(ar.today.counter(10, 13)).not.toMatch(/\s/);
   });
 
   test('save sends SaveLogInput with period daily, periodStart = today, checkedItemIds for checklist', async () => {
     await renderToday();
-    await setAllTristate();
+    await setStatus(quran.name, ar.today.tristate.done);
+    await setStatus(qiyam.name, ar.today.tristate.notDone);
+    await setStatus(tafsir.name, ar.today.tristate.notRequired);
+    await setStatus(sahihayn.name, ar.today.tristate.done);
     await checkItems(10);
     await pressSave();
+    expect(mockSaveLog).toHaveBeenCalledTimes(1);
     expect(mockSaveLog.mock.calls[0]![0]).toBe(supabase);
-    const input = savedInput();
-    expect(input.period).toBe('daily');
-    expect(input.periodStart).toBe(TODAY);
-    expect(input.entries).toHaveLength(5);
-    expect(input.entries.map((e) => e.habitId).sort()).toEqual(dailyHabits.map((h) => h.id).sort());
-    const checklist = input.entries.find((e) => e.habitId === adhkar.id)!;
-    expect(checklist.status).toBe('not_done');
-    expect(checklist.checkedItemIds).toEqual(adhkar.items.slice(0, 10).map((i) => i.id));
+    // Deep equality: every active habit, in sort order; no note key when the note is empty.
+    expect(savedInput()).toEqual({
+      period: 'daily',
+      periodStart: TODAY,
+      entries: [
+        { habitId: quran.id, status: 'done' },
+        {
+          habitId: adhkar.id,
+          status: 'not_done',
+          checkedItemIds: adhkar.items.slice(0, 10).map((i) => i.id),
+        },
+        { habitId: qiyam.id, status: 'not_done' },
+        { habitId: tafsir.id, status: 'not_required' },
+        { habitId: sahihayn.id, status: 'done' },
+      ],
+    });
   });
 
   test('after save, banner shows "يوم مُنجَز" when all done; "بقي بندان" when 2 missing', async () => {
@@ -180,7 +199,7 @@ describe('today screen', () => {
     await renderToday();
     await fireEvent.press(screen.getByRole('button', { name: ar.today.markAllDone }));
     await pressSave();
-    expect(await screen.findByText(ar.errors.DATE_OUT_OF_WINDOW)).toBeTruthy();
+    expect(await screen.findByText(startsWith(ar.errors.DATE_OUT_OF_WINDOW))).toBeTruthy();
     expect(screen.getByText(ar.today.banner.errorTitle)).toBeTruthy();
   });
 
@@ -216,7 +235,7 @@ describe('today screen', () => {
     for (const h of tristateHabits) expect(radio(h.name, ar.today.tristate.done)).toBeChecked();
     for (const item of adhkar.items)
       expect(screen.getByRole('checkbox', { name: item.name })).toBeChecked();
-    expect(screen.getByText('13/13')).toBeTruthy();
+    expect(screen.getByText(counter(13))).toBeTruthy();
     expect(saveButton()).toBeEnabled();
   });
 
@@ -231,7 +250,7 @@ describe('today screen', () => {
 
     await renderToday();
     await waitFor(() => expect(radio(quran.name, ar.today.tristate.done)).toBeChecked());
-    expect(screen.getByText('3/13')).toBeTruthy();
+    expect(screen.getByText(counter(3))).toBeTruthy();
 
     for (const h of tristateHabits) await setStatus(h.name, ar.today.tristate.done);
     await pressSave();
@@ -274,7 +293,7 @@ describe('today screen', () => {
     };
     await renderToday();
     await waitFor(() => expect(radio(quran.name, ar.today.tristate.done)).toBeChecked());
-    expect(screen.getByText('5/13')).toBeTruthy();
+    expect(screen.getByText(counter(5))).toBeTruthy();
     const logCall = fakeDb.calls.find((c) => c.table === 'logs')!;
     expect(logCall.filters).toMatchObject({
       user_id: USER_ID,
@@ -293,7 +312,7 @@ describe('today screen', () => {
     await pressSave();
     const checklist = savedInput().entries.find((e) => e.habitId === adhkar.id)!;
     expect(checklist.status).toBe('not_required');
-    expect(checklist.checkedItemIds ?? []).toEqual([]);
+    expect(checklist.checkedItemIds).toEqual([]);
   });
 
   test('tristate entries never include checkedItemIds', async () => {
@@ -311,8 +330,118 @@ describe('today screen', () => {
     await renderToday();
     await fireEvent.press(screen.getByRole('button', { name: ar.today.markAllDone }));
     await pressSave();
-    expect(await screen.findByText(ar.errors.MISSING_ENTRY)).toBeTruthy();
+    expect(await screen.findByText(startsWith(ar.errors.MISSING_ENTRY))).toBeTruthy();
     // The draft is kept after a failed save.
     expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).not.toBeNull();
+  });
+  test("navigating keeps each day's draft under its own key", async () => {
+    await renderToday();
+    await setStatus(quran.name, ar.today.tristate.done);
+    await setStatus(qiyam.name, ar.today.tristate.notDone);
+    await waitFor(async () =>
+      expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).not.toBeNull(),
+    );
+
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.prevDay }));
+    await waitFor(() =>
+      expect(mockFetchActiveHabits).toHaveBeenLastCalledWith(supabase, '2026-11-25', 'daily'),
+    );
+    await screen.findByLabelText(quran.name);
+    expect(radio(quran.name, ar.today.tristate.done)).not.toBeChecked();
+    expect(await AsyncStorage.getItem('draft:daily:2026-11-25')).toBeNull();
+
+    // Back and forth again: yesterday must still open empty, today keeps its edits.
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.nextDay }));
+    await waitFor(() => expect(radio(quran.name, ar.today.tristate.done)).toBeChecked());
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.prevDay }));
+    await waitFor(() =>
+      expect(mockFetchActiveHabits).toHaveBeenLastCalledWith(supabase, '2026-11-25', 'daily'),
+    );
+    await screen.findByLabelText(quran.name);
+    expect(radio(quran.name, ar.today.tristate.done)).not.toBeChecked();
+    expect(await AsyncStorage.getItem('draft:daily:2026-11-25')).toBeNull();
+
+    const stored = JSON.parse((await AsyncStorage.getItem(`draft:daily:${TODAY}`))!) as {
+      entries: Record<string, { status?: string }>;
+    };
+    expect(stored.entries[quran.id]?.status).toBe('done');
+    expect(stored.entries[qiyam.id]?.status).toBe('not_done');
+  });
+
+  test('a stale-habit error reloads the habits, keeps the edits and retries with the current list', async () => {
+    mockSaveLog.mockRejectedValueOnce({ message: 'INACTIVE_HABIT', code: 'P0001' });
+    await renderToday();
+    await setStatus(quran.name, ar.today.tristate.done);
+    await setStatus(qiyam.name, ar.today.tristate.notDone);
+    await setStatus(tafsir.name, ar.today.tristate.notRequired);
+    await setStatus(sahihayn.name, ar.today.tristate.done);
+    await checkItems(2);
+    // After the error the server no longer has sahihayn active.
+    mockFetchActiveHabits.mockResolvedValue([quran, adhkar, qiyam, tafsir]);
+    await pressSave();
+    expect(await screen.findByText(startsWith(ar.errors.INACTIVE_HABIT))).toBeTruthy();
+    await waitFor(() => expect(mockFetchActiveHabits).toHaveBeenCalledTimes(2));
+    await screen.findByLabelText(quran.name);
+    expect(screen.queryByLabelText(sahihayn.name)).toBeNull();
+    expect(radio(qiyam.name, ar.today.tristate.notDone)).toBeChecked();
+
+    await fireEvent.press(saveButton());
+    await waitFor(() => expect(mockSaveLog).toHaveBeenCalledTimes(2));
+    expect(savedInput().entries).toEqual([
+      { habitId: quran.id, status: 'done' },
+      {
+        habitId: adhkar.id,
+        status: 'not_done',
+        checkedItemIds: adhkar.items.slice(0, 2).map((i) => i.id),
+      },
+      { habitId: qiyam.id, status: 'not_done' },
+      { habitId: tafsir.id, status: 'not_required' },
+    ]);
+  });
+
+  test('the error banner keeps the last error copy while a retry is in flight', async () => {
+    mockSaveLog.mockRejectedValueOnce({ message: 'FORBIDDEN', code: 'P0001' });
+    await renderToday();
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.markAllDone }));
+    await pressSave();
+    await screen.findByText(startsWith(ar.errors.FORBIDDEN));
+    let finish: (v: string) => void = () => undefined;
+    mockSaveLog.mockReturnValueOnce(new Promise<string>((r) => (finish = r)));
+    await fireEvent.press(saveButton());
+    await waitFor(() => expect(mockSaveLog).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(startsWith(ar.errors.FORBIDDEN))).toBeTruthy();
+    expect(screen.queryByText(startsWith(ar.errors.UNKNOWN))).toBeNull();
+    finish('log-1');
+    expect(await screen.findByText(ar.today.banner.achieved)).toBeTruthy();
+  });
+
+  test('a connection failure mentions the device draft only when there are unsaved edits', async () => {
+    mockSaveLog.mockRejectedValue(new Error('Failed to fetch'));
+    fakeDb.logs[TODAY] = {
+      id: 'log-1',
+      user_id: USER_ID,
+      period: 'daily',
+      period_start: TODAY,
+      note: null,
+      log_entries: dailyHabits.map((h, i) => ({
+        id: `e${i}`,
+        habit_id: h.id,
+        status: 'done' as const,
+        log_entry_items: [],
+      })),
+    };
+    await renderToday();
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    // Re-saving the server log as is: nothing was edited, so no draft is claimed.
+    await pressSave();
+    expect(await screen.findByText(ar.errors.UNKNOWN)).toBeTruthy();
+    expect(screen.queryByText(new RegExp(escapeRe(ar.today.banner.draftKept)))).toBeNull();
+
+    await setStatus(qiyam.name, ar.today.tristate.notDone);
+    await fireEvent.press(saveButton());
+    await waitFor(() => expect(mockSaveLog).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByText(`${ar.errors.UNKNOWN} ${ar.today.banner.draftKept}`),
+    ).toBeTruthy();
   });
 });

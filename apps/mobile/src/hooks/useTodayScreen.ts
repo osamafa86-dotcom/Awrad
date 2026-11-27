@@ -16,12 +16,21 @@ import { useActiveHabits } from './useActiveHabits';
 import { useDraft } from './useDraft';
 import { useLog } from './useLog';
 import { useSaveLog, type SaveError } from './useSaveLog';
+
+// The habit list the payload was built from is stale: reload it (keeping the student's edits).
+const STALE_HABIT_ERRORS: ReadonlySet<SaveError> = new Set([
+  'INACTIVE_HABIT',
+  'INVALID_ITEM',
+  'FREQUENCY_MISMATCH',
+  'MISSING_ENTRY',
+]);
 import { useSettings, type UseSettings } from './useSettings';
 import { useStreak } from './useStreak';
 
 export type BannerState =
   | { kind: 'achieved' | 'failed' | 'neutral'; completionPct: number | null; remaining: number }
-  | { kind: 'error'; code: SaveError };
+  /** `draftKept`: unsaved edits are on this device. */
+  | { kind: 'error'; code: SaveError; draftKept: boolean };
 
 export interface TodayScreenState {
   settings: UseSettings;
@@ -86,9 +95,11 @@ export function useTodayScreen({
 
   // Keep edits on the device until a successful save (never in read-only mode: no draft key).
   const { setDraft } = draftQ;
+  // `setDraft` is keyed by `date`, so only write when `local` belongs to that same date — otherwise
+  // navigating would store one day's edits under the next day's key.
   useEffect(() => {
-    if (local?.dirty) setDraft({ entries: local.entries, note: local.note });
-  }, [local, setDraft]);
+    if (local?.dirty && local.date === date) setDraft({ entries: local.entries, note: local.note });
+  }, [local, date, setDraft]);
 
   const current = local && local.date === date ? local : null;
   const entries = current?.entries ?? {};
@@ -128,10 +139,16 @@ export function useTodayScreen({
   const save = useCallback(async () => {
     if (!canSave || !date || saver.saving) return;
     const input = buildSaveInput(habits, entries, date, note);
-    const ok = await saver.save(input);
-    if (!ok) {
-      setBanner({ date, state: { kind: 'error', code: 'UNKNOWN' } });
-      return; // the draft stays on the device
+    const error = await saver.save(input);
+    if (error) {
+      // The last code stays in the banner until a new result arrives; the draft stays on the device.
+      setBanner({
+        date,
+        state: { kind: 'error', code: error, draftKept: current?.dirty === true },
+      });
+      // Removed habits then drop out of the payload; new ones show as unspecified.
+      if (STALE_HABIT_ERRORS.has(error)) habitsQ.refetch();
+      return;
     }
     // F-15: the day's state right away, computed locally (BR-01/BR-02).
     const status = computeDayStatus(habits, input.entries, date, settings.thresholdPct);
@@ -151,7 +168,20 @@ export function useTodayScreen({
     });
     void logQ.refetch();
     void streakQ.refetch();
-  }, [canSave, date, saver, habits, entries, note, settings.thresholdPct, draftQ, logQ, streakQ]);
+  }, [
+    canSave,
+    date,
+    saver,
+    habits,
+    entries,
+    note,
+    current?.dirty,
+    settings.thresholdPct,
+    draftQ,
+    logQ,
+    streakQ,
+    habitsQ,
+  ]);
 
   const canPrev =
     !readOnly &&
@@ -167,9 +197,6 @@ export function useTodayScreen({
   }, [canNext, date]);
 
   const shownBanner = banner && banner.date === date ? banner.state : null;
-  // The error code arrives with the hook state after `save` resolves.
-  const resolvedBanner: BannerState | null =
-    shownBanner?.kind === 'error' ? { kind: 'error', code: saver.error ?? 'UNKNOWN' } : shownBanner;
 
   return {
     settings,
@@ -196,7 +223,7 @@ export function useTodayScreen({
     missingHabit,
     saving: saver.saving,
     save,
-    banner: resolvedBanner,
+    banner: shownBanner,
     streak: streakQ.streak,
   };
 }

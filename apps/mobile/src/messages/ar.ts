@@ -93,6 +93,13 @@ export const ar = {
     gregorianDate: (day: number, month: string, year: number) => `${day} ${month} ${year}`,
     /** Accessible summary of the row of habit marks in the header. */
     marksLabel: (done: number, total: number) => `تمّ ${done} من ${total}`,
+    /** Accessible name of each habit mark state. */
+    markState: {
+      unset: 'لم يُسجَّل',
+      done: 'تم',
+      not_done: 'لم يتم',
+      not_required: 'غير مطلوب',
+    },
     tristate: {
       done: 'تم',
       notDone: 'لم يتم',
@@ -101,7 +108,8 @@ export const ar = {
     checkAll: 'تعليم الكل',
     notRequiredToday: 'غير مطلوب اليوم',
     /** Counters have no spaces (DESIGN.md §7 rule 4): «10/13». */
-    counter: (done: number, total: number) => `${done}/${total}`,
+    // Wrapped in LRI…PDI so the bidi algorithm keeps it in order on every platform.
+    counter: (done: number, total: number) => `\u2066${done}/${total}\u2069`,
     progressLabel: (done: number, total: number) => `أُنجز ${done} من ${total}`,
     markAllDone: 'تعليم الكل تم',
     save: 'حفظ اليوم',
@@ -111,7 +119,6 @@ export const ar = {
     noteLabel: 'ملاحظة (اختياري)',
     noteHelper: 'يراها الشيخ ومشرف مجموعتك فقط.',
     streak: (days: number) => `السلسلة الحالية ${daysText(days)}`,
-    remaining: (n: number) => remainingText(n),
     banner: {
       achieved: 'حُفظ ✓ — يوم مُنجَز',
       failed: (remaining: number) => `حُفظ ✓ — ${remainingText(remaining)}`,
@@ -119,6 +126,7 @@ export const ar = {
       neutral: 'حُفظ ✓ — يوم بلا تكليف',
       errorTitle: 'تعذّر الحفظ',
       retry: 'أعد المحاولة',
+      draftKept: 'حفظنا مسوّدتك على هذا الجهاز.',
       readOnly: 'للقراءة فقط',
       readOnlyBody: 'انتهت مهلة التعديل لهذا اليوم.',
     },
@@ -136,7 +144,7 @@ export const ar = {
     INVALID_ITEM: 'تغيّرت بنود إحدى القوائم. حدّث الصفحة وحاول مرة أخرى.',
     INACTIVE_USER: 'حسابك غير مفعَّل، تواصل مع المشرف.',
     MISSING_ENTRY: 'بقي ورد بلا حالة. حدّد حالة كل ورد ثم احفظ.',
-    UNKNOWN: 'لا اتصال الآن. حفظنا مسوّدتك على هذا الجهاز.',
+    UNKNOWN: 'تعذّر الحفظ، تحقّق من الاتصال وأعد المحاولة.',
   },
 } as const;
 

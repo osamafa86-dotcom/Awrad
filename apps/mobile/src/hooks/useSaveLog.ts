@@ -7,8 +7,8 @@ import { supabase } from '../lib/supabase';
 export type SaveError = RpcErrorCode | 'UNKNOWN';
 
 export interface UseSaveLog {
-  /** Resolves true on success; on failure sets `error` and resolves false. */
-  save(input: SaveLogInput): Promise<boolean>;
+  /** Resolves null on success; on failure sets `error` and resolves the same code. */
+  save(input: SaveLogInput): Promise<SaveError | null>;
   saving: boolean;
   error: SaveError | null;
 }
@@ -23,10 +23,11 @@ export function useSaveLog(): UseSaveLog {
     setError(null);
     try {
       await saveLog(supabase, input);
-      return true;
+      return null;
     } catch (e) {
-      setError(parseRpcError(e));
-      return false;
+      const code = parseRpcError(e);
+      setError(code);
+      return code;
     } finally {
       setSaving(false);
     }

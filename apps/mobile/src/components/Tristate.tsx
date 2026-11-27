@@ -32,8 +32,9 @@ export function Tristate({ value, onChange, label, disabled = false }: TristateP
   const { colors, radius, space, type } = useTheme();
 
   const palette = (option: EntryStatus) => {
+    // Unselected segments blend into the sunken track (no background of their own).
     if (value !== option)
-      return { bg: 'transparent', fg: colors.textSecondary, border: 'transparent' };
+      return { bg: undefined, fg: colors.textSecondary, border: colors.bgSunken };
     switch (option) {
       case 'done':
         return {

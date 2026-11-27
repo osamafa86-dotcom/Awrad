@@ -114,7 +114,11 @@ export function TodayView({ initialDate, readOnly = false }: TodayViewProps) {
   ) : s.banner?.kind === 'error' ? (
     <DayStatusBanner
       state="error"
-      message={ar.errors[s.banner.code]}
+      message={
+        s.banner.draftKept
+          ? `${ar.errors[s.banner.code]} ${ar.today.banner.draftKept}`
+          : ar.errors[s.banner.code]
+      }
       offline={s.banner.code === 'UNKNOWN'}
       onRetry={s.canSave ? () => void s.save() : undefined}
     />

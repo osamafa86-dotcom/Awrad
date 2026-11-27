@@ -56,12 +56,11 @@ export function HabitChecklist({
           accessibilityValue={{ min: 0, max: total, now: done }}
           style={{ alignItems: 'flex-end', gap: space.s4 }}
         >
-          {/* LTR keeps «10/13» in reading order inside the RTL layout. */}
+          {/* The counter string is bidi-isolated (LRI…PDI) so «10/13» keeps its order in RTL. */}
           <Text
             style={[
               type.numberMd,
               {
-                writingDirection: 'ltr',
                 color: complete
                   ? colors.goldText
                   : notRequired
@@ -156,8 +155,9 @@ function ChecklistAction({
         paddingHorizontal: space.s8,
         borderRadius: radius.sm,
         borderWidth: 1,
-        borderColor: selected ? colors.borderStrong : 'transparent',
-        backgroundColor: pressed ? colors.actionPrimaryTint : 'transparent',
+        // Unselected: the border matches the card surface, so only the selected state shows one.
+        borderColor: selected ? colors.borderStrong : colors.bgSurface,
+        backgroundColor: pressed ? colors.actionPrimaryTint : undefined,
         opacity: disabled ? 0.5 : 1,
       })}
     >
