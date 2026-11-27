@@ -1,4 +1,23 @@
 // كل نصوص واجهة تطبيق الطالب. لا نصّ عربيّ داخل المكوّنات.
+
+/** Arabic counted noun: 1 → «بند واحد», 2 → «بندان», 3–10 → «3 بنود», 11+ (and 0) → «11 بندًا». */
+function countText(n: number, one: string, two: string, few: string, many: string): string {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+/** «يوم واحد» · «يومان» · «5 أيام» · «12 يومًا» (0 → «0 يوم»). */
+function daysText(n: number): string {
+  return n === 0 ? `${n} يوم` : countText(n, 'يوم واحد', 'يومان', 'أيام', 'يومًا');
+}
+
+/** Habits still short of done: «بقي بند واحد» · «بقي بندان» · «بقي 3 بنود» · «بقي 11 بندًا». */
+function remainingText(n: number): string {
+  return `بقي ${countText(n, 'بند واحد', 'بندان', 'بنود', 'بندًا')}`;
+}
+
 export const ar = {
   app: {
     name: 'أوراد',
@@ -44,9 +63,80 @@ export const ar = {
     retry: 'إعادة المحاولة',
     loading: 'جارٍ التحميل…',
   },
+  today: {
+    loading: 'جارٍ تحميل أوراد اليوم…',
+    loadFailed: 'تعذّر تحميل أوراد اليوم.',
+    retry: 'إعادة المحاولة',
+    empty: 'لا أوراد يومية لهذا التاريخ.',
+    prevDay: 'اليوم السابق',
+    nextDay: 'اليوم التالي',
+    relToday: 'اليوم',
+    relYesterday: 'أمس',
+    weekdays: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    gregorianMonths: [
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ],
+    /** «اليوم، الخميس» · «أمس، الأربعاء» · «الثلاثاء» */
+    dayLabel: (relative: string | null, weekday: string) =>
+      relative ? `${relative}، ${weekday}` : weekday,
+    gregorianDate: (day: number, month: string, year: number) => `${day} ${month} ${year}`,
+    /** Accessible summary of the row of habit marks in the header. */
+    marksLabel: (done: number, total: number) => `تمّ ${done} من ${total}`,
+    tristate: {
+      done: 'تم',
+      notDone: 'لم يتم',
+      notRequired: 'غير مطلوب',
+    },
+    checkAll: 'تعليم الكل',
+    notRequiredToday: 'غير مطلوب اليوم',
+    /** Counters have no spaces (DESIGN.md §7 rule 4): «10/13». */
+    counter: (done: number, total: number) => `${done}/${total}`,
+    progressLabel: (done: number, total: number) => `أُنجز ${done} من ${total}`,
+    markAllDone: 'تعليم الكل تم',
+    save: 'حفظ اليوم',
+    /** The one reason under a disabled save button (DESIGN.md §7 rule 6). */
+    missingStatus: (habitName: string) => `بقي ${habitName} بلا حالة`,
+    allSpecified: 'كل الأوراد محدَّدة.',
+    noteLabel: 'ملاحظة (اختياري)',
+    noteHelper: 'يراها الشيخ ومشرف مجموعتك فقط.',
+    streak: (days: number) => `السلسلة الحالية ${daysText(days)}`,
+    remaining: (n: number) => remainingText(n),
+    banner: {
+      achieved: 'حُفظ ✓ — يوم مُنجَز',
+      failed: (remaining: number) => `حُفظ ✓ — ${remainingText(remaining)}`,
+      failedBody: 'الانتظام أهمّ من الكمال.',
+      neutral: 'حُفظ ✓ — يوم بلا تكليف',
+      errorTitle: 'تعذّر الحفظ',
+      retry: 'أعد المحاولة',
+      readOnly: 'للقراءة فقط',
+      readOnlyBody: 'انتهت مهلة التعديل لهذا اليوم.',
+    },
+  },
   errors: {
     missingEnv:
       'إعدادات الاتصال ناقصة: عيّن EXPO_PUBLIC_SUPABASE_URL وEXPO_PUBLIC_SUPABASE_ANON_KEY في ملف ‎.env',
+    // RPC error codes (AGENTS.md §6) and anything unrecognised (usually no connection).
+    FORBIDDEN: 'لا تملك صلاحية حفظ هذا السجلّ.',
+    FUTURE_DATE: 'لا يمكن التسجيل ليوم لم يأتِ بعد.',
+    DATE_OUT_OF_WINDOW: 'انتهت مهلة تعديل هذا اليوم، فلا يمكن حفظه.',
+    INVALID_WEEK_START: 'بداية الأسبوع غير صحيحة.',
+    FREQUENCY_MISMATCH: 'أحد الأوراد لا يتبع هذا السجلّ. حدّث الصفحة وحاول مرة أخرى.',
+    INACTIVE_HABIT: 'تغيّرت قائمة الأوراد. حدّث الصفحة وحاول مرة أخرى.',
+    INVALID_ITEM: 'تغيّرت بنود إحدى القوائم. حدّث الصفحة وحاول مرة أخرى.',
+    INACTIVE_USER: 'حسابك غير مفعَّل، تواصل مع المشرف.',
+    MISSING_ENTRY: 'بقي ورد بلا حالة. حدّد حالة كل ورد ثم احفظ.',
+    UNKNOWN: 'لا اتصال الآن. حفظنا مسوّدتك على هذا الجهاز.',
   },
 } as const;
 
