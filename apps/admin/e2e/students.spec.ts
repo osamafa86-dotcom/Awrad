@@ -1,10 +1,11 @@
+import { addDays, todayIn } from '@awrad/domain';
 import { expect, test } from '@playwright/test';
 
 import { ar } from '../src/messages/ar';
 
 import { authFile, hasStack } from './helpers';
 import { serviceClient } from './seed';
-import { TEST_GROUP_NAME, TEST_USERS } from './users';
+import { OTHER_GROUP_NAME, TEST_GROUP_NAME, TEST_TIMEZONE, TEST_USERS } from './users';
 
 // ───────────── Tier (a): signed out — runs everywhere ─────────────
 
@@ -90,6 +91,34 @@ test.describe('students, signed in', () => {
       await expect(page.getByRole('heading', { level: 1, name: ar.students.title })).toBeVisible();
       await expect(page.getByRole('link', { name: TEST_USERS.p1.fullName })).toBeVisible();
       await expect(page.getByRole('link', { name: ar.students.invite })).toHaveCount(0);
+    });
+
+    // Final review admin M-1: RLS is DB-tested, but these pages rely on it alone, so the boundary is asserted here
+    // too — the other group's people are absent from the list, their page is «not found», and an export has none.
+    test('sup1 cannot see the other group: not in the list, no page by URL, none in an export', async ({ page }) => {
+      const db = serviceClient()!;
+      const p2 = await db.auth.admin.listUsers({ perPage: 1000 });
+      if (p2.error) throw p2.error;
+      const p2Id = p2.data.users.find((user) => user.email === TEST_USERS.p2.email)?.id;
+      expect(p2Id).toBeTruthy();
+
+      await page.goto('/students');
+      await expect(page.getByRole('link', { name: TEST_USERS.p1.fullName })).toBeVisible();
+      await expect(page.getByRole('link', { name: TEST_USERS.p2.fullName })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: TEST_USERS.sup2.fullName })).toHaveCount(0);
+      await expect(page.getByText(OTHER_GROUP_NAME, { exact: true })).toHaveCount(0);
+
+      await page.goto(`/students/${p2Id}`);
+      await expect(page.getByText(ar.students.detail.notFound)).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: TEST_USERS.p2.fullName })).toHaveCount(0);
+
+      const today = todayIn(TEST_TIMEZONE);
+      const res = await page.request.get(`/api/export?kind=daily&from=${addDays(today, -9)}&to=${today}`);
+      expect(res.status()).toBe(200);
+      const csv = await res.text();
+      expect(csv).toContain(TEST_USERS.p1.fullName);
+      expect(csv).not.toContain(TEST_USERS.p2.fullName);
+      expect(csv).not.toContain(OTHER_GROUP_NAME);
     });
   });
 });

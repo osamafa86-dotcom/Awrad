@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Fails when the apps clamp text to one line without a `// why:` (DESIGN.md §7 rule 9): `numberOfLines={1}`
-// in the mobile app, the Tailwind `truncate` / `line-clamp-1` / `text-ellipsis` classes on the web.
+// in the mobile app, the Tailwind `truncate` / `line-clamp-1` / `text-ellipsis` classes on the web, and a
+// `slice(0, n)` excerpt with an ellipsis anywhere.
 // Usage: node scripts/check-no-truncation.mjs [dir ...]   (defaults to the mobile app's src and app; the
 // admin lint passes apps/admin/app apps/admin/src)
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -35,7 +36,7 @@ for (const dir of dirs) {
 }
 
 if (problems.length > 0) {
-  console.error('A one-line clamp (numberOfLines={1}, truncate, line-clamp-1, text-ellipsis) cuts text (DESIGN.md §7 rule 9). Let it wrap, or add `// why:` on the line:');
+  console.error('A one-line clamp (numberOfLines={1}, truncate, line-clamp-1, text-ellipsis) or a slice(0, n) + «…» excerpt cuts text (DESIGN.md §7 rule 9). Let it wrap, or add `// why:` on the line:');
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }

@@ -58,6 +58,25 @@ describe('no-truncation matcher', () => {
     expect(isTruncationViolation("const id = 'truncate'; // why: a log id, never a name")).toBe(false);
   });
 
+  // Final review admin I-2: the student page cut notes at 140 characters with `slice` + «…» and left the tail in a
+  // hover-only tooltip; a character-count excerpt is a truncation too.
+  it.each([
+    'return text.length > EXCERPT ? `${text.slice(0, EXCERPT).trimEnd()}…` : text;',
+    "const short = note.substring(0, 80) + '…';",
+    "const short = note.slice(0, 80) + '...';",
+  ])('flags a character-count excerpt that ends in an ellipsis: %s', (line) => {
+    expect(isTruncationViolation(line)).toBe(true);
+  });
+
+  it.each([
+    'return date.slice(0, 7);',
+    "const id = crypto.randomUUID().slice(0, 8);",
+    "const label = isLoading ? 'جارٍ الحفظ…' : 'حفظ';",
+    '// Never `text.slice(0, n) + "…"`: show the whole text.',
+  ])('ignores slices without an ellipsis, ellipses without a slice, and comments: %s', (line) => {
+    expect(isTruncationViolation(line)).toBe(false);
+  });
+
   it('reports the 1-based line numbers of the violations in a file', () => {
     const source = ['<View>', '  <Text numberOfLines={1}>{a}</Text>', '  <Text>{b}</Text>', '  numberOfLines: 1,', '</View>'].join('\n');
     expect(findTruncations(source)).toEqual([2, 4]);

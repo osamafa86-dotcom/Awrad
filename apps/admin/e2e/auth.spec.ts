@@ -64,6 +64,16 @@ test.describe('signed out', () => {
     await page.goto('/unauthorized');
     await expect(page).toHaveURL(/\/login\?next=%2Funauthorized$/);
   });
+
+  // Final review admin M-3: no site may frame the dashboard (clickjacking of one-click actions).
+  test('responses forbid framing and sniffing and do not name the framework', async ({ page }) => {
+    const response = await page.goto('/login');
+    const headers = response!.headers();
+    expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(headers['x-frame-options']).toBe('DENY');
+    expect(headers['x-content-type-options']).toBe('nosniff');
+    expect(headers['x-powered-by']).toBeUndefined();
+  });
 });
 
 // ───────────── Tier (b): signed in — needs a Supabase stack ─────────────
@@ -96,6 +106,23 @@ test.describe('signed in', () => {
     const nav = await openSidebar(page);
     await expect(nav.getByRole('link')).toHaveText(SECTIONS);
     await expect(nav.getByRole('link', { name: 'نظرة عامة' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  // Final review admin M-2 and I-4.
+  test('an unknown URL shows the Arabic not-found page; the session cookie is HttpOnly and SameSite=Lax', async ({
+    page,
+  }) => {
+    await signIn(page, TEST_USERS.admin.email);
+    await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/);
+    const session = (await page.context().cookies()).filter((cookie) => cookie.name.startsWith('sb-'));
+    expect(session.length).toBeGreaterThan(0);
+    for (const cookie of session) {
+      expect(cookie.httpOnly).toBe(true);
+      expect(cookie.sameSite).toBe('Lax');
+    }
+    await page.goto('/no-such-page');
+    await expect(page.getByRole('heading', { level: 1, name: ar.boundaries.notFoundTitle })).toBeVisible();
+    await expect(page.getByRole('link', { name: ar.boundaries.backHome })).toHaveAttribute('href', '/');
   });
 
   test('a supervisor does not see habits or settings', async ({ page }) => {

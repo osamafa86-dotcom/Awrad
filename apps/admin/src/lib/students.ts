@@ -45,6 +45,27 @@ export function parseFilters(params: Record<string, string | string[] | undefine
   };
 }
 
+/** Logs per «عرض السجلّات الأقدم» step on the student page (F-61, Ruling FIN-1). */
+export const LOGS_PAGE = 30;
+/** An upper bound on `?logs=` so a hand-typed URL cannot ask for an unbounded read (decades of daily logs fit). */
+const LOGS_MAX = 20_000;
+
+/** How many logs the student page shows: `?logs=` rounded up to whole pages, one page by default. */
+export function parseLogsParam(value: unknown): number {
+  const n = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : 0;
+  if (n <= 0) return LOGS_PAGE;
+  return Math.min(Math.ceil(n / LOGS_PAGE) * LOGS_PAGE, LOGS_MAX);
+}
+
+/** The student page URL with its calendar month and log count; defaults stay out of the URL. */
+export function studentHref(id: string, view: { month?: string; logs?: number }): string {
+  const query = new URLSearchParams();
+  if (view.month) query.set('month', view.month);
+  if (view.logs && view.logs !== LOGS_PAGE) query.set('logs', String(view.logs));
+  const search = query.toString();
+  return `/students/${encodeURIComponent(id)}${search ? `?${search}` : ''}`;
+}
+
 export type InviteErrorCode = 'FORBIDDEN' | 'EMAIL_EXISTS' | 'INVALID_INPUT' | 'INVITE_FAILED';
 export type StudentErrorCode = InviteErrorCode | 'SELF_FORBIDDEN' | 'SAVE_FAILED' | 'DELETE_FAILED';
 export type StudentField = 'email' | 'full_name' | 'group_id' | 'joined_at';

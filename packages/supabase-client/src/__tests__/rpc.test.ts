@@ -184,19 +184,29 @@ describe('getCalendar / getGroupOverview', () => {
     ]);
   });
 
+  // get_group_overview is set-returning: PostgREST answers it through .range(), which max_rows caps at 1000.
+  const paged = (all: unknown[], error: unknown = null) => {
+    const ranges: Array<[number, number]> = [];
+    const builder = {
+      range: (from: number, to: number) => {
+        ranges.push([from, to]);
+        return Promise.resolve(error ? { data: null, error } : { data: all.slice(from, to + 1), error: null });
+      },
+    };
+    return { builder, ranges };
+  };
+
   it('getGroupOverview passes p_group_id/p_from/p_to and maps rows', async () => {
     const { client, m } = mock();
-    m.rpc.mockResolvedValue({
-      data: [
-        {
-          user_id: U1,
-          full_name: 'سارة',
-          log_date: '2026-03-01',
-          state: 'failed',
-        },
-      ],
-      error: null,
-    });
+    const { builder } = paged([
+      {
+        user_id: U1,
+        full_name: 'سارة',
+        log_date: '2026-03-01',
+        state: 'failed',
+      },
+    ]);
+    m.rpc.mockReturnValue(builder);
     const rows = await getGroupOverview(client, H1, '2026-03-01', '2026-03-07');
     expect(m.rpc).toHaveBeenCalledWith('get_group_overview', {
       p_group_id: H1,
@@ -206,11 +216,46 @@ describe('getCalendar / getGroupOverview', () => {
     expect(rows).toEqual([{ userId: U1, fullName: 'سارة', date: '2026-03-01', state: 'failed' }]);
   });
 
+  it('getGroupOverview returns every row past max_rows, one .range() page at a time', async () => {
+    const { client, m } = mock();
+    // 181 tracked members × 14 days = 2534 rows: one request would stop at 1000 without an error.
+    const all = Array.from({ length: 2534 }, (_, i) => ({
+      user_id: `u${String(Math.floor(i / 14)).padStart(3, '0')}`,
+      full_name: `طالب ${Math.floor(i / 14)}`,
+      log_date: `2026-03-${String((i % 14) + 1).padStart(2, '0')}`,
+      state: 'missing',
+    }));
+    const { builder, ranges } = paged(all);
+    m.rpc.mockReturnValue(builder);
+    const rows = await getGroupOverview(client, H1, '2026-03-01', '2026-03-14');
+    expect(rows).toHaveLength(2534);
+    expect(rows.at(-1)).toEqual({ userId: 'u180', fullName: 'طالب 180', date: '2026-03-14', state: 'missing' });
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [2000, 2999],
+    ]);
+    expect(m.rpc).toHaveBeenCalledTimes(3);
+  });
+
+  it('getGroupOverview with a fake page size stops at the first short page', async () => {
+    const { client, m } = mock();
+    const { builder, ranges } = paged(Array.from({ length: 6 }, () => ({ user_id: U1, full_name: 'س', log_date: 'd', state: 'missing' })));
+    m.rpc.mockReturnValue(builder);
+    expect(await getGroupOverview(client, H1, 'a', 'b', { pageSize: 3 })).toHaveLength(6);
+    expect(ranges).toEqual([
+      [0, 2],
+      [3, 5],
+      [6, 8],
+    ]);
+  });
+
   it('rethrow on error', async () => {
     const { client, m } = mock();
     const err = pgError('FORBIDDEN');
     m.rpc.mockResolvedValue({ data: null, error: err });
     await expect(getCalendar(client, U1, 'a', 'b')).rejects.toBe(err);
+    m.rpc.mockReturnValue(paged([], err).builder);
     await expect(getGroupOverview(client, H1, 'a', 'b')).rejects.toBe(err);
   });
 });

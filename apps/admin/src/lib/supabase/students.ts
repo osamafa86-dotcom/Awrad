@@ -3,8 +3,11 @@
 import { getCalendar, getStudentSummary, type StudentSummary, type TypedClient } from '@awrad/supabase-client';
 import type { DayState } from '@awrad/domain';
 
-import type { GroupOption, StudentFilters, StudentRow } from '../students';
+import { chunk } from '../overview';
+import { LOGS_PAGE, type GroupOption, type StudentFilters, type StudentRow } from '../students';
 import type { Role } from '../access';
+
+import { IDS_PER_QUERY, PAGE_SIZE } from './postgrest';
 
 // why: `!group_id` names the FK. PostgREST also sees profiles ↔ groups many-to-many through group_supervisors,
 // and rejects an unhinted embed with PGRST201 ("more than one relationship was found").
@@ -131,39 +134,67 @@ export interface LogRow {
   supportStatus: 'none' | 'open' | 'handled';
 }
 
-/** The latest `limit` logs, daily and weekly, newest first, with each daily log's state. */
-export function loadLogs(client: TypedClient, userId: string, limit = 30): Promise<Loaded<LogRow[]>> {
+/** One page of the record: the newest `limit` logs, and whether older ones exist. */
+export interface LogPage {
+  rows: LogRow[];
+  hasMore: boolean;
+}
+
+/**
+ * The newest `limit` logs, daily and weekly, newest first, with each daily log's state (F-61: «عرض السجلّات الأقدم»
+ * raises `limit` a page at a time). Reads `limit + 1` rows to know whether more exist, in `.range()` pages so
+ * PostgREST's max_rows cannot cut the read short; (period_start, period) is unique per person, so pages do not
+ * overlap. Through the viewer's client, so RLS keeps a supervisor to their groups.
+ */
+export function loadLogs(client: TypedClient, userId: string, limit = LOGS_PAGE): Promise<Loaded<LogPage>> {
   return attempt('logs', async () => {
-    const { data, error } = await client
-      .from('logs')
-      .select('period, period_start, note, review_text, support_status')
-      .eq('user_id', userId)
-      .order('period_start', { ascending: false })
-      .order('period')
-      .limit(limit);
-    if (error) throw error;
-    const dailyDates = data.filter((log) => log.period === 'daily').map((log) => log.period_start);
+    const wanted = limit + 1;
+    const data: Array<{
+      period: 'daily' | 'weekly';
+      period_start: string;
+      note: string | null;
+      review_text: string | null;
+      support_status: 'none' | 'open' | 'handled';
+    }> = [];
+    for (let from = 0; from < wanted; from += PAGE_SIZE) {
+      const to = Math.min(from + PAGE_SIZE, wanted) - 1;
+      const page = await client
+        .from('logs')
+        .select('period, period_start, note, review_text, support_status')
+        .eq('user_id', userId)
+        .order('period_start', { ascending: false })
+        .order('period')
+        .range(from, to);
+      if (page.error) throw page.error;
+      data.push(...page.data);
+      if (page.data.length < to - from + 1) break;
+    }
+    const shown = data.slice(0, limit);
+    const dailyDates = shown.filter((log) => log.period === 'daily').map((log) => log.period_start);
     const states = new Map<string, { state: DayState; completionPct: number | null }>();
-    if (dailyDates.length > 0) {
+    for (const dates of chunk(dailyDates, IDS_PER_QUERY)) {
       const status = await client
         .from('v_day_status')
         .select('log_date, state, completion_pct')
         .eq('user_id', userId)
-        .in('log_date', dailyDates);
+        .in('log_date', dates);
       if (status.error) throw status.error;
       for (const row of status.data) {
         // why: the view's state column is plain text in the generated types; the SQL emits only DayState values.
         states.set(row.log_date, { state: row.state as DayState, completionPct: row.completion_pct });
       }
     }
-    return data.map((log) => ({
-      period: log.period,
-      periodStart: log.period_start,
-      state: log.period === 'daily' ? (states.get(log.period_start)?.state ?? 'neutral') : null,
-      completionPct: log.period === 'daily' ? (states.get(log.period_start)?.completionPct ?? null) : null,
-      text: (log.period === 'daily' ? log.note : log.review_text) || null,
-      supportStatus: log.support_status,
-    }));
+    return {
+      rows: shown.map((log) => ({
+        period: log.period,
+        periodStart: log.period_start,
+        state: log.period === 'daily' ? (states.get(log.period_start)?.state ?? 'neutral') : null,
+        completionPct: log.period === 'daily' ? (states.get(log.period_start)?.completionPct ?? null) : null,
+        text: (log.period === 'daily' ? log.note : log.review_text) || null,
+        supportStatus: log.support_status,
+      })),
+      hasMore: data.length > limit,
+    };
   });
 }
 

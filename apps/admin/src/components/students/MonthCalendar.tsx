@@ -24,7 +24,7 @@ export interface MonthCalendarProps {
 }
 
 /**
- * The student's current month (a02), the same semantics as the mobile MonthCalendar; each day is a
+ * One month of the student's record (a02; the page's ?month=), the same semantics as the mobile MonthCalendar; each day is a
  * DayStateCell (the four states by shape, DESIGN.md §7 rule 2) with its number.
  */
 export function MonthCalendar({ month, days, today, weekStartsOn, hijriAdjustment }: MonthCalendarProps) {

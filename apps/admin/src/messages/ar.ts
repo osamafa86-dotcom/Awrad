@@ -181,15 +181,19 @@ export const ar = {
         currentStreak: 'السلسلة الحالية',
       },
       summaryFailed: 'تعذّر تحميل الملخّص.',
-      calendarTitle: 'هذا الشهر',
+      calendarTitle: 'التقويم',
       calendarFailed: 'تعذّر تحميل التقويم.',
+      prevMonth: 'الشهر السابق',
+      nextMonth: 'الشهر التالي',
       state: dayState,
       /** «26 نوفمبر: مُنجَز» */
       cellLabel: (day: string, state: string) => `${day}: ${state}`,
       todaySuffix: (state: string) => `${state}، اليوم`,
-      logsTitle: 'آخر السجلّات',
+      logsTitle: 'السجلّات',
       logsEmpty: 'لم يسجّل بعد.',
       logsFailed: 'تعذّر تحميل السجلّات.',
+      olderLogs: 'عرض السجلّات الأقدم',
+      allLogsShown: 'هذه كل السجلّات.',
       logColumns: { date: 'التاريخ', kind: 'النوع', state: 'الحالة', text: 'الملاحظة أو المراجعة', support: 'دعم' },
       period: { daily: 'يومي', weekly: 'أسبوعي' },
       weeklyLogged: 'مسجَّل',
@@ -673,6 +677,15 @@ export const ar = {
     program: 'مفاتيح العلوم',
     backToLogin: 'الدخول إلى لوحة الإشراف',
     privacyTitle: 'سياسة الخصوصية — أوراد',
+  },
+  /** The root boundaries (app/not-found, app/error, app/global-error): an unknown URL or an uncaught error. */
+  boundaries: {
+    notFoundTitle: 'الصفحة غير موجودة',
+    notFoundBody: 'لعلّ الرابط قديم أو فيه خطأ.',
+    backHome: 'العودة إلى اللوحة',
+    errorTitle: 'حدث خطأ غير متوقّع',
+    errorBody: 'أعد المحاولة، فإن تكرّر الخطأ فأعد تحميل الصفحة بعد قليل.',
+    retry: 'أعد المحاولة',
   },
   unauthorized: {
     /** a30: a student (or an account without a profile) opened the dashboard. */

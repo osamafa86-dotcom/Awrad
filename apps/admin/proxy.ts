@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { resolveAccess, type AccessProfile } from '@/lib/access';
 import { supabaseEnv } from '@/lib/env';
+import { adminCookieOptions } from '@/lib/supabase/cookies';
 import { fetchProfile } from '@/lib/supabase/profile';
 
 /**
@@ -14,19 +15,24 @@ export async function proxy(request: NextRequest) {
   // Cache-Control etc. that @supabase/ssr asks for whenever it writes the session cookie.
   let sessionHeaders: Record<string, string> = {};
   const { url, anonKey } = supabaseEnv();
-  const supabase = createServerClient(url, anonKey, {
-    getAll: () => request.cookies.getAll(),
-    setAll: (toSet, headers) => {
-      for (const { name, value } of toSet) request.cookies.set(name, value);
-      response = NextResponse.next({ request });
-      for (const { name, value, options } of toSet) {
-        // why: options are @supabase/ssr's cookie attributes, the same shape Next's cookie store takes.
-        response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
-      }
-      sessionHeaders = headers ?? {};
-      for (const [key, value] of Object.entries(sessionHeaders)) response.headers.set(key, value);
+  const supabase = createServerClient(
+    url,
+    anonKey,
+    {
+      getAll: () => request.cookies.getAll(),
+      setAll: (toSet, headers) => {
+        for (const { name, value } of toSet) request.cookies.set(name, value);
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of toSet) {
+          // why: options are @supabase/ssr's cookie attributes, the same shape Next's cookie store takes.
+          response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+        }
+        sessionHeaders = headers ?? {};
+        for (const [key, value] of Object.entries(sessionHeaders)) response.headers.set(key, value);
+      },
     },
-  });
+    adminCookieOptions(url),
+  );
 
   let signedIn = false;
   let profile: AccessProfile | null = null;
@@ -53,5 +59,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Every page; not Next's assets or static files.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt)$).*)',
+  ],
 };

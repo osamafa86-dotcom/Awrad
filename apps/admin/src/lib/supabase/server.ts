@@ -2,6 +2,7 @@ import { createServerClient, type TypedClient } from '@awrad/supabase-client';
 import { cookies } from 'next/headers';
 
 import { supabaseEnv } from '../env';
+import { adminCookieOptions } from './cookies';
 import { fetchProfile, type CurrentProfile } from './profile';
 
 export type { CurrentProfile };
@@ -12,19 +13,24 @@ type CookieStore = Awaited<ReturnType<typeof cookies>>;
 export async function createClient(): Promise<TypedClient> {
   const { url, anonKey } = supabaseEnv();
   const store = await cookies();
-  return createServerClient(url, anonKey, {
-    getAll: () => store.getAll(),
-    setAll: (toSet) => {
-      try {
-        for (const { name, value, options } of toSet) {
-          // why: options are @supabase/ssr's cookie attributes, the same shape Next's cookie store takes.
-          store.set(name, value, options as Parameters<CookieStore['set']>[2]);
+  return createServerClient(
+    url,
+    anonKey,
+    {
+      getAll: () => store.getAll(),
+      setAll: (toSet) => {
+        try {
+          for (const { name, value, options } of toSet) {
+            // why: options are @supabase/ssr's cookie attributes, the same shape Next's cookie store takes.
+            store.set(name, value, options as Parameters<CookieStore['set']>[2]);
+          }
+        } catch {
+          // Server Components cannot write cookies; proxy.ts refreshes the session on every request.
         }
-      } catch {
-        // Server Components cannot write cookies; proxy.ts refreshes the session on every request.
-      }
+      },
     },
-  });
+    adminCookieOptions(url),
+  );
 }
 
 /**

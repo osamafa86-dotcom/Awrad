@@ -143,22 +143,39 @@ export async function getCalendar(
   }));
 }
 
+/** PostgREST's `max_rows` (supabase/config.jsonc, Supabase's default): a response is cut there without an error. */
+export const MAX_ROWS = 1000;
+
+/**
+ * One row per tracked member per day (members × days), so a group of more than 71 members over 14 days passes
+ * MAX_ROWS. Read one `.range()` page at a time until a short page; the function orders by
+ * (full_name, id, day), a unique order, so the pages neither overlap nor skip.
+ */
 export async function getGroupOverview(
   client: TypedClient,
   groupId: string,
   from: string,
   to: string,
+  opts: { pageSize?: number } = {},
 ): Promise<Array<{ userId: string; fullName: string; date: string; state: DayState }>> {
-  const { data, error } = await client.rpc(
-    'get_group_overview',
-    args('get_group_overview', {
-      p_group_id: groupId,
-      p_from: from,
-      p_to: to,
-    }),
-  );
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const pageSize = opts.pageSize ?? MAX_ROWS;
+  const rows: Fns['get_group_overview']['Returns'] = [];
+  for (let start = 0; ; start += pageSize) {
+    const { data, error } = await client
+      .rpc(
+        'get_group_overview',
+        args('get_group_overview', {
+          p_group_id: groupId,
+          p_from: from,
+          p_to: to,
+        }),
+      )
+      .range(start, start + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows.map((r) => ({
     userId: r.user_id,
     fullName: r.full_name,
     date: r.log_date,

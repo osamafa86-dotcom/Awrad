@@ -1,15 +1,17 @@
 import type { DayState } from '@awrad/domain';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { Avatar } from '@/components/Avatar';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatGregorian, formatHijri } from '@/lib/format';
 import type { GroupOption } from '@/lib/students';
 import type {
   AttendanceRow,
   Loaded,
+  LogPage,
   LogRow,
   StudentProfile,
   StudentSummary,
@@ -22,29 +24,38 @@ import { StatusChip } from './StatusChip';
 import { StudentEditPanel } from './StudentEditPanel';
 
 const t = ar.students.detail;
-const EXCERPT = 140;
+
+/** Server-built links of the student page (F-61, Ruling FIN-1); null where there is nowhere to go. */
+export interface StudentLinks {
+  prevMonth: string | null;
+  nextMonth: string | null;
+  /** The same page with one more page of logs, while older logs exist. */
+  olderLogs: string | null;
+}
 
 export interface StudentDetailProps {
   student: StudentProfile;
   /** The student's today, `YYYY-MM-DD`. */
   today: string;
-  /** `YYYY-MM` shown by the calendar (the current month). */
+  /** `YYYY-MM` shown by the calendar (`?month=`, the current month by default). */
   month: string;
   hijriAdjustment: number;
   summary: Loaded<StudentSummary>;
   calendar: Loaded<Map<string, CalendarDay>>;
-  logs: Loaded<LogRow[]>;
+  logs: Loaded<LogPage>;
   attendance: Loaded<AttendanceRow[]>;
   /** Admins: the edit panel, activate/deactivate and delete. Supervisors read only. */
   canEdit: boolean;
   /** The viewer is looking at their own profile (no deactivate or delete). */
   isSelf?: boolean;
   groups: GroupOption[];
+  links: StudentLinks;
 }
 
-/** a02 — the student page: header, summary, this month, latest logs, attendance (and the admin's tools). */
+/** a02 — the student page: header, summary, any month, the whole record, attendance (and the admin's tools). */
 export function StudentDetail(props: StudentDetailProps) {
-  const { student, today, month, hijriAdjustment, summary, calendar, logs, attendance, canEdit, isSelf, groups } = props;
+  const { student, today, month, hijriAdjustment, summary, calendar, logs, attendance, canEdit, isSelf, groups, links } =
+    props;
   return (
     <div className="flex flex-col gap-32">
       <header className="flex flex-col gap-16">
@@ -72,12 +83,13 @@ export function StudentDetail(props: StudentDetailProps) {
         </div>
       </header>
 
-      <Section title={t.summaryTitle}>
+      <Section id="student-summary" title={t.summaryTitle}>
         {summary.ok ? <SummaryCards summary={summary.data} /> : <Failed>{t.summaryFailed}</Failed>}
       </Section>
 
       <div className={cn('grid gap-24', canEdit && 'lg:grid-cols-2')}>
-        <Section title={t.calendarTitle}>
+        <Section id="student-calendar" title={t.calendarTitle}>
+          <MonthNav prev={links.prevMonth} next={links.nextMonth} />
           {calendar.ok ? (
             <MonthCalendar
               month={month}
@@ -93,17 +105,29 @@ export function StudentDetail(props: StudentDetailProps) {
         {canEdit ? <StudentEditPanel student={student} groups={groups} today={today} isSelf={isSelf} /> : null}
       </div>
 
-      <Section title={t.logsTitle}>
+      <Section id="student-logs" title={t.logsTitle}>
         {!logs.ok ? (
           <Failed>{t.logsFailed}</Failed>
-        ) : logs.data.length === 0 ? (
+        ) : logs.data.rows.length === 0 ? (
           <Empty>{t.logsEmpty}</Empty>
         ) : (
-          <LogsTable logs={logs.data} hijriAdjustment={hijriAdjustment} />
+          <>
+            <LogsTable logs={logs.data.rows} hijriAdjustment={hijriAdjustment} />
+            {links.olderLogs ? (
+              // A plain link: the server reads one more page; it works without JavaScript and from the keyboard.
+              <Button asChild size="md" variant="secondary" className="w-fit">
+                <Link href={links.olderLogs} scroll={false}>
+                  {t.olderLogs}
+                </Link>
+              </Button>
+            ) : (
+              <p className="t-body-sm text-fg-secondary">{t.allLogsShown}</p>
+            )}
+          </>
         )}
       </Section>
 
-      <Section title={t.attendanceTitle}>
+      <Section id="student-attendance" title={t.attendanceTitle}>
         {!attendance.ok ? (
           <Failed>{t.attendanceFailed}</Failed>
         ) : attendance.data.length === 0 ? (
@@ -125,12 +149,45 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/** A titled region (its heading names it for assistive technology). */
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-12">
-      <h2 className="t-display-section text-fg-primary">{title}</h2>
+    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-12">
+      <h2 id={`${id}-title`} className="t-display-section text-fg-primary">
+        {title}
+      </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Previous / next month of the calendar. Under RTL «previous» sits at the start side and points there (ChevronRight),
+ * «next» at the end side (ChevronLeft) — DESIGN.md §7 rule 3; the icons flip under LTR.
+ */
+function MonthNav({ prev, next }: { prev: string | null; next: string | null }) {
+  if (!prev && !next) return null;
+  return (
+    <nav aria-label={t.calendarTitle} className="flex items-center justify-between gap-8">
+      {prev ? (
+        <Button asChild size="md" variant="quiet">
+          <Link href={prev} scroll={false}>
+            <ChevronRight aria-hidden="true" className="size-16 ltr:-scale-x-100" />
+            {t.prevMonth}
+          </Link>
+        </Button>
+      ) : (
+        <span />
+      )}
+      {next ? (
+        <Button asChild size="md" variant="quiet">
+          <Link href={next} scroll={false}>
+            {t.nextMonth}
+            <ChevronLeft aria-hidden="true" className="size-16 ltr:-scale-x-100" />
+          </Link>
+        </Button>
+      ) : null}
+    </nav>
   );
 }
 
@@ -191,10 +248,6 @@ function DayStateMark({ state }: { state: DayState }) {
   );
 }
 
-function excerpt(text: string): string {
-  return text.length > EXCERPT ? `${text.slice(0, EXCERPT).trimEnd()}…` : text;
-}
-
 function LogsTable({ logs, hijriAdjustment }: { logs: LogRow[]; hijriAdjustment: number }) {
   return (
     <Table>
@@ -229,8 +282,9 @@ function LogsTable({ logs, hijriAdjustment }: { logs: LogRow[]; hijriAdjustment:
                 t.weeklyLogged
               )}
             </TableCell>
-            <TableCell className="min-w-240" title={log.text ?? undefined}>
-              {log.text ? excerpt(log.text) : <span className="text-fg-tertiary">{t.none}</span>}
+            {/* The whole text, wrapped, line breaks kept: DESIGN.md §7 rule 9 (no truncation, no hover-only tail). */}
+            <TableCell className="min-w-240 whitespace-pre-wrap break-words">
+              {log.text ?? <span className="text-fg-tertiary">{t.none}</span>}
             </TableCell>
             <TableCell className="whitespace-nowrap">
               {log.supportStatus === 'none' ? (

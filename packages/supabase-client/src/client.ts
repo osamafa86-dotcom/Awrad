@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js';
-import { createServerClient as createSsrServerClient } from '@supabase/ssr';
+import { createServerClient as createSsrServerClient, type CookieOptions } from '@supabase/ssr';
 import type { Database } from './database.types';
 
 export type { Database };
@@ -35,16 +35,23 @@ export interface CookieAdapter {
   ): void;
 }
 
-/** Server-side client (Next.js admin) that persists the session in cookies via @supabase/ssr. */
+export type { CookieOptions };
+
+/**
+ * Server-side client (Next.js admin) that persists the session in cookies via @supabase/ssr. `cookieOptions`
+ * (HttpOnly, Secure, SameSite…) are merged over the library's defaults for every session cookie it writes.
+ */
 export function createServerClient(
   url: string,
   anonKey: string,
   cookies: CookieAdapter,
+  cookieOptions?: CookieOptions,
 ): TypedClient {
   return createSsrServerClient<Database>(url, anonKey, {
     cookies: {
       getAll: () => cookies.getAll(),
       setAll: (toSet, headers) => cookies.setAll(toSet, headers),
     },
+    ...(cookieOptions ? { cookieOptions } : {}),
   });
 }
