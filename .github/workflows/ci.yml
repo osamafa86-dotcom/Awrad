@@ -28,6 +28,9 @@ jobs:
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
       EXPO_PUBLIC_ADMIN_URL: http://127.0.0.1:3000
       EXPO_NO_TELEMETRY: '1'
+      # Dummy values so the admin's Supabase helpers load in unit tests (no `next build` in this job).
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -86,4 +89,47 @@ jobs:
         with:
           name: mobile-web-playwright-report
           path: apps/mobile/playwright-report/
+          if-no-files-found: ignore
+
+  admin-e2e:
+    # Task 3.1: admin dashboard Playwright, both tiers. Tier (a) (signed out) needs nothing; tier (b)
+    # (student / admin / supervisor sign-in) runs against a local Supabase stack started here.
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start Supabase (db, auth, rest, kong, mailpit)
+        # Applies supabase/migrations and supabase/seed.sql; config in supabase/config.jsonc.
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+      - name: Export Supabase settings
+        run: |
+          eval "$(supabase status -o env)"
+          # Fail here rather than let the signed-in tier skip itself silently.
+          test -n "$API_URL" && test -n "$ANON_KEY" && test -n "$SERVICE_ROLE_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/admin
+      - name: Admin e2e (builds with the stack's URL and key, then next start)
+        run: pnpm --filter admin e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-playwright-report
+          path: apps/admin/playwright-report/
           if-no-files-found: ignore

@@ -53,5 +53,39 @@ psql "$SUPABASE_DB_URL" -Atc "select auth.uid() is null, auth.role() is null"   
 - **فشل كلمة المرور:** `pnpm db:start` يعيد ضبطها إلى `postgres`؛ تأكد أن `.env` لا يحوي رابطًا بكلمة أخرى.
 - **`db:reset` يفشل في منتصف ملف:** السكربت يتوقف عند أول خطأ (`ON_ERROR_STOP`) ويطبع اسم الملف والسطر.
 
+## لوحة الإدارة (apps/admin)
+لوحة الشيخ والمشرف: Next.js 16 (App Router) وTailwind 4 ومكوّنات بأسلوب shadcn مكتوبة يدويًا على `radix-ui`.
+
+**المتغيّرات:** `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_ANON_KEY` (API URL والمفتاح العام من `supabase status`
+أو من لوحة المشروع). Next يقرأ ملفات `.env*` من مجلد التطبيق لا من الجذر، فضعهما في `apps/admin/.env.local` أو صدّرهما في الطرفية.
+البناء يُضمِّن قيم `NEXT_PUBLIC_*` في الحزمة، فأعد `next build` بعد تغييرهما.
+
+```bash
+pnpm --filter admin dev         # http://localhost:3000
+pnpm --filter admin test        # Vitest: الحارس resolveAccess والشريط الجانبي (بلا متغيّرات)
+pnpm --filter admin e2e         # Playwright: يبني ثم يشغّل next start على المنفذ 3100
+```
+
+**الحارس:** `apps/admin/proxy.ts` (اسم middleware في Next 16) يطبّق `resolveAccess()` من `src/lib/access.ts` على كل طلب:
+غير المسجَّل إلى `/login?next=…`، والطالب أو الحساب غير المفعَّل أو بلا ملف إلى `/unauthorized`، والمشرف خارج
+`/habits` و`/settings`. هذا للتجربة فقط؛ الحماية الفعلية في RLS.
+
+**طبقتا اختبار e2e** (`apps/admin/e2e/auth.spec.ts`، مشروعا `desktop` 1440 و`mobile` 390):
+- **(أ) بلا تسجيل دخول — تعمل في أي مكان.** إن لم تُضبط `NEXT_PUBLIC_*` يبني الاختبار على `http://127.0.0.1:54321`
+  بمفتاح وهمي؛ لا شيء يستمع هناك فيُعامَل كل طلب كغير مسجَّل. تتحقّق من التحويل إلى `/login` وRTL وحقل البريد LTR والخطّين والوضع الداكن.
+- **(ب) بتسجيل دخول — تحتاج حزمة Supabase.** تُتخطّى ما لم تُضبط `E2E_SUPABASE_URL` و`E2E_SERVICE_ROLE_KEY`.
+  `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعة اختبار ودعوات وحسابات `admin@`/`sup1@`/`p1@test.example`
+  (مُشغِّل `handle_new_user` يبني الملفات)، والدخول عبر الواجهة برمز يولّده `auth.admin.generateLink`.
+
+تشغيل الطبقة (ب) محليًا (يحتاج Docker):
+```bash
+supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+eval "$(supabase status -o env)"      # API_URL و ANON_KEY و SERVICE_ROLE_KEY
+NEXT_PUBLIC_SUPABASE_URL=$API_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY \
+E2E_SUPABASE_URL=$API_URL E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY pnpm --filter admin e2e
+```
+`E2E_SKIP_BUILD=1` يعيد استخدام بناء `.next` الموجود. إن لم يتوفّر متصفح Playwright فاضبط
+`PW_CHROMIUM_EXECUTABLE` على مسار Chromium مثبَّت. في CI تشغّل المهمّة `admin-e2e` الطبقتين معًا.
+
 ## قبل النشر (Task 5.1)
 - [ ] استبدل `extra.eas.projectId` في `apps/mobile/app.json` (القيمة المؤقتة `REPLACE_WITH_EAS_PROJECT_ID`) بمعرّف مشروع EAS؛ وإلا يعرض التطبيق «الإشعارات غير متاحة في هذا الإصدار».
