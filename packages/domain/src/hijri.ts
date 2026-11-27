@@ -1,5 +1,19 @@
-import umalqura from '@umalqura/core';
+import * as umalquraModule from '@umalqura/core';
 import { addDays } from './dates';
+
+// why: @umalqura/core ships ESM (`module`: a real default export) and CJS (`main`: `exports.default = fn`
+// without `__esModule`). Bundlers, vitest and Metro take the ESM build, where the namespace's `default`
+// is the API. A Node/CJS loader (Playwright's TS transform) wraps the CJS exports once more, so the API
+// sits one or two `default`s down. Unwrap `default` until the object carries the API's `$`.
+type Umalqura = typeof umalquraModule.default;
+function unwrapDefault(mod: unknown): Umalqura {
+  let current = mod as { $?: unknown; default?: unknown } | undefined;
+  for (let depth = 0; depth < 3 && current && current.$ === undefined; depth += 1) {
+    current = current.default as typeof current;
+  }
+  return current as unknown as Umalqura;
+}
+const umalqura = unwrapDefault(umalquraModule);
 
 export const HIJRI_MONTH_NAMES = [
   'محرم',
