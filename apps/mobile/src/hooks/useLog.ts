@@ -11,6 +11,8 @@ export interface LogRow {
   note: string | null;
   review_text: string | null;
   support_request_text: string | null;
+  /** When the server last saved this log: an unsaved draft newer than it wins on hydration (mobile I4). */
+  updated_at: string | null;
 }
 
 interface NestedLog extends LogRow {
@@ -48,7 +50,11 @@ export function useLog(period: Frequency, periodStart: string | null): UseLog {
     try {
       const { data, error } = await supabase
         .from('logs')
-        .select('*, log_entries(*, log_entry_items(*))')
+        // Named columns: the student's own row carries staff-side fields (handled_by/at) this app has no use for.
+        .select(
+          'id, period, period_start, note, review_text, support_request_text, updated_at, ' +
+            'log_entries(habit_id, status, log_entry_items(habit_item_id))',
+        )
         .eq('user_id', uid)
         .eq('period', period)
         .eq('period_start', periodStart)
@@ -69,6 +75,7 @@ export function useLog(period: Frequency, periodStart: string | null): UseLog {
         note: row.note,
         review_text: row.review_text ?? null,
         support_request_text: row.support_request_text ?? null,
+        updated_at: row.updated_at ?? null,
       };
       return { key, log, entries, error: null };
     } catch (error) {

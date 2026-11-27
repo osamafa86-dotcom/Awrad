@@ -9,6 +9,7 @@ import Settings from 'lucide-react-native/icons/settings';
 
 import { SessionGate } from '../../src/components/SessionGate';
 import { useAppSession } from '../../src/hooks/SessionProvider';
+import { usePushOnSignIn } from '../../src/hooks/usePushOnSignIn';
 import { useTheme } from '../../src/lib/theme';
 import { ar } from '../../src/messages/ar';
 
@@ -44,6 +45,8 @@ export default function TabLayout() {
 
 function AppTabs() {
   const { colors, type } = useTheme();
+  // Inside the gate: an active, tracked student is signed in — get this device ready for their reminders.
+  usePushOnSignIn(useAppSession().profile);
   return (
     <Tabs
       screenOptions={{

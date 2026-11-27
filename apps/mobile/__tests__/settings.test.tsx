@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import SettingsScreen from '../app/(tabs)/settings';
 import { resetSettingsCache } from '../src/hooks/useSettings';
-import { registerForPush } from '../src/lib/notifications';
+import { DEVICE_TOKEN_KEY, registerForPush } from '../src/lib/notifications';
 import { ar } from '../src/messages/ar';
 import { fakeProfile, resetFakeDb, USER_ID } from './helpers/today-fixture';
 
@@ -41,23 +43,31 @@ jest.mock('../src/lib/supabase', () => {
       };
     }
     if (table === 'push_tokens') {
+      const filters: Record<string, unknown> = {};
+      let deleting = false;
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (column: string, value: unknown) => {
+          filters[column] = value;
+          return chain;
+        },
         limit: async () => {
           if (mockDb.failPushRead) throw new Error('offline');
-          return { data: mockDb.pushTokens, error: null };
+          const rows = mockDb.pushTokens.filter((t) => !('token' in filters) || t.token === filters.token);
+          return { data: rows, error: null };
         },
         upsert: async (row: Record<string, unknown>, options: unknown) => {
           mockDb.upserts.push({ row, options });
           return { error: null };
         },
-        delete: () => ({
-          eq: async (column: string, value: unknown) => {
-            mockDb.deletes.push({ [column]: value });
-            return { error: null };
-          },
-        }),
+        delete: () => {
+          deleting = true;
+          return chain;
+        },
+        then: (resolve: (r: { error: null }) => unknown) => {
+          if (deleting) mockDb.deletes.push({ ...filters });
+          return Promise.resolve({ error: null }).then(resolve);
+        },
       };
       return chain;
     }
@@ -135,8 +145,9 @@ async function renderSettings() {
 
 const savedUrl = process.env.EXPO_PUBLIC_ADMIN_URL;
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
   resetFakeDb();
   resetSettingsCache();
   mockDb.profile = { ...fakeProfile, reminder_time: null, weekly_reminder: true, timezone: null };
@@ -232,12 +243,24 @@ describe('settings — push notifications', () => {
     expect(mockOpenSettings).toHaveBeenCalled();
   });
 
-  test('starts on when a token row exists; turning off deletes the user rows', async () => {
-    mockDb.pushTokens = [{ id: 't-1' }];
+  // Final review mobile I1: the switch is this device's registration, not "any device of this user".
+  test("starts on when this device's token row exists; turning off deletes only this device's row", async () => {
+    await AsyncStorage.setItem(DEVICE_TOKEN_KEY, 'ExponentPushToken[abc]');
+    mockGetPerms.mockResolvedValue({ status: 'granted' });
+    mockDb.pushTokens = [
+      { id: 't-1', token: 'ExponentPushToken[abc]' },
+      { id: 't-2', token: 'ExponentPushToken[other-phone]' },
+    ];
     await renderSettings();
     expect(sw(ar.settings.notifications).props.value).toBe(true);
     await toggle(ar.settings.notifications, false);
-    expect(mockDb.deletes).toEqual([{ user_id: USER_ID }]);
+    expect(mockDb.deletes).toEqual([{ user_id: USER_ID, token: 'ExponentPushToken[abc]' }]);
+    expect(sw(ar.settings.notifications).props.value).toBe(false);
+  });
+
+  test('a token registered on another phone only: the switch on this device is off', async () => {
+    mockDb.pushTokens = [{ id: 't-2', token: 'ExponentPushToken[other-phone]' }];
+    await renderSettings();
     expect(sw(ar.settings.notifications).props.value).toBe(false);
   });
 
@@ -254,6 +277,48 @@ describe('settings — push notifications', () => {
     } finally {
       jest.restoreAllMocks();
     }
+  });
+});
+
+// Final review mobile I2: «التذكير اليومي» is ON from the invitation, so a reminder toggle that is ON while this device
+// has no token must never look fine: the app asks in context, and says plainly when reminders cannot arrive.
+describe('settings — reminders need this device registered', () => {
+  test('turning the daily reminder on asks for notifications when this device has none', async () => {
+    mockDb.profile.weekly_reminder = false;
+    await renderSettings();
+    expect(mockRequestPerms).not.toHaveBeenCalled();
+    await toggle(ar.settings.dailyReminder, true);
+    expect(mockDb.profileUpdates).toEqual([{ reminder_time: '21:00' }]);
+    await waitFor(() => expect(mockRequestPerms).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockDb.upserts).toHaveLength(1));
+    expect(sw(ar.settings.notifications).props.value).toBe(true);
+  });
+
+  test('reminders on but notifications refused: says reminders cannot arrive, with the device settings link', async () => {
+    mockDb.profile.reminder_time = '21:00:00';
+    mockGetPerms.mockResolvedValue({ status: 'denied' });
+    await renderSettings();
+    expect(await screen.findByText(ar.settings.pushDenied)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: ar.settings.openSettings }));
+    expect(mockOpenSettings).toHaveBeenCalled();
+    expect(sw(ar.settings.notifications).props.value).toBe(false);
+  });
+
+  test('reminders on and this device not registered yet: a hint that enables notifications', async () => {
+    mockDb.profile.reminder_time = '21:00:00';
+    await renderSettings();
+    expect(await screen.findByText(ar.settings.remindersNeedPush)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: ar.settings.enablePush }));
+    await waitFor(() => expect(mockDb.upserts).toHaveLength(1));
+    expect(sw(ar.settings.notifications).props.value).toBe(true);
+    expect(screen.queryByText(ar.settings.remindersNeedPush)).toBeNull();
+  });
+
+  test('both reminders off: no hint', async () => {
+    mockDb.profile.weekly_reminder = false;
+    await renderSettings();
+    expect(screen.queryByText(ar.settings.remindersNeedPush)).toBeNull();
+    expect(screen.queryByText(ar.settings.pushDenied)).toBeNull();
   });
 });
 

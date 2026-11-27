@@ -53,8 +53,13 @@ interface PushMessage {
   title: string;
   body: string;
   sound: 'default';
+  /** Android: the channel the app creates (apps/mobile/src/lib/notifications.ts CHANNEL_ID). */
+  channelId: typeof ANDROID_CHANNEL_ID;
   data: { kind: ReminderKind };
 }
+
+/** The app's Android notification channel («التذكيرات»); without it Expo uses its own English default channel. */
+export const ANDROID_CHANNEL_ID = 'reminders';
 
 interface Ticket {
   status?: string;
@@ -74,6 +79,7 @@ function messagesFor(due: readonly DueReminder[]): PushMessage[] {
       title: REMINDER_COPY.title,
       body: REMINDER_COPY[reminder.kind],
       sound: 'default' as const,
+      channelId: ANDROID_CHANNEL_ID,
       data: { kind: reminder.kind },
     })),
   );

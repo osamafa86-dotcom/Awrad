@@ -130,6 +130,8 @@ export function TodayView({ initialDate, readOnly = false, lockDate = false }: T
       completionPct={s.banner.completionPct}
       remaining={s.banner.remaining}
     />
+  ) : s.draftRestored ? (
+    <DayStatusBanner state="draft" />
   ) : null;
 
   const showSaveBar = !readOnly && !s.loading && !s.loadError && s.habits.length > 0;

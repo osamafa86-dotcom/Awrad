@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react-native';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
+import FilePen from 'lucide-react-native/icons/file-pen';
 import Lock from 'lucide-react-native/icons/lock';
 import WifiOff from 'lucide-react-native/icons/wifi-off';
 import { useEffect } from 'react';
@@ -9,7 +10,7 @@ import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
 
-export type BannerKind = 'achieved' | 'failed' | 'neutral' | 'error' | 'readOnly';
+export type BannerKind = 'achieved' | 'failed' | 'neutral' | 'error' | 'readOnly' | 'draft';
 
 export interface DayStatusBannerProps {
   state: BannerKind;
@@ -25,7 +26,10 @@ export interface DayStatusBannerProps {
   period?: 'daily' | 'weekly';
 }
 
-/** DESIGN.md §6 DayStatusBanner: achieved · remaining items · save failed · read only — one sentence each. */
+/**
+ * DESIGN.md §6 DayStatusBanner: achieved · remaining items · save failed · read only — one sentence each; plus
+ * «مسوّدة غير محفوظة» for edits restored from this device (final review mobile I4), in the neutral tokens.
+ */
 export function DayStatusBanner({
   state,
   remaining = 0,
@@ -70,6 +74,14 @@ export function DayStatusBanner({
           icon: offline ? WifiOff : CircleAlert,
           title: ar.today.banner.errorTitle,
           body: message,
+        };
+      case 'draft':
+        return {
+          bg: colors.statusNeutralTint,
+          fg: colors.statusNeutral,
+          icon: FilePen,
+          title: ar.today.banner.draftTitle,
+          body: ar.today.banner.draftBody,
         };
       case 'readOnly':
         return {

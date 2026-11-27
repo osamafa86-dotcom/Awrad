@@ -244,7 +244,7 @@ describe('today screen', () => {
     await setStatus(quran.name, ar.today.tristate.done);
     await checkItems(3);
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).not.toBeNull(),
+      expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`)).not.toBeNull(),
     );
     await first.unmount();
 
@@ -256,13 +256,13 @@ describe('today screen', () => {
     await pressSave();
     await screen.findByText(ar.today.banner.failed(1));
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).toBeNull(),
+      expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`)).toBeNull(),
     );
   });
 
   test('a saved server log wins over a local draft', async () => {
     await AsyncStorage.setItem(
-      `draft:daily:${TODAY}`,
+      `draft:${USER_ID}:daily:${TODAY}`,
       JSON.stringify({
         entries: { [quran.id]: { status: 'not_done', checkedItemIds: [] } },
         note: '',
@@ -304,6 +304,64 @@ describe('today screen', () => {
     expect(logCall.select).toContain('log_entry_items');
   });
 
+  // Final review mobile I3: a shared phone must not hand one student's unsaved edits to the next.
+  test("another user's draft, or an old draft without a user, is never shown", async () => {
+    const foreign = JSON.stringify({ entries: { [quran.id]: { status: 'done', checkedItemIds: [] } }, note: 'سرّ' });
+    await AsyncStorage.setItem(`draft:u-2:daily:${TODAY}`, foreign);
+    await AsyncStorage.setItem(`draft:daily:${TODAY}`, foreign);
+    await renderToday();
+    expect(radio(quran.name, ar.today.tristate.done)).not.toBeChecked();
+    expect(screen.queryByDisplayValue('سرّ')).toBeNull();
+  });
+
+  // Final review mobile I4: «حفظنا مسوّدتك على هذا الجهاز» must be true for an edit of an already-saved day too.
+  test('an unsaved edit of a saved day survives navigation: the newer draft wins, with a notice, until saved', async () => {
+    fakeDb.logs[TODAY] = {
+      id: 'log-1',
+      user_id: USER_ID,
+      period: 'daily',
+      period_start: TODAY,
+      note: 'ملاحظة محفوظة',
+      updated_at: '2020-01-01T00:00:00.000Z',
+      log_entries: dailyHabits.map((h, i) => ({
+        id: `e${i}`,
+        habit_id: h.id,
+        status: 'done' as const,
+        log_entry_items: h.kind === 'checklist' ? h.items.map((it) => ({ entry_id: `e${i}`, habit_item_id: it.id })) : [],
+      })),
+    };
+    mockSaveLog.mockRejectedValueOnce(new Error('Failed to fetch'));
+    const first = await renderToday();
+    await waitFor(() => expect(radio(qiyam.name, ar.today.tristate.done)).toBeChecked());
+    expect(screen.queryByText(ar.today.banner.draftTitle)).toBeNull();
+
+    await setStatus(qiyam.name, ar.today.tristate.notDone);
+    await pressSave();
+    const kept = `${ar.errors.UNKNOWN} ${ar.today.banner.draftKept}`;
+    expect(await screen.findByText(kept)).toBeTruthy();
+
+    // «اليوم السابق» then back: the edit is still there (it used to be replaced by the saved log).
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.prevDay }));
+    await waitFor(() => expect(mockFetchActiveHabits).toHaveBeenLastCalledWith(supabase, '2026-11-25', 'daily'));
+    await screen.findByLabelText(quran.name);
+    await fireEvent.press(screen.getByRole('button', { name: ar.today.nextDay }));
+    await waitFor(() => expect(radio(qiyam.name, ar.today.tristate.notDone)).toBeChecked());
+    expect(screen.getByText(kept)).toBeTruthy();
+
+    // A restart (no error banner any more): the edit comes back from the device, marked as not saved yet.
+    await first.unmount();
+    await renderToday();
+    await waitFor(() => expect(radio(qiyam.name, ar.today.tristate.notDone)).toBeChecked());
+    expect(screen.getByText(ar.today.banner.draftTitle)).toBeTruthy();
+    expect(screen.getByDisplayValue('ملاحظة محفوظة')).toBeTruthy();
+
+    await fireEvent.press(saveButton());
+    await waitFor(() => expect(mockSaveLog).toHaveBeenCalledTimes(2));
+    expect(savedInput().entries.find((e) => e.habitId === qiyam.id)?.status).toBe('not_done');
+    await waitFor(async () => expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`)).toBeNull());
+    expect(screen.queryByText(ar.today.banner.draftTitle)).toBeNull();
+  });
+
   test('checklist "غير مطلوب اليوم" sends not_required with no items', async () => {
     await renderToday();
     await checkItems(4);
@@ -335,14 +393,14 @@ describe('today screen', () => {
     await pressSave();
     expect(await screen.findByText(startsWith(ar.errors.MISSING_ENTRY))).toBeTruthy();
     // The draft is kept after a failed save.
-    expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).not.toBeNull();
+    expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`)).not.toBeNull();
   });
   test("navigating keeps each day's draft under its own key", async () => {
     await renderToday();
     await setStatus(quran.name, ar.today.tristate.done);
     await setStatus(qiyam.name, ar.today.tristate.notDone);
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem(`draft:daily:${TODAY}`)).not.toBeNull(),
+      expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`)).not.toBeNull(),
     );
 
     await fireEvent.press(screen.getByRole('button', { name: ar.today.prevDay }));
@@ -351,7 +409,7 @@ describe('today screen', () => {
     );
     await screen.findByLabelText(quran.name);
     expect(radio(quran.name, ar.today.tristate.done)).not.toBeChecked();
-    expect(await AsyncStorage.getItem('draft:daily:2026-11-25')).toBeNull();
+    expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:2026-11-25`)).toBeNull();
 
     // Back and forth again: yesterday must still open empty, today keeps its edits.
     await fireEvent.press(screen.getByRole('button', { name: ar.today.nextDay }));
@@ -362,9 +420,9 @@ describe('today screen', () => {
     );
     await screen.findByLabelText(quran.name);
     expect(radio(quran.name, ar.today.tristate.done)).not.toBeChecked();
-    expect(await AsyncStorage.getItem('draft:daily:2026-11-25')).toBeNull();
+    expect(await AsyncStorage.getItem(`draft:${USER_ID}:daily:2026-11-25`)).toBeNull();
 
-    const stored = JSON.parse((await AsyncStorage.getItem(`draft:daily:${TODAY}`))!) as {
+    const stored = JSON.parse((await AsyncStorage.getItem(`draft:${USER_ID}:daily:${TODAY}`))!) as {
       entries: Record<string, { status?: string }>;
     };
     expect(stored.entries[quran.id]?.status).toBe('done');

@@ -130,7 +130,7 @@ describe('weekly screen', () => {
     await fireEvent.changeText(screen.getByLabelText(REVIEW), 'نص');
     await pressSave();
     expect(await screen.findByText(new RegExp(`^${ar.errors.UNKNOWN}`))).toBeTruthy();
-    expect(await AsyncStorage.getItem('draft:weekly:2026-11-22')).not.toBeNull();
+    expect(await AsyncStorage.getItem('draft:u-1:weekly:2026-11-22')).not.toBeNull();
   });
 
   test('draft is keyed per week: navigating never writes one week under the other', async () => {
@@ -138,12 +138,49 @@ describe('weekly screen', () => {
     await renderWeekly();
     await fireEvent.changeText(screen.getByLabelText(REVIEW), 'نص هذا الأسبوع');
     await waitFor(async () =>
-      expect(await AsyncStorage.getItem('draft:weekly:2026-11-22')).toContain('نص هذا الأسبوع'),
+      expect(await AsyncStorage.getItem('draft:u-1:weekly:2026-11-22')).toContain('نص هذا الأسبوع'),
     );
     await fireEvent.press(screen.getByRole('button', { name: ar.weekly.prevWeek }));
     await screen.findByText(TITLE_PREVIOUS);
     await new Promise((r) => setTimeout(r, 20));
-    expect(await AsyncStorage.getItem('draft:weekly:2026-11-15')).toBeNull();
+    expect(await AsyncStorage.getItem('draft:u-1:weekly:2026-11-15')).toBeNull();
+  });
+
+  test('an unsaved edit of a saved week is kept after a failed save and shown again with a notice', async () => {
+    mockToday = '2026-11-24';
+    fakeDb.logs['2026-11-22'] = {
+      id: 'l1',
+      user_id: 'u-1',
+      period: 'weekly',
+      period_start: '2026-11-22',
+      note: null,
+      review_text: 'مراجعة محفوظة',
+      support_request_text: null,
+      updated_at: '2020-01-01T00:00:00.000Z',
+      log_entries: weeklyHabits.map((h, i) => ({
+        id: `e${i}`,
+        habit_id: h.id,
+        status: 'done' as const,
+        log_entry_items: h.items.map((it) => ({ entry_id: `e${i}`, habit_item_id: it.id })),
+      })),
+    };
+    mockSaveLog.mockRejectedValueOnce(new Error('network down'));
+    const first = await renderWeekly();
+    await waitFor(() => expect(screen.getByLabelText(REVIEW).props.value).toBe('مراجعة محفوظة'));
+    await fireEvent.changeText(screen.getByLabelText(REVIEW), 'مراجعة معدّلة');
+    await pressSave();
+    expect(await screen.findByText(new RegExp(ar.today.banner.draftKept))).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: ar.weekly.prevWeek }));
+    await screen.findByText(TITLE_PREVIOUS);
+    await fireEvent.press(screen.getByRole('button', { name: ar.weekly.nextWeek }));
+    await screen.findByText(TITLE_CURRENT);
+    await waitFor(() => expect(screen.getByLabelText(REVIEW).props.value).toBe('مراجعة معدّلة'));
+
+    await first.unmount();
+    await renderWeekly();
+    await waitFor(() => expect(screen.getByLabelText(REVIEW).props.value).toBe('مراجعة معدّلة'));
+    expect(screen.getByText(ar.today.banner.draftTitle)).toBeTruthy();
   });
 
   test('a saved server log wins over a draft and fills the form', async () => {
@@ -162,7 +199,7 @@ describe('weekly screen', () => {
         log_entry_items: h.items.map((it) => ({ entry_id: `e${i}`, habit_item_id: it.id })),
       })),
     };
-    await AsyncStorage.setItem('draft:weekly:2026-11-22', JSON.stringify({ reviewText: 'مسوّدة' }));
+    await AsyncStorage.setItem('draft:u-1:weekly:2026-11-22', JSON.stringify({ reviewText: 'مسوّدة' }));
     await renderWeekly();
     await waitFor(() => expect(screen.getByLabelText(REVIEW).props.value).toBe('مراجعة محفوظة'));
   });

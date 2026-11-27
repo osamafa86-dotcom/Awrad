@@ -136,6 +136,8 @@ export function WeeklyView({ weekStart, readOnly = false }: WeeklyViewProps = {}
         completionPct={s.banner.completionPct}
         remaining={s.banner.remaining}
       />
+    ) : s.draftRestored ? (
+      <DayStatusBanner period="weekly" state="draft" />
     ) : null;
 
   const showSaveBar = !readOnly && !s.loading && !s.loadError && s.habits.length > 0;

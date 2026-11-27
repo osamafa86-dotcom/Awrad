@@ -193,7 +193,11 @@ function builder(table: string) {
           );
           return ok(null);
         }
-        return ok(fakeDb.pushTokens.filter((t) => t.user_id === call.filters.user_id));
+        return ok(
+          fakeDb.pushTokens.filter(
+            (t) => t.user_id === call.filters.user_id && (!('token' in call.filters) || t.token === call.filters.token),
+          ),
+        );
       case 'deletion_requests':
         return ok(fakeDb.deletionRequests.filter((d) => d.user_id === call.filters.user_id && d.handled_at === null));
       default:

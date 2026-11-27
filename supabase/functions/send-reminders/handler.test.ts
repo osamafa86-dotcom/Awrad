@@ -22,6 +22,7 @@ interface PushMessage {
   title: string;
   body: string;
   sound: string;
+  channelId: string;
   data: { kind: string };
 }
 
@@ -106,11 +107,21 @@ describe('handleSend', () => {
     const result = await handleSend(setup.deps, NOW);
     expect(setup.deps.dueReminders).toHaveBeenCalledWith(NOW);
     expect(setup.expo.requests).toHaveLength(1);
+    // channelId: the Android channel the app creates («التذكيرات», apps/mobile/src/lib/notifications.ts), so muting it
+    // in Android settings works and reminders do not land on Expo's English default channel (final review mobile minor 6).
+    const msg = (to: string, kind: 'daily' | 'weekly') => ({
+      to,
+      title: 'أوراد',
+      body: REMINDER_COPY[kind],
+      sound: 'default',
+      channelId: 'reminders',
+      data: { kind },
+    });
     expect(setup.expo.requests[0]).toEqual([
-      { to: 'ExponentPushToken[a]', title: 'أوراد', body: REMINDER_COPY.daily, sound: 'default', data: { kind: 'daily' } },
-      { to: 'ExponentPushToken[b]', title: 'أوراد', body: REMINDER_COPY.daily, sound: 'default', data: { kind: 'daily' } },
-      { to: 'ExponentPushToken[a]', title: 'أوراد', body: REMINDER_COPY.weekly, sound: 'default', data: { kind: 'weekly' } },
-      { to: 'ExponentPushToken[b]', title: 'أوراد', body: REMINDER_COPY.weekly, sound: 'default', data: { kind: 'weekly' } },
+      msg('ExponentPushToken[a]', 'daily'),
+      msg('ExponentPushToken[b]', 'daily'),
+      msg('ExponentPushToken[a]', 'weekly'),
+      msg('ExponentPushToken[b]', 'weekly'),
     ]);
     expect(result).toEqual({ due: 2, sent: 4, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
   });

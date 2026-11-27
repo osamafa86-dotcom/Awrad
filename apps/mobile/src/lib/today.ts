@@ -17,6 +17,9 @@ export interface DayDraft {
   note: string;
 }
 
+/** A draft as stored on the device: `savedAt` (ISO time of the last edit) decides against a saved log (mobile I4). */
+export type StoredDraft<T> = T & { savedAt?: string };
+
 export const EMPTY_ENTRY: HabitEntryState = { checkedItemIds: [] };
 
 export function entryFor(entries: EntryMap, habitId: string): HabitEntryState {

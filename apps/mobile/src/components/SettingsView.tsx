@@ -9,7 +9,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSession } from '../hooks/SessionProvider';
 import { useProfileSettings, type ProfileSettingsPatch } from '../hooks/useProfileSettings';
 import { useSettings } from '../hooks/useSettings';
-import { registerForPushDetailed, unregisterPush } from '../lib/notifications';
+import {
+  devicePushStatus,
+  registerForPushDetailed,
+  unregisterThisDevice,
+  type DevicePushStatus,
+} from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
@@ -79,30 +84,28 @@ export function SettingsView() {
   const app = useSettings();
   const isWeb = Platform.OS === 'web';
 
-  const [pushOn, setPushOn] = useState<boolean | null>(null);
-  const [pushDenied, setPushDenied] = useState(false);
+  // This device's registration (mobile I1): the switch shows it, not whether some other phone of the user has a token.
+  const [push, setPush] = useState<DevicePushStatus | null>(isWeb ? 'unavailable' : null);
+  const [pushAttempted, setPushAttempted] = useState(false);
   const [pushError, setPushError] = useState(false);
-  const [pushUnavailable, setPushUnavailable] = useState(false);
   const [draftTime, setDraftTime] = useState<Date | null>(null);
   const [deletionOpen, setDeletionOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [zonePicker, setZonePicker] = useState(false);
   const [timePicker, setTimePicker] = useState(false);
 
-  // One read each: does this user have a push token / an open deletion request?
+  // One read each: is this device registered for this user / is a deletion request open?
   useEffect(() => {
     if (!uid) return;
     let live = true;
     // Independent reads: one failing must not leave the other control stuck.
-    const tokens = isWeb
-      ? Promise.resolve(null)
-      : Promise.resolve(supabase.from('push_tokens').select('id').eq('user_id', uid).limit(1));
+    const device: Promise<DevicePushStatus> = isWeb ? Promise.resolve('unavailable') : devicePushStatus(uid);
     const requests = Promise.resolve(
       supabase.from('deletion_requests').select('id').eq('user_id', uid).is('handled_at', null).limit(1),
     );
-    void Promise.allSettled([tokens, requests]).then(([t, r]) => {
+    void Promise.allSettled([device, requests]).then(([d, r]) => {
       if (!live) return;
-      if (!isWeb) setPushOn(t.status === 'fulfilled' && !t.value?.error && (t.value?.data?.length ?? 0) > 0);
+      setPush(d.status === 'fulfilled' ? d.value : 'not-registered');
       setDeletionOpen(r.status === 'fulfilled' && !r.value.error && (r.value.data?.length ?? 0) > 0);
     });
     return () => {
@@ -113,24 +116,32 @@ export function SettingsView() {
   const { update } = prefs;
   const save = useCallback((patch: ProfileSettingsPatch) => void update(patch), [update]);
 
-  const togglePush = async (next: boolean) => {
+  const enablePush = async () => {
+    setPushAttempted(true);
     setPushError(false);
-    setPushDenied(false);
-    setPushUnavailable(false);
     try {
-      if (next) {
-        const result = await registerForPushDetailed();
-        if (result.status === 'granted') setPushOn(true);
-        else if (result.status === 'denied') setPushDenied(true);
-        else if (result.status === 'unavailable') setPushUnavailable(true);
-        else setPushError(true);
-      } else {
-        await unregisterPush();
-        setPushOn(false);
-      }
+      const result = await registerForPushDetailed();
+      if (result.status === 'no-user') setPushError(true);
+      else setPush(result.status === 'granted' ? 'registered' : result.status);
     } catch {
       setPushError(true);
     }
+  };
+
+  const togglePush = async (next: boolean) => {
+    if (next) return enablePush();
+    setPushError(false);
+    try {
+      await unregisterThisDevice(uid);
+      setPush('not-registered');
+    } catch {
+      setPushError(true);
+    }
+  };
+
+  /** A reminder switched on (mobile I2): register this device in context if it is not yet, so the reminder can arrive. */
+  const reminderSwitchedOn = () => {
+    if (!isWeb && push !== 'registered' && push !== 'unavailable') void enablePush();
   };
 
   const requestDeletion = async (): Promise<boolean> => {
@@ -140,6 +151,11 @@ export function SettingsView() {
   };
 
   const reminderOn = prefs.reminderTime !== null;
+  // A reminder is on, so this device should be able to receive it (spec §12, F-50/F-51).
+  const wantsReminders = reminderOn || prefs.weeklyReminder;
+  const showDenied = !isWeb && push === 'denied' && (wantsReminders || pushAttempted);
+  const showNeedPush = !isWeb && push === 'not-registered' && wantsReminders;
+  const showUnavailable = !isWeb && push === 'unavailable' && (wantsReminders || pushAttempted);
   const privacyBase = process.env.EXPO_PUBLIC_ADMIN_URL; // read literally so Expo inlines it
   const effectiveZone = app.timezone;
   const [h, m] = (prefs.reminderTime ?? app.defaultReminderTime).split(':').map(Number);
@@ -181,7 +197,10 @@ export function SettingsView() {
               <Toggle
                 label={ar.settings.dailyReminder}
                 value={reminderOn}
-                onValueChange={(on) => save({ reminder_time: on ? app.defaultReminderTime : null })}
+                onValueChange={(on) => {
+                  save({ reminder_time: on ? app.defaultReminderTime : null });
+                  if (on) reminderSwitchedOn();
+                }}
               />
             }
           />
@@ -237,7 +256,10 @@ export function SettingsView() {
               <Toggle
                 label={ar.settings.weeklyReminder}
                 value={prefs.weeklyReminder}
-                onValueChange={(on) => save({ weekly_reminder: on })}
+                onValueChange={(on) => {
+                  save({ weekly_reminder: on });
+                  if (on) reminderSwitchedOn();
+                }}
               />
             }
           />
@@ -248,8 +270,8 @@ export function SettingsView() {
               right={
                 <Toggle
                   label={ar.settings.notifications}
-                  value={pushOn === true}
-                  disabled={pushOn === null}
+                  value={push === 'registered'}
+                  disabled={push === null}
                   onValueChange={(on) => void togglePush(on)}
                 />
               }
@@ -257,7 +279,7 @@ export function SettingsView() {
           )}
         </Section>
         {isWeb ? banner(ar.settings.webInstallBanner, 'info') : null}
-        {pushDenied
+        {showDenied
           ? banner(
               ar.settings.pushDenied,
               'error',
@@ -270,7 +292,20 @@ export function SettingsView() {
               />,
             )
           : null}
-        {pushUnavailable ? banner(ar.settings.pushUnavailable, 'info') : null}
+        {showNeedPush
+          ? banner(
+              ar.settings.remindersNeedPush,
+              'info',
+              <Button
+                label={ar.settings.enablePush}
+                variant="secondary"
+                size="md"
+                fullWidth={false}
+                onPress={() => void enablePush()}
+              />,
+            )
+          : null}
+        {showUnavailable ? banner(ar.settings.pushUnavailable, 'info') : null}
         {pushError ? banner(ar.settings.saveFailed, 'error') : null}
 
         <Section title={ar.settings.timezoneSection}>

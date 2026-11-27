@@ -2,6 +2,7 @@ import { addDays, computeDayStatus, isWithinBackfill, type HabitDef } from '@awr
 import { useCallback, useEffect, useState } from 'react';
 
 import { localToday } from '../lib/clock';
+import { draftKey, isNewerDraft } from '../lib/drafts';
 import {
   buildSaveInput,
   entriesFromDraft,
@@ -12,7 +13,9 @@ import {
   type DayDraft,
   type EntryMap,
   type HabitEntryState,
+  type StoredDraft,
 } from '../lib/today';
+import { useAppSession } from './SessionProvider';
 import { useActiveHabits } from './useActiveHabits';
 import { useDraft } from './useDraft';
 import { useLog } from './useLog';
@@ -57,6 +60,8 @@ export interface TodayScreenState {
   saving: boolean;
   save(): Promise<void>;
   banner: BannerState | null;
+  /** The edits shown came back from this device's unsaved draft (newer than any saved log): not saved yet. */
+  draftRestored: boolean;
   streak: number | null;
 }
 
@@ -69,29 +74,39 @@ export function useTodayScreen({
   readOnly = false,
 }: { initialDate?: string; readOnly?: boolean } = {}): TodayScreenState {
   const settings = useSettings();
+  const { profile } = useAppSession();
+  const uid = profile?.id ?? null;
   const today = settings.loading ? null : localToday(settings.timezone);
   const [chosen, setChosen] = useState<string | null>(initialDate ?? null);
   const date = chosen ?? today;
 
   const habitsQ = useActiveHabits(date, 'daily');
   const logQ = useLog('daily', date);
-  const draftQ = useDraft<DayDraft>(date && !readOnly ? `draft:daily:${date}` : null);
+  // Keyed by user (mobile I3): another student's unsaved edits on a shared phone are never read here.
+  const draftQ = useDraft<StoredDraft<DayDraft>>(date && uid && !readOnly ? draftKey(uid, 'daily', date) : null);
   const saver = useSaveLog();
   const streakQ = useStreak();
 
-  // Local edits for the date shown; hydrated once per date from the server log, else the draft.
-  // `dirty` = edited since hydration/save, i.e. worth keeping as a draft.
-  const [local, setLocal] = useState<({ date: string; dirty: boolean } & DayDraft) | null>(null);
+  // Local edits for the date shown, hydrated once per date. `dirty` = not saved yet, i.e. kept as a draft;
+  // `restored` = hydrated from such a draft; `savedAt` = when it was last edited.
+  const [local, setLocal] = useState<
+    ({ date: string; dirty: boolean; restored: boolean; savedAt?: string } & DayDraft) | null
+  >(null);
   const [banner, setBanner] = useState<{ date: string; state: BannerState } | null>(null);
 
   const ready = date !== null && !habitsQ.loading && !logQ.loading && draftQ.loaded;
   useEffect(() => {
     if (!ready || !date || local?.date === date) return;
-    // A saved server log always wins; the draft is only for a day with no log yet.
-    const next: DayDraft = logQ.log
-      ? { entries: entriesFromLog(habitsQ.habits, logQ.entries), note: logQ.log.note ?? '' }
-      : { entries: entriesFromDraft(habitsQ.habits, draftQ.draft), note: draftQ.draft?.note ?? '' };
-    setLocal({ date, dirty: false, ...next });
+    // The saved server log wins, unless this device holds an unsaved edit made after the log was last saved
+    // (mobile I4: «حفظنا مسوّدتك» must stay true for an edit of an already-saved day).
+    const draft = draftQ.draft;
+    const fromDraft = draft !== null && (!logQ.log || isNewerDraft(draft.savedAt, logQ.log.updated_at));
+    const next: DayDraft = fromDraft
+      ? { entries: entriesFromDraft(habitsQ.habits, draft), note: draft.note ?? '' }
+      : logQ.log
+        ? { entries: entriesFromLog(habitsQ.habits, logQ.entries), note: logQ.log.note ?? '' }
+        : { entries: entriesFromDraft(habitsQ.habits, null), note: '' };
+    setLocal({ date, dirty: fromDraft, restored: fromDraft, savedAt: fromDraft ? draft.savedAt : undefined, ...next });
   }, [ready, date, local?.date, logQ.log, logQ.entries, habitsQ.habits, draftQ.draft]);
 
   // Keep edits on the device until a successful save (never in read-only mode: no draft key).
@@ -99,7 +114,9 @@ export function useTodayScreen({
   // `setDraft` is keyed by `date`, so only write when `local` belongs to that same date — otherwise
   // navigating would store one day's edits under the next day's key.
   useEffect(() => {
-    if (local?.dirty && local.date === date) setDraft({ entries: local.entries, note: local.note });
+    if (local?.dirty && local.date === date) {
+      setDraft({ entries: local.entries, note: local.note, savedAt: local.savedAt });
+    }
   }, [local, date, setDraft]);
 
   const current = local && local.date === date ? local : null;
@@ -113,7 +130,13 @@ export function useTodayScreen({
       // Functional update so quick successive taps never drop one.
       setLocal((l) =>
         l && l.date === date
-          ? { date, dirty: true, ...fn({ entries: l.entries, note: l.note }) }
+          ? {
+              date,
+              dirty: true,
+              restored: l.restored,
+              savedAt: new Date().toISOString(),
+              ...fn({ entries: l.entries, note: l.note }),
+            }
           : l,
       );
       // A "saved" banner no longer describes the edited day; an error stays until the next attempt.
@@ -165,7 +188,7 @@ export function useTodayScreen({
     // Saved state is clean; edits made while saving are written back as a draft (new object → effect).
     setLocal((l) => {
       if (!l || l.date !== date) return l;
-      return l.entries === entries && l.note === note ? { ...l, dirty: false } : { ...l };
+      return l.entries === entries && l.note === note ? { ...l, dirty: false, restored: false } : { ...l };
     });
     void logQ.refetch();
     void streakQ.refetch();
@@ -225,6 +248,7 @@ export function useTodayScreen({
     saving: saver.saving,
     save,
     banner: shownBanner,
+    draftRestored: current?.restored === true && current.dirty,
     streak: streakQ.streak,
   };
 }

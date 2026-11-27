@@ -1,6 +1,7 @@
 import type { EntryInput, HabitDef, SaveLogInput } from '@awrad/domain';
 import { useCallback, useEffect, useState } from 'react';
 
+import { draftKey, isNewerDraft } from '../lib/drafts';
 import {
   entriesFromDraft,
   entriesFromLog,
@@ -10,7 +11,9 @@ import {
   toEntryInputs,
   type EntryMap,
   type HabitEntryState,
+  type StoredDraft,
 } from '../lib/today';
+import { useAppSession } from './SessionProvider';
 import type { BannerState } from './useTodayScreen';
 import { useActiveHabits } from './useActiveHabits';
 import { useDraft } from './useDraft';
@@ -93,6 +96,8 @@ export interface WeeklyScreenState {
   saving: boolean;
   save(): Promise<void>;
   banner: BannerState | null;
+  /** The edits shown came back from this device's unsaved draft (newer than any saved log): not saved yet. */
+  draftRestored: boolean;
 }
 
 /** State and actions of the weekly review screen (F-20…F-24); mirrors useTodayScreen, keyed by week. */
@@ -101,6 +106,8 @@ export function useWeeklyScreen({
   readOnly = false,
 }: { weekStart?: string; readOnly?: boolean } = {}): WeeklyScreenState {
   const settings = useSettings();
+  const { profile } = useAppSession();
+  const uid = profile?.id ?? null;
   const currentWeek = useWeek(0);
   const previousWeek = useWeek(-1);
   const [offset, setOffset] = useState<0 | -1>(0);
@@ -120,35 +127,49 @@ export function useWeeklyScreen({
 
   const habitsQ = useActiveHabits(weekStart, 'weekly');
   const logQ = useLog('weekly', weekStart);
-  const draftQ = useDraft<WeekDraft>(weekStart && !readOnly ? `draft:weekly:${weekStart}` : null);
+  // Keyed by user (mobile I3): another student's unsaved edits on a shared phone are never read here.
+  const draftQ = useDraft<StoredDraft<WeekDraft>>(
+    weekStart && uid && !readOnly ? draftKey(uid, 'weekly', weekStart) : null,
+  );
   const lastWeekQ = useLog(
     'weekly',
     !fixedWeekStart && !currentWeek.loading && previousWeek.canEdit ? previousWeek.weekStart : null,
   );
   const saver = useSaveLog();
 
-  // Local edits for the week shown; hydrated once per week from the server log, else the draft.
-  const [local, setLocal] = useState<({ weekStart: string; dirty: boolean } & WeekDraft) | null>(
-    null,
-  );
+  // Local edits for the week shown, hydrated once per week (as in useTodayScreen: `dirty` = not saved yet,
+  // `restored` = hydrated from this device's draft, `savedAt` = last edit).
+  const [local, setLocal] = useState<
+    ({ weekStart: string; dirty: boolean; restored: boolean; savedAt?: string } & WeekDraft) | null
+  >(null);
   const [banner, setBanner] = useState<{ weekStart: string; state: BannerState } | null>(null);
 
   const ready = weekStart !== null && !habitsQ.loading && !logQ.loading && draftQ.loaded;
   useEffect(() => {
     if (!ready || !weekStart || local?.weekStart === weekStart) return;
-    // A saved server log always wins; the draft is only for a week with no log yet.
-    const next: WeekDraft = logQ.log
+    // The saved server log wins, unless this device holds an unsaved edit made after it was last saved (mobile I4).
+    const draft = draftQ.draft;
+    const fromDraft = draft !== null && (!logQ.log || isNewerDraft(draft.savedAt, logQ.log.updated_at));
+    const next: WeekDraft = fromDraft
       ? {
-          entries: entriesFromLog(habitsQ.habits, logQ.entries),
-          reviewText: logQ.log.review_text ?? '',
-          supportRequestText: logQ.log.support_request_text ?? '',
+          entries: entriesFromDraft(habitsQ.habits, draft),
+          reviewText: draft.reviewText ?? '',
+          supportRequestText: draft.supportRequestText ?? '',
         }
-      : {
-          entries: entriesFromDraft(habitsQ.habits, draftQ.draft),
-          reviewText: draftQ.draft?.reviewText ?? '',
-          supportRequestText: draftQ.draft?.supportRequestText ?? '',
-        };
-    setLocal({ weekStart, dirty: false, ...next });
+      : logQ.log
+        ? {
+            entries: entriesFromLog(habitsQ.habits, logQ.entries),
+            reviewText: logQ.log.review_text ?? '',
+            supportRequestText: logQ.log.support_request_text ?? '',
+          }
+        : { entries: entriesFromDraft(habitsQ.habits, null), reviewText: '', supportRequestText: '' };
+    setLocal({
+      weekStart,
+      dirty: fromDraft,
+      restored: fromDraft,
+      savedAt: fromDraft ? draft.savedAt : undefined,
+      ...next,
+    });
   }, [ready, weekStart, local?.weekStart, logQ.log, logQ.entries, habitsQ.habits, draftQ.draft]);
 
   // `setDraft` is keyed by `weekStart`: only write when `local` belongs to that same week, otherwise
@@ -160,6 +181,7 @@ export function useWeeklyScreen({
         entries: local.entries,
         reviewText: local.reviewText,
         supportRequestText: local.supportRequestText,
+        savedAt: local.savedAt,
       });
     }
   }, [local, weekStart, setDraft]);
@@ -178,6 +200,8 @@ export function useWeeklyScreen({
           ? {
               weekStart,
               dirty: true,
+              restored: l.restored,
+              savedAt: new Date().toISOString(),
               ...fn({
                 entries: l.entries,
                 reviewText: l.reviewText,
@@ -230,7 +254,7 @@ export function useWeeklyScreen({
       return l.entries === entries &&
         l.reviewText === reviewText &&
         l.supportRequestText === supportRequestText
-        ? { ...l, dirty: false }
+        ? { ...l, dirty: false, restored: false }
         : { ...l };
     });
     void logQ.refetch();
@@ -291,5 +315,6 @@ export function useWeeklyScreen({
     saving: saver.saving,
     save,
     banner: shownBanner,
+    draftRestored: current?.restored === true && current.dirty,
   };
 }

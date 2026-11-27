@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import type { Database } from '@awrad/supabase-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { clearDrafts } from '../lib/drafts';
+import { unregisterThisDevice } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 
 export type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -72,7 +74,19 @@ export function useSession(): UseSession {
     await loadProfile(userId.current);
   }, [loadProfile]);
 
+  /**
+   * Final review mobile I1 + I3 (a shared family phone): before the session goes, this device stops receiving the
+   * student's reminders (its own push_tokens row, deletable under RLS only while signed in) and their unsaved drafts
+   * leave with them. Both are best effort: a failure (offline) never keeps the student signed in.
+   */
   const signOut = useCallback(async () => {
+    const uid = userId.current;
+    try {
+      await unregisterThisDevice(uid);
+    } catch {
+      // The row stays until Expo reports the token dead; signing out still goes ahead.
+    }
+    await clearDrafts(uid);
     await supabase.auth.signOut();
   }, []);
 
