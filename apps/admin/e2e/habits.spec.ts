@@ -72,9 +72,10 @@ async function createWeeklyHabit(page: Page, name: string, items: string[] = [])
   await expect(habitRow(page, name)).toBeVisible();
 }
 
-/** The names of the active weekly habits, in table order (from their drag handles). */
+/** The names of the active weekly habits, in table order (from their rows' drag handles, not the item chips'). */
 async function weeklyOrder(page: Page): Promise<string[]> {
   const labels = await weeklyTable(page)
+    .locator('tbody > tr:first-child > td:first-child')
     .getByRole('button', { name: /^إعادة ترتيب/ })
     .evaluateAll((handles) => handles.map((h) => h.getAttribute('aria-label') ?? ''));
   return labels.map((label) => label.replace(/^إعادة ترتيب «(.*)»$/, '$1'));
@@ -125,10 +126,25 @@ test.describe('habits, signed in', () => {
 
       const handle = weeklyTable(page).getByRole('button', { name: t.reorder.handle(second), exact: true });
       await handle.focus();
+      await expect(handle).toBeFocused();
       await page.keyboard.press('Space');
+      // why: dnd-kit's keyboard sensor listens for the arrow keys only from the next tick after the pick-up;
+      // an ArrowUp sent at once is dropped and the item never moves. Wait for the pick-up, then the move.
+      await expect(handle).toHaveAttribute('aria-pressed', 'true');
       await page.keyboard.press('ArrowUp');
+      const target = before.indexOf(first) + 1;
+      await expect(page.getByText(t.reorder.moved(second, target, before.length), { exact: true })).toHaveCount(1);
+      const saved = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/habits');
       await page.keyboard.press('Space');
-      await expect(page.getByRole('status').filter({ hasText: t.reorder.saved })).toBeVisible({ timeout: 20_000 });
+
+      // The optimistic order (rendered on the next commit after the drop), then the server action's answer.
+      await expect
+        .poll(async () => {
+          const moved = await weeklyOrder(page);
+          return moved.indexOf(second) - moved.indexOf(first);
+        })
+        .toBe(-1);
+      expect((await saved).ok()).toBe(true);
 
       await openWeekly(page);
       const after = await weeklyOrder(page);

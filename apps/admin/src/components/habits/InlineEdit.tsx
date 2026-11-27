@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import { ar } from '@/messages/ar';
@@ -28,6 +28,17 @@ export function InlineEdit({ value, label, onSave, placeholder, allowEmpty = fal
   const [prevValue, setPrevValue] = useState(value);
   // Set when the edit already ended (Enter or Esc), so the blur that follows does not save again.
   const ended = useRef(false);
+  const button = useRef<HTMLButtonElement>(null);
+  // Set when Enter or Esc ends the edit: focus goes back to the button instead of falling to <body>.
+  // Not on blur, which means the focus already moved somewhere the user chose.
+  const refocus = useRef(false);
+
+  useEffect(() => {
+    if (!editing && refocus.current) {
+      refocus.current = false;
+      button.current?.focus();
+    }
+  }, [editing]);
 
   if (value !== prevValue) {
     // The server sent the saved value: it replaces the optimistic one.
@@ -72,11 +83,13 @@ export function InlineEdit({ value, label, onSave, placeholder, allowEmpty = fal
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
+            refocus.current = true;
             void commit();
           } else if (event.key === 'Escape') {
             event.preventDefault();
             // Esc ends the edit, not the dialog or drag around it.
             event.stopPropagation();
+            refocus.current = true;
             cancel();
           }
         }}
@@ -86,6 +99,7 @@ export function InlineEdit({ value, label, onSave, placeholder, allowEmpty = fal
 
   return (
     <button
+      ref={button}
       type="button"
       title={ar.habits.inline.editHint}
       onClick={start}

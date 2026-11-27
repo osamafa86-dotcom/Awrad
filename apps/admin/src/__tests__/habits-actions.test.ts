@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.fn();
 const from = vi.fn();
@@ -42,9 +42,19 @@ function query(result: { data: unknown; error: unknown }) {
   return { builder, calls };
 }
 
+// «Today» in the admin's zone (Asia/Riyadh) is 2026-11-27: the dates below are the day after and the day before.
+const TOMORROW = '2026-11-28';
+const YESTERDAY = '2026-11-26';
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-27T09:00:00Z'));
   vi.resetAllMocks();
   getCurrentProfile.mockResolvedValue(admin);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('habits actions', () => {
@@ -57,7 +67,7 @@ describe('habits actions', () => {
       code: 'FORBIDDEN',
     });
     getCurrentProfile.mockResolvedValue({ ...admin, isActive: false });
-    expect(await archiveHabit(H1, '2030-01-01')).toEqual({ ok: false, code: 'FORBIDDEN' });
+    expect(await archiveHabit(H1, TOMORROW)).toEqual({ ok: false, code: 'FORBIDDEN' });
     expect(from).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -108,7 +118,7 @@ describe('habits actions', () => {
         target_text: null,
         frequency: 'weekly',
         kind: 'checklist',
-        active_from: '2030-01-01',
+        active_from: TOMORROW,
         items: ['أ', 'ب'],
       },
     });
@@ -120,8 +130,8 @@ describe('habits actions', () => {
       'insert',
       [
         [
-          { habit_id: H2, name: 'أ', sort_order: 1, active_from: '2030-01-01' },
-          { habit_id: H2, name: 'ب', sort_order: 2, active_from: '2030-01-01' },
+          { habit_id: H2, name: 'أ', sort_order: 1, active_from: TOMORROW },
+          { habit_id: H2, name: 'ب', sort_order: 2, active_from: TOMORROW },
         ],
       ],
     ]);
@@ -135,7 +145,7 @@ describe('habits actions', () => {
         target_text: null,
         frequency: 'daily',
         kind: 'tristate',
-        active_from: '2020-01-01',
+        active_from: YESTERDAY,
         items: [],
       },
     });
@@ -148,12 +158,12 @@ describe('habits actions', () => {
   });
 
   it('archiveHabit refuses a past date and an already archived habit', async () => {
-    expect(await archiveHabit(H1, '2020-01-01')).toEqual({ ok: false, code: 'DATE_OUT_OF_WINDOW' });
+    expect(await archiveHabit(H1, YESTERDAY)).toEqual({ ok: false, code: 'DATE_OUT_OF_WINDOW' });
     const update = query({ data: [], error: null });
     from.mockReturnValueOnce(update.builder);
-    expect(await archiveHabit(H1, '2030-01-01')).toEqual({ ok: false, code: 'INACTIVE_HABIT' });
+    expect(await archiveHabit(H1, TOMORROW)).toEqual({ ok: false, code: 'INACTIVE_HABIT' });
     expect(update.calls).toEqual([
-      ['update', [{ active_to: '2030-01-01' }]],
+      ['update', [{ active_to: TOMORROW }]],
       ['eq', ['id', H1]],
       ['is', ['active_to', null]],
       ['select', ['id']],

@@ -76,12 +76,16 @@ async function habit(id: string): Promise<HabitRow> {
   return result.rows[0]!;
 }
 
-/** A daily log of p1 on `date` with an entry for `habitId` (written directly: this file tests habits, not save_log). */
-async function logOn(habitId: string, date: string): Promise<string> {
+/** A log of p1 (daily by default) starting on `date` with an entry for `habitId` (written directly: this file tests habits, not save_log). */
+async function logOn(
+  habitId: string,
+  date: string,
+  period: "daily" | "weekly" = "daily",
+): Promise<string> {
   const log = await db.query<{ id: string }>(
-    `insert into logs (user_id, period, period_start) values ($1, 'daily', $2)
+    `insert into logs (user_id, period, period_start) values ($1, $3, $2)
      on conflict (user_id, period, period_start) do update set note = null returning id`,
-    [fx.p1, date],
+    [fx.p1, date, period],
   );
   const entry = await db.query<{ id: string }>(
     `insert into log_entries (log_id, habit_id, status) values ($1, $2, 'done') returning id`,
@@ -366,6 +370,31 @@ describe("0009_habit_admin: archive_and_replace_habit", () => {
       p_switch_date: "2026-11-21",
     });
     expect((await habit(old)).active_to).toBe("2026-11-20");
+  });
+
+  test("weekly: the switch may not be on or before a logged week start, but may fall inside that week (the log's period_start is what counts)", async () => {
+    // A weekly log is checked against the habits active on its week start (save_log), so the old habit
+    // must stay active through W; a switch on W+3 keeps it active on W and starts the new one mid-week.
+    const old = await makeHabit("weekly_logged", { frequency: "weekly" });
+    await logOn(old, "2026-11-15", "weekly");
+    const admin = await as("admin@test");
+    for (const date of ["2026-11-15", "2026-11-08"]) {
+      const error = await failure(
+        admin.rpc("archive_and_replace_habit", {
+          p_old_habit_id: old,
+          p_new: { name: "بديل" },
+          p_switch_date: date,
+        }),
+      );
+      expect(error.message, date).toBe("DATE_OUT_OF_WINDOW");
+    }
+    await admin.rpc("archive_and_replace_habit", {
+      p_old_habit_id: old,
+      p_new: { name: "بديل" },
+      p_switch_date: "2026-11-18",
+    });
+    expect((await habit(old)).active_to).toBe("2026-11-17");
+    expect(await activeIds("2026-11-15", "weekly")).toEqual([old]);
   });
 });
 

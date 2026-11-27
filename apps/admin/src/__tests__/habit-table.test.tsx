@@ -83,7 +83,14 @@ describe('HabitTable', () => {
     await userEvent.click(screen.getByRole('button', { name: fresh.name }));
     await userEvent.type(screen.getByRole('textbox', { name: t.inline.name }), ' زيادة{Escape}');
     expect(upsertHabit).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: fresh.name })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: fresh.name })).toHaveFocus();
+  });
+
+  it('gives focus back to the name after Enter saves', async () => {
+    renderTable();
+    await userEvent.click(screen.getByRole('button', { name: fresh.name }));
+    await userEvent.type(screen.getByRole('textbox', { name: t.inline.name }), 'ة{Enter}');
+    expect(screen.getByRole('button', { name: `${fresh.name}ة` })).toHaveFocus();
   });
 
   it('puts the old name back and explains when the rename fails', async () => {
