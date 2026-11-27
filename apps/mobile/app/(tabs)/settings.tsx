@@ -1,6 +1,5 @@
-import { PlaceholderScreen } from '../../src/components/PlaceholderScreen';
-import { ar } from '../../src/messages/ar';
+import { SettingsView } from '../../src/components/SettingsView';
 
 export default function SettingsScreen() {
-  return <PlaceholderScreen title={ar.tabs.settings} />;
+  return <SettingsView />;
 }

@@ -1,13 +1,14 @@
 import '../global.css';
 
 import { useFonts } from 'expo-font';
-import { Stack, ThemeProvider } from 'expo-router';
+import { Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
 
 import { SessionProvider } from '../src/hooks/SessionProvider';
 import { fontMap } from '../src/lib/fonts';
+import { setupNotificationResponseHandler } from '../src/lib/notifications';
 import { ensureRTL } from '../src/lib/rtl';
 import { toNavigationTheme, useTheme } from '../src/lib/theme';
 import { ar } from '../src/messages/ar';
@@ -25,12 +26,18 @@ export const unstable_settings = {
 export default function RootLayout() {
   const [loaded, error] = useFonts(fontMap);
   const theme = useTheme();
+  const router = useRouter();
   const navigationTheme = useMemo(() => toNavigationTheme(theme), [theme]);
   const ready = loaded || error !== null;
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync();
   }, [ready]);
+
+  // Reminder taps open Today; installs once (the helper ignores repeats and web).
+  useEffect(() => {
+    setupNotificationResponseHandler(router);
+  }, [router]);
 
   // A font error falls back to the system font rather than blocking the app.
   if (!ready) return null;
