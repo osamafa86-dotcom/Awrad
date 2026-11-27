@@ -14,7 +14,7 @@
     },
     "ios": {
       "bundleIdentifier": "org.mafatih.awrad",
-      "supportsTablet": true
+      "supportsTablet": false
     },
     "android": {
       "package": "org.mafatih.awrad",
