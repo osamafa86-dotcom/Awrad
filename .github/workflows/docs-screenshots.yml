@@ -5,9 +5,17 @@ name: Docs screenshots
 # the `setup` project it depends on) and uploads apps/admin/e2e/docs-out as the `docs-screenshots` artifact.
 # Copy the PNGs into docs/images/admin/ by hand. Run it from the Actions tab or
 # `gh workflow run docs-screenshots.yml --ref <branch>`.
+#
+# GitHub only dispatches a workflow whose file is on the default branch (main). Until it is, a push to main
+# or build/** that changes this file or the spec runs it too; that is also how a fix to either is retried.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, 'build/**']
+    paths:
+      - .github/workflows/docs-screenshots.yml
+      - apps/admin/e2e/docs-screenshots.spec.ts
 
 permissions:
   contents: read
