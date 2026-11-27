@@ -8,6 +8,18 @@ import Today from '../app/(tabs)/today';
 import Weekly from '../app/(tabs)/weekly';
 import { ar } from '../src/messages/ar';
 
+// The tab bar sits behind SessionGate; here the visitor is a signed-in, active, tracked student.
+jest.mock('../src/hooks/SessionProvider', () => ({
+  useAppSession: () => ({
+    session: { user: { id: 'u1' } },
+    profile: { id: 'u1', is_active: true, is_tracked: true },
+    loading: false,
+    error: null,
+    signOut: jest.fn(),
+    refreshProfile: jest.fn(),
+  }),
+}));
+
 const routes = {
   '(tabs)/_layout': TabLayout,
   '(tabs)/today': Today,

@@ -7,6 +7,8 @@ import ChartColumn from 'lucide-react-native/icons/chart-column';
 import History from 'lucide-react-native/icons/history';
 import Settings from 'lucide-react-native/icons/settings';
 
+import { SessionGate } from '../../src/components/SessionGate';
+import { useAppSession } from '../../src/hooks/SessionProvider';
 import { useTheme } from '../../src/lib/theme';
 import { ar } from '../../src/messages/ar';
 
@@ -25,6 +27,22 @@ const ICON_SIZE = 24;
 const ICON_STROKE = 1.75;
 
 export default function TabLayout() {
+  const { session, profile, loading, error, signOut, refreshProfile } = useAppSession();
+  return (
+    <SessionGate
+      session={session}
+      profile={profile}
+      loading={loading}
+      error={error}
+      onRetry={() => void refreshProfile()}
+      onSignOut={() => void signOut()}
+    >
+      <AppTabs />
+    </SessionGate>
+  );
+}
+
+function AppTabs() {
   const { colors, type } = useTheme();
   return (
     <Tabs

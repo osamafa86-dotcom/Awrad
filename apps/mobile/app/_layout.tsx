@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
 
+import { SessionProvider } from '../src/hooks/SessionProvider';
 import { fontMap } from '../src/lib/fonts';
 import { ensureRTL } from '../src/lib/rtl';
 import { toNavigationTheme, useTheme } from '../src/lib/theme';
@@ -36,9 +37,13 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-      </Stack>
+      {/* One auth subscription; (tabs) is guarded by SessionGate, (auth) by AuthRouteGuard. */}
+      <SessionProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(auth)" />
+        </Stack>
+      </SessionProvider>
     </ThemeProvider>
   );
 }

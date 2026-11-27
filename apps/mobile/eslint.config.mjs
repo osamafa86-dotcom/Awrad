@@ -4,7 +4,7 @@ export default [
   ...config,
   {
     // CommonJS tool configs (Babel, Metro, Tailwind, Jest) must use require().
-    files: ['*.config.js'],
+    files: ['*.config.js', 'jest.setup.js'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
 ];

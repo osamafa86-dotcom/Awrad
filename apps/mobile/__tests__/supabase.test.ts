@@ -10,6 +10,10 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(async (k: string) => void mockSecure.delete(k)),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 const KEYS = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'] as const;
 
 function loadModule(): typeof import('../src/lib/supabase') {
@@ -58,7 +62,7 @@ describe('supabase client', () => {
     expect(supabase).toEqual({ kind: 'client' });
   });
 
-  it('uses a SecureStore adapter on native and localStorage (no adapter) on web', async () => {
+  it('uses the encrypted LargeSecureStore adapter on native and localStorage (no adapter) on web', async () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
     const { nativeStorage, storageFor } = loadModule();

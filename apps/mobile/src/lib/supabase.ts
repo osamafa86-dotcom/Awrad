@@ -1,27 +1,15 @@
 import { createBrowserClient } from '@awrad/supabase-client';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { ar } from '../messages/ar';
+import { LargeSecureStore, type AuthStorage } from './storage';
 
-/** The storage contract supabase-js expects (all methods may be async). */
-export interface AuthStorage {
-  getItem(key: string): Promise<string | null>;
-  setItem(key: string, value: string): Promise<void>;
-  removeItem(key: string): Promise<void>;
-}
+export type { AuthStorage };
 
-/**
- * Minimal native adapter over the Keychain/Keystore. Task 2.2 replaces it with an encrypted
- * large-value store (SecureStore values are size-limited).
- */
-export const nativeStorage: AuthStorage = {
-  getItem: (key) => SecureStore.getItemAsync(key),
-  setItem: (key, value) => SecureStore.setItemAsync(key, value),
-  removeItem: (key) => SecureStore.deleteItemAsync(key),
-};
+/** Encrypted native session storage (see storage.ts). */
+export const nativeStorage: AuthStorage = new LargeSecureStore();
 
-/** Web uses supabase-js's default (localStorage); native uses the SecureStore adapter. */
+/** Web uses supabase-js's default (localStorage); native uses the encrypted LargeSecureStore. */
 export function storageFor(os: typeof Platform.OS): AuthStorage | undefined {
   return os === 'web' ? undefined : nativeStorage;
 }
