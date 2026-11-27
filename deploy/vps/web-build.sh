@@ -7,9 +7,28 @@
 set -eu
 : "${EXPO_PUBLIC_SUPABASE_URL:?}" "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?}" "${EXPO_PUBLIC_ADMIN_URL:?}"
 unset EXPO_PUBLIC_PREVIEW
+# A writable HOME and TMPDIR of our own (Expo keeps state in ~/.expo and caches under TMPDIR), no telemetry, CI mode.
+export HOME=/tmp/home TMPDIR=/tmp/expo-tmp EXPO_NO_TELEMETRY=1 CI=1
+mkdir -p "$HOME" "$TMPDIR"
+diag() {
+  w=no; [ -w "$HOME" ] && w=yes
+  echo "web-build: uid $(id -u) · HOME $HOME writable $w · node $(node -p process.versions.node) · pnpm $(pnpm --version) · NODE_OPTIONS ${NODE_OPTIONS:-—} · cpus $(nproc)"
+  # cgroup v2: was anything in this container killed for memory, and how high did it go?
+  if [ -r /sys/fs/cgroup/memory.events ]; then
+    echo "web-build: cgroup oom_kill $(awk '/^oom_kill /{print $2}' /sys/fs/cgroup/memory.events) · peak $(( $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || echo 0) / 1048576 )) MiB · max $(cat /sys/fs/cgroup/memory.max 2>/dev/null)"
+  fi
+  return 0
+}
+diag
 cd /app
 rm -rf apps/mobile/dist
-pnpm --filter mobile exec expo export -p web --clear >/tmp/export.log 2>&1 || { tail -40 /tmp/export.log; exit 1; }
+# As CI's production export (no --clear); two Metro workers keep the forks inside the container's memory cap.
+if ! pnpm --filter mobile exec expo export -p web --max-workers 2 >/tmp/export.log 2>&1; then
+  echo "web-build: expo export failed — the whole log ($(wc -l </tmp/export.log) lines):"
+  tail -200 /tmp/export.log
+  diag
+  exit 1
+fi
 tail -3 /tmp/export.log
 test -f apps/mobile/dist/index.html || { echo "web-build: dist/index.html missing"; exit 1; }
 # -w: whole words, as in CI — expo-router's own `__internal__previewId` does not count.
