@@ -37,12 +37,14 @@ export interface StudentDetailProps {
   attendance: Loaded<AttendanceRow[]>;
   /** Admins: the edit panel, activate/deactivate and delete. Supervisors read only. */
   canEdit: boolean;
+  /** The viewer is looking at their own profile (no deactivate or delete). */
+  isSelf?: boolean;
   groups: GroupOption[];
 }
 
 /** a02 — the student page: header, summary, this month, latest logs, attendance (and the admin's tools). */
 export function StudentDetail(props: StudentDetailProps) {
-  const { student, today, month, hijriAdjustment, summary, calendar, logs, attendance, canEdit, groups } = props;
+  const { student, today, month, hijriAdjustment, summary, calendar, logs, attendance, canEdit, isSelf, groups } = props;
   return (
     <div className="flex flex-col gap-32">
       <header className="flex flex-col gap-16">
@@ -88,7 +90,7 @@ export function StudentDetail(props: StudentDetailProps) {
             <Failed>{t.calendarFailed}</Failed>
           )}
         </Section>
-        {canEdit ? <StudentEditPanel student={student} groups={groups} today={today} /> : null}
+        {canEdit ? <StudentEditPanel student={student} groups={groups} today={today} isSelf={isSelf} /> : null}
       </div>
 
       <Section title={t.logsTitle}>

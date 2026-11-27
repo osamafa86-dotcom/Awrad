@@ -6,7 +6,10 @@ import type { DayState } from '@awrad/domain';
 import type { GroupOption, StudentFilters, StudentRow } from '../students';
 import type { Role } from '../access';
 
-const PROFILE_COLUMNS = 'id, full_name, role, group_id, is_active, is_tracked, joined_at, timezone, groups(name, timezone, week_starts_on)';
+// why: `!group_id` names the FK. PostgREST also sees profiles ↔ groups many-to-many through group_supervisors,
+// and rejects an unhinted embed with PGRST201 ("more than one relationship was found").
+const PROFILE_COLUMNS =
+  'id, full_name, role, group_id, is_active, is_tracked, joined_at, timezone, groups!group_id(name, timezone, week_starts_on)';
 
 interface ProfileJoin {
   id: string;
@@ -43,7 +46,7 @@ export async function listStudents(client: TypedClient, filters: StudentFilters)
   if (filters.status) query = query.eq('is_active', filters.status === 'active');
   const { data, error } = await query.order('full_name');
   if (error) throw error;
-  // why: the embedded `groups(...)` select is typed loosely by the generated relationships; its shape is fixed above.
+  // why: the embedded `groups!group_id(...)` select is typed loosely by the generated relationships; its shape is fixed above.
   return (data as unknown as ProfileJoin[]).map(toRow);
 }
 
@@ -77,6 +80,8 @@ export interface StudentProfile extends StudentRow {
 /** One person's profile, or null when it does not exist or RLS hides it. */
 export async function getStudentProfile(client: TypedClient, id: string): Promise<StudentProfile | null> {
   const { data, error } = await client.from('profiles').select(PROFILE_COLUMNS).eq('id', id).maybeSingle();
+  // An id that is not a uuid is a 22P02 from PostgREST: just "not found". Anything else is worth a server log.
+  if (error && error.code !== '22P02') console.error('students: load profile failed', error);
   if (error || !data) return null;
   const p = data as unknown as ProfileJoin;
   return {
@@ -91,16 +96,18 @@ export type { StudentSummary };
 /** A section that failed to load renders its own message instead of failing the page. */
 export type Loaded<T> = { ok: true; data: T } | { ok: false };
 
-async function attempt<T>(load: () => Promise<T>): Promise<Loaded<T>> {
+async function attempt<T>(what: string, load: () => Promise<T>): Promise<Loaded<T>> {
   try {
     return { ok: true, data: await load() };
-  } catch {
+  } catch (error) {
+    // Server log only; the section shows its generic message.
+    console.error(`students: load ${what} failed`, error);
     return { ok: false };
   }
 }
 
 export function loadSummary(client: TypedClient, userId: string): Promise<Loaded<StudentSummary>> {
-  return attempt(() => getStudentSummary(client, { userId }));
+  return attempt('summary', () => getStudentSummary(client, { userId }));
 }
 
 export function loadCalendar(
@@ -109,7 +116,7 @@ export function loadCalendar(
   from: string,
   to: string,
 ): Promise<Loaded<Array<{ date: string; state: DayState; completionPct: number | null }>>> {
-  return attempt(() => getCalendar(client, userId, from, to));
+  return attempt('calendar', () => getCalendar(client, userId, from, to));
 }
 
 export interface LogRow {
@@ -126,7 +133,7 @@ export interface LogRow {
 
 /** The latest `limit` logs, daily and weekly, newest first, with each daily log's state. */
 export function loadLogs(client: TypedClient, userId: string, limit = 30): Promise<Loaded<LogRow[]>> {
-  return attempt(async () => {
+  return attempt('logs', async () => {
     const { data, error } = await client
       .from('logs')
       .select('period, period_start, note, review_text, support_status')
@@ -168,13 +175,13 @@ export interface AttendanceRow {
 
 /** The sessions this person was marked in, newest first. */
 export function loadAttendance(client: TypedClient, userId: string): Promise<Loaded<AttendanceRow[]>> {
-  return attempt(async () => {
+  return attempt('attendance', async () => {
     const { data, error } = await client
       .from('attendance')
-      .select('status, sessions(session_date, title)')
+      .select('status, sessions!session_id(session_date, title)')
       .eq('user_id', userId);
     if (error) throw error;
-    // why: the embedded `sessions(...)` select is typed loosely by the generated relationships.
+    // why: the embedded `sessions!session_id(...)` select (hinted like the groups embed) is typed loosely by the generated relationships.
     const rows = data as unknown as Array<{
       status: AttendanceRow['status'];
       sessions: { session_date: string; title: string | null } | null;

@@ -50,6 +50,12 @@ function deps(req: Request): InviteDeps {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight();
   if (req.method !== 'POST') return json(405, { code: 'METHOD_NOT_ALLOWED' });
-  const { status, body } = await handleInvite(await parse(req), deps(req));
-  return json(status, body);
+  try {
+    const { status, body } = await handleInvite(await parse(req), deps(req));
+    return json(status, body);
+  } catch (error) {
+    // Anything outside the handler's own error paths (e.g. a missing env var): still a JSON answer.
+    console.error('invite-user: unexpected failure', error);
+    return json(500, { code: 'INVITE_FAILED' });
+  }
 });

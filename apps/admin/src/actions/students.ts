@@ -20,9 +20,14 @@ import { createClient, getCurrentProfile } from '@/lib/supabase/server';
 // Each re-checks the role for the experience; RLS, is_admin() in the function and the RPC stay the boundary.
 const fail = (code: StudentErrorCode): StudentResult => ({ ok: false, code });
 
-async function isAdmin(): Promise<boolean> {
+/** The signed-in active admin's id, or null for anyone else. */
+async function adminId(): Promise<string | null> {
   const profile = await getCurrentProfile();
-  return profile?.role === 'admin' && profile.isActive;
+  return profile?.role === 'admin' && profile.isActive ? profile.id : null;
+}
+
+async function isAdmin(): Promise<boolean> {
+  return (await adminId()) !== null;
 }
 
 /** F-01/F-61: invite a student through the invite-user Edge Function, then open their page. */
@@ -49,7 +54,10 @@ export async function inviteStudent(_previous: StudentResult | null, form: FormD
 
 /** F-61: edit name, group, joined date, tracking, and activate/deactivate (profiles RLS: admin only). */
 export async function updateStudent(id: string, values: StudentUpdate): Promise<StudentResult> {
-  if (!(await isAdmin())) return fail('FORBIDDEN');
+  const me = await adminId();
+  if (!me) return fail('FORBIDDEN');
+  // An admin must not lock themselves out (admin_delete_user refuses self-deletion for the same reason).
+  if (id === me && !values.is_active) return fail('SELF_FORBIDDEN');
   const parsed = parseStudentUpdate(values);
   if (!parsed.ok) return { ok: false, code: 'INVALID_INPUT', fields: parsed.fields };
   try {

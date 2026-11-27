@@ -46,7 +46,7 @@ export function parseFilters(params: Record<string, string | string[] | undefine
 }
 
 export type InviteErrorCode = 'FORBIDDEN' | 'EMAIL_EXISTS' | 'INVALID_INPUT' | 'INVITE_FAILED';
-export type StudentErrorCode = InviteErrorCode | 'SAVE_FAILED' | 'DELETE_FAILED';
+export type StudentErrorCode = InviteErrorCode | 'SELF_FORBIDDEN' | 'SAVE_FAILED' | 'DELETE_FAILED';
 export type StudentField = 'email' | 'full_name' | 'group_id' | 'joined_at';
 
 /** Outcome of a students Server Action that did not redirect. `fields` names the invalid inputs. */

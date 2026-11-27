@@ -16,7 +16,8 @@ export default async function NewStudentPage() {
   let failed = false;
   try {
     groups = await listGroups(await createClient());
-  } catch {
+  } catch (error) {
+    console.error('students: load groups failed', error);
     failed = true;
   }
 

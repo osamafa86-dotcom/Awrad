@@ -100,7 +100,7 @@ E2E_SUPABASE_URL=$API_URL E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY pnpm --filter a
 بنية `supabase/functions`:
 - `invite-user/index.ts` و`_shared/auth.ts`: مدخل Deno 2 لا يعمل إلا داخل Supabase Edge Runtime (`supabase start` بلا
   `-x edge-runtime`، أو `supabase functions serve`)؛ يقرأ `SUPABASE_URL` و`SUPABASE_ANON_KEY` و`SUPABASE_SERVICE_ROLE_KEY`
-  التي يحقنها المشغّل. `deno.json` يربط `@supabase/supabase-js` بـ `npm:`. مستثناة من `tsc` وeslint في `@awrad/db`.
+  التي يحقنها المشغّل. `deno.json` (في `supabase/functions/` وفي مجلد كل دالة) يربط `@supabase/supabase-js` بـ `npm:`. مستثناة من `tsc` وeslint في `@awrad/db`.
 - `invite-user/handler.ts`: المنطق كله، وحدة نقية بلا استيرادات، تُختبر في Node:
 ```bash
 pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # handler.test.ts بتبعيات وهمية

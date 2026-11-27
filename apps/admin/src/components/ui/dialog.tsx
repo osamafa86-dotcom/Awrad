@@ -18,7 +18,7 @@ export function DialogContent({ className, children, ...props }: ComponentProps<
         data-dialog
         className={cn(
           // Centred by inset-0 + m-auto + h-fit: no translate, so nothing depends on the text direction.
-          'fixed inset-0 z-50 m-auto flex h-fit w-[calc(100vw-32px)] max-w-480 flex-col gap-16',
+          'fixed inset-0 z-50 m-auto flex h-fit w-[calc(100vw-var(--space-32))] max-w-480 flex-col gap-16',
           'rounded-xl border border-line-subtle bg-surface p-24 outline-none',
           '[animation:fade-in_150ms_ease-out]',
           className,

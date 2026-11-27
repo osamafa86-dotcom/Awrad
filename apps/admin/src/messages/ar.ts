@@ -183,6 +183,7 @@ export const ar = {
     /** Display text for each code a students Server Action returns. */
     errors: {
       FORBIDDEN: 'هذا الإجراء للمدير وحده.',
+      SELF_FORBIDDEN: 'لا يمكنك تعطيل حسابك أو حذفه بنفسك.',
       EMAIL_EXISTS: 'هذا البريد مسجَّل لحساب آخر.',
       INVALID_INPUT: 'راجع الحقول المعلَّمة.',
       INVITE_FAILED: 'تعذّرت الدعوة. تحقّق من الاتصال وحاول مرة أخرى.',

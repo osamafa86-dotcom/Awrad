@@ -43,5 +43,8 @@ export default defineConfig({
     },
     timeout: 240_000,
     reuseExistingServer: !process.env.CI,
+    // The server's own log (e.g. a failed PostgREST read a page only logs) shows up in the test output.
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 });

@@ -26,7 +26,9 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
       const supervised = await supervisedGroupIds(supabase, profile.id);
       groups = groups.filter((group) => supervised.has(group.id));
     }
-  } catch {
+  } catch (error) {
+    // Server log only (CI shows it through Playwright's webServer pipe); the page shows the generic message.
+    console.error('students: load failed', error);
     return (
       <div className="flex flex-col gap-8">
         <h1 className="t-display-title text-fg-primary">{ar.students.title}</h1>

@@ -36,7 +36,10 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     loadCalendar(supabase, id, from, to),
     loadLogs(supabase, id),
     loadAttendance(supabase, id),
-    canEdit ? listGroups(supabase).catch((): GroupOption[] => []) : Promise.resolve([]),
+    canEdit ? listGroups(supabase).catch((error: unknown): GroupOption[] => {
+          console.error('students: load groups failed', error);
+          return [];
+        }) : Promise.resolve([]),
   ]);
   const calendar: Loaded<Map<string, CalendarDay>> = calendarRows.ok
     ? { ok: true, data: new Map(calendarRows.data.map((d) => [d.date, d])) }
@@ -53,6 +56,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
       logs={logs}
       attendance={attendance}
       canEdit={canEdit}
+      isSelf={viewer?.id === student.id}
       groups={groups}
     />
   );

@@ -29,10 +29,12 @@ export interface StudentEditPanelProps {
   groups: GroupOption[];
   /** `YYYY-MM-DD`, the latest joined_at allowed. */
   today: string;
+  /** The admin's own page: no deactivate and no delete (the action and the RPC refuse them too). */
+  isSelf?: boolean;
 }
 
 /** a02, admins only: edit the profile, activate/deactivate, and delete the account after a confirmation. */
-export function StudentEditPanel({ student, groups, today }: StudentEditPanelProps) {
+export function StudentEditPanel({ student, groups, today, isSelf = false }: StudentEditPanelProps) {
   const [fullName, setFullName] = useState(student.fullName);
   const [groupId, setGroupId] = useState(student.groupId ?? NO_GROUP);
   const [joinedAt, setJoinedAt] = useState(student.joinedAt);
@@ -90,9 +92,7 @@ export function StudentEditPanel({ student, groups, today }: StudentEditPanelPro
           <Label htmlFor="edit-group">{t.group}</Label>
           <Select value={groupId} onValueChange={setGroupId}>
             <SelectTrigger id="edit-group" className="min-h-52">
-              <SelectValue>
-                {groups.find((group) => group.id === groupId)?.name ?? ar.students.noGroup}
-              </SelectValue>
+              <SelectValue>{groups.find((group) => group.id === groupId)?.name ?? ar.students.noGroup}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_GROUP}>{ar.students.noGroup}</SelectItem>
@@ -131,45 +131,55 @@ export function StudentEditPanel({ student, groups, today }: StudentEditPanelPro
         </div>
 
         <div className="flex flex-wrap justify-end gap-8">
-          <Button type="button" variant="secondary" size="md" disabled={pending} onClick={() => save(!student.isActive)}>
-            {student.isActive ? t.deactivate : t.activate}
-          </Button>
+          {isSelf ? null : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={pending}
+              onClick={() => save(!student.isActive)}
+            >
+              {student.isActive ? t.deactivate : t.activate}
+            </Button>
+          )}
           <Button type="submit" size="md" disabled={pending} aria-busy={pending}>
             {pending ? t.saving : t.save}
           </Button>
         </div>
       </form>
 
-      <div className="flex flex-col gap-12 rounded-xl border border-status-notdone bg-surface p-16">
-        <h3 className="t-title-md text-fg-primary">{t.dangerTitle}</h3>
-        <p className="t-body-md text-fg-secondary">{t.dangerBody}</p>
-        <Dialog onOpenChange={() => setDeleteResult(null)}>
-          <DialogTrigger asChild>
-            <Button variant="danger" size="md" className="w-fit">
-              {t.delete}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogTitle>{t.confirmTitle}</DialogTitle>
-            <DialogDescription>{t.confirmBody(student.fullName)}</DialogDescription>
-            {deleteResult && !deleteResult.ok ? (
-              <p role="alert" className="t-body-md text-status-notdone">
-                {studentErrorText(deleteResult)}
-              </p>
-            ) : null}
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="secondary" size="md" disabled={deleting}>
-                  {t.cancel}
-                </Button>
-              </DialogClose>
-              <Button variant="danger" size="md" disabled={deleting} aria-busy={deleting} onClick={remove}>
-                {deleting ? t.deleting : t.confirm}
+      {isSelf ? null : (
+        <div className="flex flex-col gap-12 rounded-xl border border-status-notdone bg-surface p-16">
+          <h3 className="t-title-md text-fg-primary">{t.dangerTitle}</h3>
+          <p className="t-body-md text-fg-secondary">{t.dangerBody}</p>
+          <Dialog onOpenChange={() => setDeleteResult(null)}>
+            <DialogTrigger asChild>
+              <Button variant="danger" size="md" className="w-fit">
+                {t.delete}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>{t.confirmTitle}</DialogTitle>
+              <DialogDescription>{t.confirmBody(student.fullName)}</DialogDescription>
+              {deleteResult && !deleteResult.ok ? (
+                <p role="alert" className="t-body-md text-status-notdone">
+                  {studentErrorText(deleteResult)}
+                </p>
+              ) : null}
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="secondary" size="md" disabled={deleting}>
+                    {t.cancel}
+                  </Button>
+                </DialogClose>
+                <Button variant="danger" size="md" disabled={deleting} aria-busy={deleting} onClick={remove}>
+                  {deleting ? t.deleting : t.confirm}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
     </section>
   );
 }

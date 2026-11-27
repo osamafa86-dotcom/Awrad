@@ -121,6 +121,13 @@ describe('updateStudent', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/students');
   });
 
+  it('refuses an admin deactivating their own account, but lets them edit it', async () => {
+    expect(await updateStudent(admin.id, values)).toEqual({ ok: false, code: 'SELF_FORBIDDEN' });
+    expect(from).not.toHaveBeenCalled();
+    eq.mockResolvedValue({ error: null });
+    expect(await updateStudent(admin.id, { ...values, is_active: true })).toEqual({ ok: true });
+  });
+
   it('reports invalid input and failed saves', async () => {
     expect(await updateStudent(STUDENT, { ...values, full_name: ' ' })).toEqual({
       ok: false,

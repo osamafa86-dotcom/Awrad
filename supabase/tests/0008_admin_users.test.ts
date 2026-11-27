@@ -126,6 +126,10 @@ describe('0008_admin_users: admin_delete_user', () => {
     await db.query(`insert into audit_log (actor_id, action) values ($1, 'attendance.set')`, [
       fx.sup1,
     ]);
+    await db.query(
+      `update deletion_requests set handled_by = $1, handled_at = now() where user_id = $2`,
+      [fx.sup1, fx.p1],
+    );
 
     const admin = await as('admin@test');
     await admin.rpc('admin_delete_user', { p_user_id: fx.sup1 });
@@ -144,6 +148,22 @@ describe('0008_admin_users: admin_delete_user', () => {
         [],
       ),
     ).toBe(1);
+    // every other column naming sup1 as the one who acted is cleared too
+    expect(await count('select 1 from sessions where created_by is null', [])).toBe(1);
+    expect(
+      await count(
+        `select 1 from invitations where email = 'later@test' and invited_by is null`,
+        [],
+      ),
+    ).toBe(1);
+    expect(
+      await count(
+        `select 1 from deletion_requests
+          where user_id = $1 and handled_by is null and handled_at is not null`,
+        [fx.p1],
+      ),
+    ).toBe(1);
+    expect(await count('select 1 from group_supervisors where user_id = $1', [fx.sup1])).toBe(0);
   });
 
   test('deleting an id with no account is a no-op that still requires an admin', async () => {
