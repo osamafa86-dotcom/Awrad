@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { ar } from '../src/messages/ar';
+
 import { serviceClient } from './seed';
 import { TEST_USERS } from './users';
 
@@ -20,9 +22,11 @@ test.describe('signed out', () => {
 
   test('the login form shows the brand and an LTR email field', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByText('أوراد', { exact: true })).toBeVisible();
+    // Scoped to <main>: Next's route announcer (role=alert) can repeat page text after a client navigation.
+    const main = page.getByRole('main');
+    await expect(main.getByText(ar.app.name, { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'تسجيل الدخول' })).toBeVisible();
-    await expect(page.getByText('نظام متابعة الأوراد')).toBeVisible();
+    await expect(main.getByText(ar.app.tagline)).toBeVisible();
     const email = page.getByLabel('البريد الإلكتروني');
     await expect(email).toBeVisible();
     await expect(email).toHaveAttribute('dir', 'ltr');
@@ -108,7 +112,8 @@ test.describe('signed in', () => {
   test('a student is turned away to /unauthorized', async ({ page }) => {
     await signIn(page, TEST_USERS.p1.email);
     await expect(page).toHaveURL(/\/unauthorized$/);
-    await expect(page.getByText('هذه اللوحة للمشرفين')).toBeVisible();
+    // A heading, not bare text: after the client navigation Next's route announcer repeats the title.
+    await expect(page.getByRole('heading', { name: ar.unauthorized.staffOnlyTitle })).toBeVisible();
     await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible();
   });
 
