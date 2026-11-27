@@ -19,6 +19,15 @@ describe('saveLogSchema', () => {
       }).success,
     ).toBe(true);
   });
+  test('accepts the seeded habit and item ids from supabase/seed.sql', () => {
+    const item1 = '00000000-0000-4000-8000-000000000101';
+    expect(
+      saveLogSchema.safeParse({
+        ...valid,
+        entries: [{ habitId: '00000000-0000-4000-8000-0000000000a2', status: 'not_done', checkedItemIds: [item1] }],
+      }).success,
+    ).toBe(true);
+  });
   test.each(['2026-13-01', '2026-1-1', '2026-02-30', '2026-11-26T00:00'])('rejects periodStart %s', (periodStart) => {
     expect(saveLogSchema.safeParse({ ...valid, periodStart }).success).toBe(false);
   });

@@ -44,4 +44,28 @@ describe('active windows', () => {
       completionPct: 100,
     });
   });
+
+  test('checklist items that ended before the date leave the denominator; their checked ids are ignored', () => {
+    const adhkar = catalogue.find((h) => h.slug === 'adhkar');
+    if (!adhkar) throw new Error('no adhkar');
+    const items = adhkar.items.map((i, idx) => (idx < 3 ? { ...i, activeTo: '2026-01-01' } : i));
+    const habit = { ...adhkar, items };
+    const checked = items.slice(0, 8).map((i) => i.id); // 3 inactive + 5 active
+    const entries = [{ habitId: habit.id, status: 'not_done' as const, checkedItemIds: checked }];
+    expect(computeDayStatus([habit], entries, '2026-11-26', 100)).toEqual({ state: 'failed', completionPct: 50 });
+  });
+  test('checklist with zero active items counts 1/1 (parity with SQL)', () => {
+    const adhkar = catalogue.find((h) => h.slug === 'adhkar');
+    if (!adhkar) throw new Error('no adhkar');
+    const habit = { ...adhkar, items: adhkar.items.map((i) => ({ ...i, activeTo: '2026-01-01' })) };
+    const entries = [{ habitId: habit.id, status: 'not_done' as const }];
+    expect(computeDayStatus([habit], entries, '2026-11-26', 100)).toEqual({ state: 'achieved', completionPct: 100 });
+  });
+  test('rounds half up like Postgres round(numeric): 29/200 -> 15', () => {
+    const [first] = catalogue;
+    if (!first) throw new Error('empty catalogue');
+    const habits = Array.from({ length: 200 }, (_, i) => ({ ...first, id: `h${i}` }));
+    const entries = habits.map((h, i) => ({ habitId: h.id, status: i < 29 ? ('done' as const) : ('not_done' as const) }));
+    expect(computeDayStatus(habits, entries, '2026-11-26', 100).completionPct).toBe(15);
+  });
 });

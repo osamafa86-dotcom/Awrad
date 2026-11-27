@@ -35,6 +35,6 @@ export function computeDayStatus(
     }
   }
   if (required === 0) return { state: 'neutral', completionPct: null };
-  const completionPct = Math.round((achieved / required) * 100);
+  const completionPct = Math.round((achieved * 100) / required);
   return { state: completionPct >= thresholdPct ? 'achieved' : 'failed', completionPct };
 }
