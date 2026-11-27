@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Fails when apps/mobile/{src,app} clamps text to one line without a `// why:` (DESIGN.md §7 rule 9).
-// Usage: node scripts/check-no-truncation.mjs [dir ...]   (defaults to the mobile app's src and app)
+// Fails when the apps clamp text to one line without a `// why:` (DESIGN.md §7 rule 9): `numberOfLines={1}`
+// in the mobile app, the Tailwind `truncate` / `line-clamp-1` / `text-ellipsis` classes on the web.
+// Usage: node scripts/check-no-truncation.mjs [dir ...]   (defaults to both apps' src and app)
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -10,7 +11,12 @@ const require = createRequire(import.meta.url);
 const { findTruncations } = require('./no-truncation.cjs');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dirs = process.argv.length > 2 ? process.argv.slice(2) : ['apps/mobile/src', 'apps/mobile/app'];
+const dirs = process.argv.length > 2 ? process.argv.slice(2) : [
+        'apps/mobile/src',
+        'apps/mobile/app',
+        'apps/admin/src',
+        'apps/admin/app',
+      ];
 const SOURCE = /\.(?:[cm]?[jt]sx?)$/;
 
 function* walk(dir) {
@@ -33,7 +39,7 @@ for (const dir of dirs) {
 }
 
 if (problems.length > 0) {
-  console.error('numberOfLines={1} truncates text (DESIGN.md §7 rule 9). Let it wrap, or add `// why:` on the line:');
+  console.error('A one-line clamp (numberOfLines={1}, truncate, line-clamp-1, text-ellipsis) cuts text (DESIGN.md §7 rule 9). Let it wrap, or add `// why:` on the line:');
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }

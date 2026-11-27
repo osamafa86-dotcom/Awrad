@@ -32,6 +32,32 @@ describe('no-truncation matcher', () => {
     expect(isTruncationViolation('  numberOfLines: 1, // why: same, in a style/props object')).toBe(false);
   });
 
+  it.each([
+    '<span className="truncate">{name}</span>',
+    "className={cn('t-body-md', 'md:truncate')}",
+    '<p className="line-clamp-1 text-fg-primary">{title}</p>',
+    '<td className="text-ellipsis overflow-hidden">',
+  ])('flags a Tailwind one-line truncation class on the web: %s', (line) => {
+    expect(isTruncationViolation(line)).toBe(true);
+  });
+
+  it.each([
+    '<p className="line-clamp-2">{body}</p>',
+    '<p className="line-clamp-10">{body}</p>',
+    '// A label that wraps rather than truncates.',
+    '/** Name and target: names wrap, never truncate (DESIGN.md §7 rule 9). */',
+    ' * never truncate a name',
+    '{/* never truncate here */}',
+    '<span className="truncated-name">',
+    '<span className="whitespace-normal">{name}</span>',
+  ])('ignores web classes and words that are not a one-line truncation: %s', (line) => {
+    expect(isTruncationViolation(line)).toBe(false);
+  });
+
+  it('accepts a web truncation class that explains itself with `// why:` on the same line', () => {
+    expect(isTruncationViolation("const id = 'truncate'; // why: a log id, never a name")).toBe(false);
+  });
+
   it('reports the 1-based line numbers of the violations in a file', () => {
     const source = ['<View>', '  <Text numberOfLines={1}>{a}</Text>', '  <Text>{b}</Text>', '  numberOfLines: 1,', '</View>'].join('\n');
     expect(findTruncations(source)).toEqual([2, 4]);

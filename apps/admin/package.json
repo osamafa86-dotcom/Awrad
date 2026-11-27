@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint . && node ../../scripts/check-no-truncation.mjs apps/admin/app apps/admin/src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test"
