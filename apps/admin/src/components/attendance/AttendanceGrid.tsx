@@ -52,17 +52,19 @@ export interface AttendanceGridProps {
 export function AttendanceGrid(props: AttendanceGridProps) {
   const { session, groups, members, marks, canDelete, timezone, hijriAdjustment = 0 } = props;
   const sections = useMemo(() => buildSections(session.groupId, groups, members), [session.groupId, groups, members]);
-  const saved = useMemo(() => new Set(marks.map((mark) => mark.userId)), [marks]);
+  const saved = useMemo(() => new Map(marks.map((mark) => [mark.userId, mark.status])), [marks]);
   const [statuses, setStatuses] = useState<Statuses>(() =>
     Object.fromEntries(marks.map((mark) => [mark.userId, mark.status])),
   );
   const [result, setResult] = useState<AttendanceResult | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Only new or changed marks: set_attendance's upsert rewrites recorded_by/recorded_at on every row it
+  // gets, so resending an untouched mark would credit it to this viewer and move «آخر حفظ».
   const rows = sections.flatMap((section) =>
     section.members.flatMap((m) => {
       const status = statuses[m.id];
-      return status ? [{ userId: m.id, status }] : [];
+      return status && status !== saved.get(m.id) ? [{ userId: m.id, status }] : [];
     }),
   );
   const counts = countMarks(sections, marks);
@@ -73,11 +75,12 @@ export function AttendanceGrid(props: AttendanceGridProps) {
     setStatuses((previous) => ({ ...previous, [userId]: status }));
   }
 
+  /** Ruling ATT-1: «حاضر» for the section's rows without a status; saved and draft marks stay. */
   function allPresent(section: MemberSection) {
     setResult(null);
     setStatuses((previous) => ({
       ...previous,
-      ...Object.fromEntries(section.members.map((m) => [m.id, 'present' as const])),
+      ...Object.fromEntries(section.members.filter((m) => !previous[m.id]).map((m) => [m.id, 'present' as const])),
     }));
   }
 
@@ -200,14 +203,25 @@ function Section({
   const titleId = useId();
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-8 rounded-xl border border-line-subtle bg-surface p-16">
-      <div className="flex flex-wrap items-center justify-between gap-12">
+      <div className="flex flex-wrap items-start justify-between gap-12">
         <h2 id={titleId} className="t-display-section text-fg-primary">
           {section.group.name}
         </h2>
         {section.members.length > 0 ? (
-          <Button variant="secondary" size="md" onClick={onAllPresent} disabled={disabled}>
-            {t.allPresent}
-          </Button>
+          <div className="flex flex-col items-end gap-4">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onAllPresent}
+              disabled={disabled}
+              aria-describedby={`${titleId}-hint`}
+            >
+              {t.allPresent}
+            </Button>
+            <p id={`${titleId}-hint`} className="t-caption text-fg-secondary">
+              {t.allPresentHint}
+            </p>
+          </div>
         ) : null}
       </div>
       {section.members.length === 0 ? (

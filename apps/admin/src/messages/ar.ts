@@ -275,6 +275,8 @@ export const ar = {
     /** AttendanceSegment's four states (DESIGN.md §6). */
     status: { unmarked: 'لم يُسجَّل', present: 'حاضر', absent: 'غائب', excused: 'معذور' },
     allPresent: 'الكل حاضر',
+    /** Under «الكل حاضر» (Ruling ATT-1). */
+    allPresentHint: 'يعلّم «حاضر» من لا حالة له فقط، ولا يغيّر ما عُلِّم.',
     save: 'حفظ',
     saving: 'جارٍ الحفظ…',
     saved: 'حُفظ الحضور.',

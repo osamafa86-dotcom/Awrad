@@ -124,6 +124,39 @@ describe('AttendanceGrid', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(t.errors.FORBIDDEN);
   });
 
+  it('sends only new or changed rows: saved marks nobody touched are left as they were', async () => {
+    renderGrid({
+      marks: [
+        { userId: 'u1', status: 'present', recordedAt: '2026-11-27T10:05:00Z' },
+        { userId: 'u3', status: 'excused', recordedAt: '2026-11-27T10:05:00Z' },
+      ],
+    });
+    // Nothing changed yet: nothing to save.
+    expect(screen.getByRole('button', { name: t.save })).toBeDisabled();
+    await userEvent.click(option('أحمد', t.status.absent));
+    await userEvent.click(screen.getByRole('button', { name: t.save }));
+    await waitFor(() => expect(saveAttendance).toHaveBeenCalledWith('s1', [{ userId: 'u1', status: 'absent' }]));
+  });
+
+  it('a mark changed back to its saved status is not sent', async () => {
+    renderGrid({ marks: [{ userId: 'u1', status: 'present', recordedAt: '2026-11-27T10:05:00Z' }] });
+    await userEvent.click(option('أحمد', t.status.absent));
+    await userEvent.click(option('أحمد', t.status.present));
+    expect(screen.getByRole('button', { name: t.save })).toBeDisabled();
+  });
+
+  it('«الكل حاضر» marks only the rows without a status, keeping saved and draft marks', async () => {
+    renderGrid({ groups: [G1], marks: [{ userId: 'u1', status: 'absent', recordedAt: '2026-11-27T10:05:00Z' }] });
+    const region = screen.getByRole('region', { name: G1.name });
+    expect(within(region).getByText(t.allPresentHint)).toBeInTheDocument();
+    await userEvent.click(within(region).getByRole('button', { name: t.allPresent }));
+    expect(option('أحمد', t.status.absent)).toBeChecked();
+    expect(option('خالد', t.status.present)).toBeChecked();
+    await userEvent.click(option('خالد', t.status.excused));
+    await userEvent.click(within(region).getByRole('button', { name: t.allPresent }));
+    expect(option('خالد', t.status.excused)).toBeChecked();
+  });
+
   it('disables «حفظ» while no row has a status', () => {
     renderGrid();
     expect(screen.getByRole('button', { name: t.save })).toBeDisabled();

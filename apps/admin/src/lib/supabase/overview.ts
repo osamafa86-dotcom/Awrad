@@ -17,12 +17,11 @@ import {
 } from '../overview';
 import { DEFAULT_TIMEZONE, type GroupOption } from '../students';
 
+import { IDS_PER_QUERY } from './postgrest';
 import { supervisedGroupIds } from './students';
 
 /** get_student_summary calls in flight at once (one per row; PERF-1 in docs/backlog.md). */
 const SUMMARY_CONCURRENCY = 8;
-/** user ids per `.in()` filter, to keep the request URL short. */
-const IDS_PER_QUERY = 200;
 
 export interface Overview {
   rows: OverviewRow[];

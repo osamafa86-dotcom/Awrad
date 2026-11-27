@@ -10,9 +10,7 @@ import { chunk } from '../overview';
 import { DEFAULT_TIMEZONE, type GroupOption } from '../students';
 
 import { viewerGroups } from './overview';
-
-/** session ids per `.in()` filter, to keep the request URL short. */
-const IDS_PER_QUERY = 200;
+import { fetchAllPages, IDS_PER_QUERY } from './postgrest';
 
 type Viewer = { id: string; role: Role };
 
@@ -73,11 +71,17 @@ export async function listSessions(client: TypedClient, viewer: Viewer): Promise
     chunk(
       sessions.map((s) => s.id),
       IDS_PER_QUERY,
-    ).map(async (ids) => {
-      const marks = await client.from('attendance').select('session_id, user_id, status, recorded_at').in('session_id', ids);
-      if (marks.error) throw marks.error;
-      return marks.data;
-    }),
+    ).map((ids) =>
+      // About sessions × people rows per chunk: paged, or PostgREST's max_rows would cut it off silently.
+      fetchAllPages((from, to) =>
+        client
+          .from('attendance')
+          .select('id, session_id, user_id, status, recorded_at')
+          .in('session_id', ids)
+          .order('id')
+          .range(from, to),
+      ),
+    ),
   );
   const marksBySession = new Map<string, Mark[]>();
   for (const row of pages.flat()) {
@@ -122,11 +126,14 @@ export async function listSessionMembers(
 
 /** The saved marks of a session that the viewer may read. */
 export async function listMarks(client: TypedClient, sessionId: string): Promise<Mark[]> {
-  const { data, error } = await client
-    .from('attendance')
-    .select('user_id, status, recorded_at')
-    .eq('session_id', sessionId);
-  if (error) throw error;
+  const data = await fetchAllPages((from, to) =>
+    client
+      .from('attendance')
+      .select('id, user_id, status, recorded_at')
+      .eq('session_id', sessionId)
+      .order('id')
+      .range(from, to),
+  );
   return data.map((row) => ({ userId: row.user_id, status: row.status, recordedAt: row.recorded_at }));
 }
 
