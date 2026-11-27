@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    // The integration tests share the local database with @awrad/db's tests, whose files truncate
+    // every table: run after them, never alongside.
+    "test": { "cache": false, "dependsOn": ["@awrad/db#test"] }
+  }
+}

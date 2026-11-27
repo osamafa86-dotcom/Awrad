@@ -13,7 +13,8 @@
     "db:start": "node scripts/db/start.mjs",
     "db:stop": "node scripts/db/stop.mjs",
     "db:reset": "node scripts/db/reset.mjs",
-    "db:types": "node scripts/db/types.mjs"
+    "db:types": "node scripts/db/types.mjs",
+    "import-legacy": "pnpm --filter @awrad/import-legacy start"
   },
   "devDependencies": {
     "eslint": "^9.39.5",

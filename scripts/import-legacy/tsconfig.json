@@ -1,0 +1,12 @@
+{
+  "extends": "@awrad/config/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // The CLI runs under Node's built-in type stripping (node src/index.ts), which resolves relative
+    // imports by their real file name (./parse.ts); tsc only type-checks here.
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  // The integration test reuses the DB test harness from supabase/tests (helpers.ts, sql.ts).
+  "include": ["src"]
+}
