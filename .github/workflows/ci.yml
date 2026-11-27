@@ -109,11 +109,11 @@ jobs:
         with:
           # The version installed and tested in the dev container (see docs/dev-setup.md).
           version: 3.4.0
-      - name: Start Supabase (db, auth, rest, kong, mailpit)
+      - name: Start Supabase (db, auth, rest, kong, mailpit, edge functions)
         # Applies supabase/migrations and supabase/seed.sql; config in supabase/config.jsonc.
         # A rare Docker Hub "Rate exceeded" on an image pull here is infrastructure, not code: the CLI
         # retries pulls (seen and recovered in run 45932142449); re-run the job if it ever gives up.
-        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+        run: supabase start -x studio,imgproxy,logflare,vector,realtime,storage-api,postgres-meta,supavisor
       - name: Export Supabase settings
         run: |
           eval "$(supabase status -o env)"
