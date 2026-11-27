@@ -20,6 +20,9 @@ export const TEST_USERS = {
   // A throwaway student with an open account-deletion request: support.spec.ts deletes the account for good,
   // and the seed (or that spec's reset) creates it again when it is missing.
   p4: { email: 'p4@test.example', fullName: 'طالب يطلب الحذف', role: 'student', group: 'test', isTracked: true },
+  // Another throwaway student with one daily log: privacy.spec.ts deletes the account for good from its page
+  // (the double confirmation) and checks the cascade; resetPermanentDeletionFixture() creates it again.
+  p5: { email: 'p5@test.example', fullName: 'طالب للحذف النهائي', role: 'student', group: 'test', isTracked: true },
 } as const;
 
 export type TestUserKey = keyof typeof TEST_USERS;
@@ -55,6 +58,12 @@ export const SEEDED_SUPPORT = {
 
 /** The student whose open deletion request support.spec.ts executes. */
 export const DELETION_REQUESTER = 'p4' as const;
+
+/**
+ * The student privacy.spec.ts deletes permanently from the student page, and the one daily log the seed
+ * saves for them through save_log (days before today in TEST_TIMEZONE), so the spec can see it go.
+ */
+export const PERMANENT_DELETION = { user: 'p5', daysAgo: 2, outcome: 'achieved' } as const;
 
 /** Names of the habits habits.spec.ts creates (and removes); they never belong in a seeded log. */
 export const E2E_HABIT_PREFIX = 'e2e-عادة';

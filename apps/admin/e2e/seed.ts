@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   DELETION_REQUESTER,
   OTHER_GROUP_NAME,
+  PERMANENT_DELETION,
   SEEDED_LOGS,
   SEEDED_SUPPORT,
   TEST_GROUP_NAME,
@@ -51,7 +52,13 @@ async function sessionFor(db: SupabaseClient, email: string): Promise<SupabaseCl
   const url = process.env.E2E_SUPABASE_URL;
   const anonKey = process.env.E2E_SUPABASE_ANON_KEY;
   if (!url || !anonKey) throw new Error('E2E_SUPABASE_ANON_KEY is needed to seed logs through save_log');
-  const link = await db.auth.admin.generateLink({ type: 'magiclink', email });
+  let link = await db.auth.admin.generateLink({ type: 'magiclink', email });
+  // why: GoTrue may refuse a new link within `max_frequency` (1s) of the previous one for the same user, and
+  // the seed asks for the admin's twice (seedLogs, then resetPermanentDeletionFixture).
+  for (let attempt = 1; link.error && attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    link = await db.auth.admin.generateLink({ type: 'magiclink', email });
+  }
   if (link.error) throw link.error;
   const client = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const verified = await client.auth.verifyOtp({ token_hash: link.data.properties.hashed_token, type: 'magiclink' });
@@ -141,6 +148,18 @@ async function currentWeekStart(db: SupabaseClient): Promise<string> {
   return weekStartFor(todayIn(TEST_TIMEZONE), group.week_starts_on);
 }
 
+/** One daily log for `userId`, `daysAgo` days before today in TEST_TIMEZONE, saved by `admin` through save_log. */
+async function saveDailyLog(admin: SupabaseClient, userId: string | undefined, daysAgo: number, outcome: Outcome) {
+  const date = addDays(todayIn(TEST_TIMEZONE), -daysAgo);
+  const saved = await admin.rpc('save_log', {
+    p_user_id: userId,
+    p_period: 'daily',
+    p_period_start: date,
+    p_entries: await entriesFor(admin, 'daily', date, outcome),
+  });
+  if (saved.error) throw saved.error;
+}
+
 /**
  * The known logs the overview spec reads (SEEDED_LOGS), written like every other log: through save_log
  * (AGENTS.md §3), as the admin, who may write for others and outside the backfill window. Re-running
@@ -150,17 +169,7 @@ async function currentWeekStart(db: SupabaseClient): Promise<string> {
 async function seedLogs(db: SupabaseClient, ids: Map<string, string>): Promise<void> {
   const admin = await sessionFor(db, TEST_USERS.admin.email);
   try {
-    const today = todayIn(TEST_TIMEZONE);
-    for (const log of SEEDED_LOGS) {
-      const date = addDays(today, -log.daysAgo);
-      const saved = await admin.rpc('save_log', {
-        p_user_id: ids.get(log.user),
-        p_period: 'daily',
-        p_period_start: date,
-        p_entries: await entriesFor(admin, 'daily', date, log.outcome),
-      });
-      if (saved.error) throw saved.error;
-    }
+    for (const log of SEEDED_LOGS) await saveDailyLog(admin, ids.get(log.user), log.daysAgo, log.outcome);
 
     // SEEDED_SUPPORT: a weekly log with a review and a support request → support_status 'open'.
     const week = await currentWeekStart(db);
@@ -204,7 +213,7 @@ async function ensureUser(
 
   let userId = existingId;
   if (!userId) {
-    // A deleted account leaves its accepted invitation behind (support.spec.ts deletes p4 each run).
+    // A deleted account leaves its accepted invitation behind (support.spec.ts deletes p4, privacy.spec.ts p5).
     check(await db.from('invitations').delete().eq('email', user.email).not('accepted_at', 'is', null));
     await ensureInvitation(db, { email: user.email, ...profile });
     const created = await db.auth.admin.createUser({
@@ -282,9 +291,35 @@ export async function resetSupportFixtures(db: SupabaseClient | null = serviceCl
 }
 
 /**
+ * What privacy.spec.ts starts from: PERMANENT_DELETION's student present (re-created after a run deleted it)
+ * with its one daily log, saved through save_log as the admin (upsert, so running it again converges).
+ */
+export async function resetPermanentDeletionFixture(db: SupabaseClient | null = serviceClient()): Promise<void> {
+  if (!db) return;
+  const groupIds: GroupIds = {
+    test: await ensureGroup(db, TEST_GROUP_NAME),
+    other: await ensureGroup(db, OTHER_GROUP_NAME),
+  };
+  const key = PERMANENT_DELETION.user;
+  const userId = await ensureUser(
+    db,
+    key,
+    groupIds,
+    addDays(todayIn(TEST_TIMEZONE), -30),
+    await userIdOf(db, TEST_USERS[key].email),
+  );
+  const admin = await sessionFor(db, TEST_USERS.admin.email);
+  try {
+    await saveDailyLog(admin, userId, PERMANENT_DELETION.daysAgo, PERMANENT_DELETION.outcome);
+  } finally {
+    await admin.auth.signOut({ scope: 'local' });
+  }
+}
+
+/**
  * Playwright global setup: brings the tier (b) accounts to a known state (ensureUser), saves the known
- * logs and restores the support fixtures. Every step converges, so a run interrupted half-way is
- * repaired by the next one.
+ * logs and restores the support and permanent-deletion fixtures. Every step converges, so a run
+ * interrupted half-way is repaired by the next one.
  */
 export default async function seed(): Promise<void> {
   const db = serviceClient();
@@ -308,4 +343,5 @@ export default async function seed(): Promise<void> {
   await removeLeftoverTestHabits(db);
   await seedLogs(db, ids);
   await resetSupportFixtures(db);
+  await resetPermanentDeletionFixture(db);
 }

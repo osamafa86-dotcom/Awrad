@@ -4,20 +4,10 @@ import { todayIn } from '@awrad/domain';
 import Link from 'next/link';
 import { useId, useState, useTransition } from 'react';
 
-import { deleteStudent } from '@/actions/students';
 import { dismissDeletionRequest } from '@/actions/support';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { formatGregorian, formatHijri } from '@/lib/format';
-import { studentErrorText, type StudentResult } from '@/lib/students';
 import { deletionDeadline, supportErrorText, type DeletionRequest, type SupportResult } from '@/lib/support';
 import { ar } from '@/messages/ar';
 
@@ -33,8 +23,9 @@ export interface DeletionCardProps {
 
 /**
  * §13 — one open account-deletion request (admins only): the student, the group, when it was asked, the
- * 30-day deadline («متأخّر» once passed). «حذف نهائي» deletes the account after a confirmation naming the
- * student (the request goes with it; admin_delete_user writes the audit row); «رفض الطلب» closes it.
+ * 30-day deadline («متأخّر» once passed). «حذف نهائي» deletes the account after the double confirmation
+ * (ConfirmDeleteDialog: the student's full name typed; the request goes with it; admin_delete_user writes the
+ * audit row); «رفض الطلب» closes it.
  */
 export function DeletionCard({ request, today, timezone, hijriAdjustment }: DeletionCardProps) {
   const nameId = useId();
@@ -42,19 +33,8 @@ export function DeletionCard({ request, today, timezone, hijriAdjustment }: Dele
   const requestedOn = todayIn(timezone, new Date(request.requestedAt));
   const deadline = deletionDeadline(request.requestedAt, timezone, today);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<StudentResult | null>(null);
   const [dismissResult, setDismissResult] = useState<SupportResult | null>(null);
-  const [deleting, startDelete] = useTransition();
   const [dismissing, startDismiss] = useTransition();
-
-  function remove() {
-    startDelete(async () => {
-      const outcome = await deleteStudent(request.userId, 'support');
-      if (outcome.ok) setConfirmOpen(false);
-      else setDeleteResult(outcome);
-    });
-  }
 
   function dismiss() {
     startDismiss(async () => {
@@ -92,41 +72,19 @@ export function DeletionCard({ request, today, timezone, hijriAdjustment }: Dele
         </div>
 
         <div className="flex flex-wrap gap-8">
-          <Button variant="secondary" size="md" disabled={dismissing || deleting} aria-busy={dismissing} onClick={dismiss}>
+          <Button variant="secondary" size="md" disabled={dismissing} aria-busy={dismissing} onClick={dismiss}>
             {dismissing ? t.deletion.dismissing : t.deletion.dismiss}
           </Button>
-          <Dialog
-            open={confirmOpen}
-            onOpenChange={(next) => {
-              setConfirmOpen(next);
-              setDeleteResult(null);
-            }}
-          >
-            <DialogTrigger asChild>
+          <ConfirmDeleteDialog
+            studentId={request.userId}
+            studentName={name}
+            from="support"
+            trigger={
               <Button variant="danger" size="md" disabled={dismissing}>
                 {t.deletion.delete}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogTitle>{t.deletion.confirmTitle(name)}</DialogTitle>
-              <DialogDescription>{t.deletion.confirmBody}</DialogDescription>
-              {deleteResult && !deleteResult.ok ? (
-                <p role="alert" className="t-body-md text-status-notdone">
-                  {studentErrorText(deleteResult)}
-                </p>
-              ) : null}
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="secondary" size="md" disabled={deleting}>
-                    {t.deletion.cancel}
-                  </Button>
-                </DialogClose>
-                <Button variant="danger" size="md" disabled={deleting} aria-busy={deleting} onClick={remove}>
-                  {deleting ? t.deletion.deleting : t.deletion.confirm}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            }
+          />
         </div>
       </div>
 

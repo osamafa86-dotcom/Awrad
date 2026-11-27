@@ -108,7 +108,7 @@ test.describe('support, signed in', () => {
       await expect(item.getByText(t.handledBy(TEST_USERS.admin.fullName, gregorian(todayIn(TEST_TIMEZONE))))).toBeVisible();
     });
 
-    test('«حذف نهائي» on p4\'s request deletes the account after a confirmation naming them', async ({ page }) => {
+    test('«حذف نهائي» on p4\'s request deletes the account once their full name is typed', async ({ page }) => {
       const id = await profileId(p4.email);
       expect(id).toBeTruthy();
       await openSupport(page, 'deletion');
@@ -119,8 +119,11 @@ test.describe('support, signed in', () => {
       await expect(item.getByText(t.deletion.overdue, { exact: true })).toHaveCount(0);
 
       await item.getByRole('button', { name: t.deletion.delete }).click();
-      const dialog = page.getByRole('dialog', { name: t.deletion.confirmTitle(p4.fullName) });
-      await dialog.getByRole('button', { name: t.deletion.confirm }).click();
+      const dialog = page.getByRole('dialog', { name: ar.deleteAccount.title(p4.fullName) });
+      const confirm = dialog.getByRole('button', { name: ar.deleteAccount.confirm });
+      await expect(confirm).toBeDisabled();
+      await dialog.getByLabel(ar.deleteAccount.typeName(p4.fullName)).fill(p4.fullName);
+      await confirm.click();
       await expect(dialog).toHaveCount(0, { timeout: 20_000 });
       await expect(card(page, p4.fullName)).toHaveCount(0);
 

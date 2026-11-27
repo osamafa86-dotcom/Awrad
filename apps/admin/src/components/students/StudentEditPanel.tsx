@@ -2,17 +2,9 @@
 
 import { useState, useTransition } from 'react';
 
-import { deleteStudent, updateStudent } from '@/actions/students';
+import { updateStudent } from '@/actions/students';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,7 +25,7 @@ export interface StudentEditPanelProps {
   isSelf?: boolean;
 }
 
-/** a02, admins only: edit the profile, activate/deactivate, and delete the account after a confirmation. */
+/** a02, admins only: edit the profile, activate/deactivate, and delete the account after the double confirmation. */
 export function StudentEditPanel({ student, groups, today, isSelf = false }: StudentEditPanelProps) {
   const [fullName, setFullName] = useState(student.fullName);
   const [groupId, setGroupId] = useState(student.groupId ?? NO_GROUP);
@@ -41,8 +33,6 @@ export function StudentEditPanel({ student, groups, today, isSelf = false }: Stu
   const [tracked, setTracked] = useState(student.isTracked);
   const [result, setResult] = useState<StudentResult | null>(null);
   const [pending, startTransition] = useTransition();
-  const [deleteResult, setDeleteResult] = useState<StudentResult | null>(null);
-  const [deleting, startDelete] = useTransition();
 
   const invalid = new Set<StudentField>(result && !result.ok ? (result.fields ?? []) : []);
   const error = studentErrorText(result);
@@ -58,13 +48,6 @@ export function StudentEditPanel({ student, groups, today, isSelf = false }: Stu
           joined_at: joinedAt,
         }),
       );
-    });
-  }
-
-  function remove() {
-    startDelete(async () => {
-      // On success the action redirects to /students and this never returns.
-      setDeleteResult(await deleteStudent(student.id));
     });
   }
 
@@ -152,32 +135,16 @@ export function StudentEditPanel({ student, groups, today, isSelf = false }: Stu
         <div className="flex flex-col gap-12 rounded-xl border border-status-notdone bg-surface p-16">
           <h3 className="t-title-md text-fg-primary">{t.dangerTitle}</h3>
           <p className="t-body-md text-fg-secondary">{t.dangerBody}</p>
-          <Dialog onOpenChange={() => setDeleteResult(null)}>
-            <DialogTrigger asChild>
+          <ConfirmDeleteDialog
+            studentId={student.id}
+            studentName={student.fullName}
+            from="student"
+            trigger={
               <Button variant="danger" size="md" className="w-fit">
                 {t.delete}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogTitle>{t.confirmTitle}</DialogTitle>
-              <DialogDescription>{t.confirmBody(student.fullName)}</DialogDescription>
-              {deleteResult && !deleteResult.ok ? (
-                <p role="alert" className="t-body-md text-status-notdone">
-                  {studentErrorText(deleteResult)}
-                </p>
-              ) : null}
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="secondary" size="md" disabled={deleting}>
-                    {t.cancel}
-                  </Button>
-                </DialogClose>
-                <Button variant="danger" size="md" disabled={deleting} aria-busy={deleting} onClick={remove}>
-                  {deleting ? t.deleting : t.confirm}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            }
+          />
         </div>
       )}
     </section>

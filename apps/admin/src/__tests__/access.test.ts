@@ -60,6 +60,13 @@ const rows: Row[] = [
   ['a path that only starts with "api" is a page', '/apix', false, null, to('/login?next=%2Fapix')],
   ['an API route not on the list still sends a signed-out user to login', '/api/other', false, null, to('/login?next=%2Fapi%2Fother')],
   ['a path under the export route is not the export route', '/api/export/x', false, null, to('/login?next=%2Fapi%2Fexport%2Fx')],
+
+  // The privacy policy (F-80) is public: the mobile app and the stores link to it, signed in or not.
+  ['signed out may open the privacy policy', '/privacy', false, null, allow],
+  ['a signed-in admin may open the privacy policy', '/privacy', true, admin, allow],
+  ['a signed-in supervisor may open the privacy policy', '/privacy', true, supervisor, allow],
+  ['a signed-in student may open the privacy policy', '/privacy', true, student, allow],
+  ['a path that only starts with "privacy" is a dashboard page', '/privacyx', false, null, to('/login?next=%2Fprivacyx')],
 ];
 
 describe('resolveAccess (GUARD-1)', () => {

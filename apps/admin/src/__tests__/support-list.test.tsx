@@ -147,13 +147,14 @@ describe('SupportList', () => {
     expect(within(item).getByRole('button', { name: t.deletion.dismiss })).toBeInTheDocument();
   });
 
-  it('«حذف نهائي» asks for confirmation naming the student, then deletes the account and stays in the inbox', async () => {
+  it('«حذف نهائي» asks for the student\'s full name, then deletes the account and stays in the inbox', async () => {
     deleteStudent.mockResolvedValue({ ok: true });
     renderList({ initialTab: 'deletion' });
     await userEvent.click(screen.getByRole('button', { name: t.deletion.delete }));
-    const dialog = screen.getByRole('dialog', { name: t.deletion.confirmTitle('طالب يطلب الحذف') });
+    const dialog = screen.getByRole('dialog', { name: ar.deleteAccount.title('طالب يطلب الحذف') });
     expect(deleteStudent).not.toHaveBeenCalled();
-    await userEvent.click(within(dialog).getByRole('button', { name: t.deletion.confirm }));
+    await userEvent.type(within(dialog).getByLabelText(ar.deleteAccount.typeName('طالب يطلب الحذف')), 'طالب يطلب الحذف');
+    await userEvent.click(within(dialog).getByRole('button', { name: ar.deleteAccount.confirm }));
     expect(deleteStudent).toHaveBeenCalledWith('99999999-9999-4999-8999-999999999993', 'support');
   });
 });

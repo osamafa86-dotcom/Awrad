@@ -218,11 +218,6 @@ export const ar = {
       dangerTitle: 'حذف الحساب',
       dangerBody: 'يحذف الحساب وكل سجلّاته وحضوره نهائيًا، ولا يمكن التراجع.',
       delete: 'حذف الحساب نهائيًا',
-      confirmTitle: 'حذف الحساب نهائيًا؟',
-      confirmBody: (name: string) => `سيُحذف حساب «${name}» وكل سجلّاته وحضوره، ولا يمكن استرجاعها.`,
-      confirm: 'احذف نهائيًا',
-      deleting: 'جارٍ الحذف…',
-      cancel: 'إلغاء',
     },
     /** Display text for each code a students Server Action returns. */
     errors: {
@@ -240,6 +235,16 @@ export const ar = {
       group_id: 'اختر مجموعة.',
       joined_at: 'اختر تاريخًا لا يتجاوز اليوم.',
     },
+  },
+  /** The double confirmation before a permanent account deletion (student page and deletion requests). */
+  deleteAccount: {
+    title: (name: string) => `حذف حساب «${name}» نهائيًا؟`,
+    body: 'يُحذف ما يلي نهائيًا، ولا يمكن التراجع:',
+    removed: ['الحساب', 'السجلّات', 'الحضور', 'طلبات الدعم'],
+    typeName: (name: string) => `للتأكيد اكتب الاسم الكامل: ${name}`,
+    confirm: 'حذف نهائي',
+    deleting: 'جارٍ الحذف…',
+    cancel: 'إلغاء',
   },
   attendance: {
     title: 'الحضور',
@@ -493,11 +498,6 @@ export const ar = {
       delete: 'حذف نهائي',
       dismiss: 'رفض الطلب',
       dismissing: 'جارٍ الرفض…',
-      confirmTitle: (name: string) => `حذف حساب ${name} نهائيًا؟`,
-      confirmBody: 'يُحذف الحساب وكل سجلّاته وحضوره، ولا يمكن التراجع.',
-      confirm: 'احذف نهائيًا',
-      deleting: 'جارٍ الحذف…',
-      cancel: 'إلغاء',
     },
     loadFailed: 'تعذّر تحميل طلبات الدعم. تحقّق من الاتصال وأعد تحميل الصفحة.',
     /** Display text for each code a support Server Action returns. */
@@ -661,6 +661,13 @@ export const ar = {
         SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
       },
     },
+  },
+  /** The public pages' shell (app/(public)): the privacy policy (F-80). */
+  publicPage: {
+    /** The programme under the app name in the header. */
+    program: 'مفاتيح العلوم',
+    backToLogin: 'الدخول إلى لوحة الإشراف',
+    privacyTitle: 'سياسة الخصوصية — أوراد',
   },
   unauthorized: {
     /** a30: a student (or an account without a profile) opened the dashboard. */
