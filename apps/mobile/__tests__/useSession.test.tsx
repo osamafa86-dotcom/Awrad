@@ -94,6 +94,42 @@ describe('useSession', () => {
     expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 
+  it('turns a thrown fetch error into error state instead of sticking on loading', async () => {
+    const failure = new Error('network down');
+    mockSingle.mockRejectedValue(failure);
+    const { result } = await renderHook(() => useSession());
+    await act(() => authCb!('INITIAL_SESSION', session));
+    await waitFor(() => expect(result.current.error).toBe(failure));
+    expect(result.current).toMatchObject({ profile: null, loading: false });
+  });
+
+  it('ignores a profile fetch that resolves after sign-out', async () => {
+    let resolve!: (v: unknown) => void;
+    mockSingle.mockReturnValue(new Promise((r) => (resolve = r)));
+    const { result } = await renderHook(() => useSession());
+    await act(() => authCb!('INITIAL_SESSION', session));
+    await waitFor(() => expect(mockSingle).toHaveBeenCalled());
+    await act(() => authCb!('SIGNED_OUT', null));
+    await act(async () => resolve({ data: PROFILE, error: null }));
+    expect(result.current).toMatchObject({ session: null, profile: null, loading: false });
+  });
+
+  it('ignores the first user\'s profile when another user signs in before it resolves', async () => {
+    const resolvers: ((v: unknown) => void)[] = [];
+    mockSingle.mockImplementation(() => new Promise((r) => resolvers.push(r)));
+    const { result } = await renderHook(() => useSession());
+    await act(() => authCb!('INITIAL_SESSION', session));
+    await waitFor(() => expect(resolvers).toHaveLength(1));
+    const other = { user: { id: 'u2' } } as unknown as Session;
+    await act(() => authCb!('SIGNED_IN', other));
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+    await act(async () => resolvers[0]!({ data: PROFILE, error: null }));
+    expect(result.current.profile).toBeNull();
+    expect(result.current.loading).toBe(true);
+    await act(async () => resolvers[1]!({ data: { ...PROFILE, id: 'u2' }, error: null }));
+    expect(result.current.profile?.id).toBe('u2');
+  });
+
   it('unsubscribes on unmount', async () => {
     const { unmount } = await renderHook(() => useSession());
     await unmount();

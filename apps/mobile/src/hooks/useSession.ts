@@ -28,7 +28,13 @@ export function useSession(): UseSession {
   const mounted = useRef(true);
 
   const loadProfile = useCallback(async (uid: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+    let data: Profile | null = null;
+    let error: unknown = null;
+    try {
+      ({ data, error } = await supabase.from('profiles').select('*').eq('id', uid).single());
+    } catch (thrown) {
+      error = thrown; // a network failure must not leave `loading` stuck
+    }
     // Ignore a result for a user who has since signed out or been replaced.
     if (!mounted.current || userId.current !== uid) return;
     setState((s) => ({ ...s, profile: error ? null : data, error: error ?? null, loading: false }));

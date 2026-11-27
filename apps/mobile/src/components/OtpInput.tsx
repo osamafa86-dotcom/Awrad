@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentRef } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { I18nManager, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
@@ -13,6 +13,17 @@ export interface OtpInputProps {
   error?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+}
+
+/**
+ * Row that always reads left to right. Web: CSS `direction: ltr` (I18nManager.isRTL is false there).
+ * Native: `direction` is not honoured on Android, and under forceRTL `row` is mirrored, so flip
+ * with `row-reverse` instead.
+ */
+export function otpRowStyle(isRTL: boolean, os: typeof Platform.OS) {
+  return os === 'web'
+    ? ({ direction: 'ltr', flexDirection: 'row' } as const)
+    : ({ flexDirection: isRTL ? 'row-reverse' : 'row' } as const);
 }
 
 const BOX_W = 48;
@@ -46,7 +57,7 @@ export function OtpInput({
 
   return (
     <View>
-      <View testID="otp-row" style={{ direction: 'ltr', flexDirection: 'row', justifyContent: 'center', gap: space.s8 }}>
+      <View testID="otp-row" style={[otpRowStyle(I18nManager.isRTL, Platform.OS), { justifyContent: 'center', gap: space.s8 }]}>
         {Array.from({ length }, (_, i) => {
           const digit = value[i] ?? '';
           const isActive = focused && !disabled && i === activeIndex;

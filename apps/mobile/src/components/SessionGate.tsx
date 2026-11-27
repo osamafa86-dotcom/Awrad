@@ -67,15 +67,15 @@ export function Splash() {
 
 const noop = () => {};
 
-/** Wraps the `(auth)` routes: a signed-in visitor has no business on the login screens. */
+/** Wraps the `(auth)` routes: a signed-in visitor has no business on the login screens (loop-free: tabs bounce to login only when `!session`). */
 export function AuthRouteGuard({
   session,
-  profile,
   loading,
   children,
-}: Pick<SessionGateProps, 'session' | 'profile' | 'loading' | 'children'>) {
+}: Pick<SessionGateProps, 'session' | 'loading' | 'children'> & { profile?: unknown }) {
   if (loading) return <Splash />;
-  if (session && profile) return <Redirect href="/(tabs)/today" />;
+  // Any session leaves the login screens; SessionGate then shows splash, notice or the retry screen.
+  if (session) return <Redirect href="/(tabs)/today" />;
   return <>{children}</>;
 }
 

@@ -74,6 +74,14 @@ describe('SessionGate', () => {
     expect(screen.queryByText('LOGIN-SCREEN')).toBeNull();
   });
 
+  it('sends a signed-in visitor whose profile failed to load to the app, where retry and sign-out are offered', async () => {
+    await renderGate({ session, profile: null, loading: false, error: new Error('x') }, '/login');
+    expect(await screen.findByText(ar.auth.profileLoadFailed)).toBeTruthy();
+    expect(screen.queryByText('LOGIN-SCREEN')).toBeNull();
+    expect(screen.getByRole('button', { name: ar.auth.retry })).toBeTruthy();
+    expect(screen.getByRole('button', { name: ar.auth.signOut })).toBeTruthy();
+  });
+
   it('redirects to the login screen when there is no session', async () => {
     await renderGate({ session: null, profile: null, loading: false });
     expect(await screen.findByText('LOGIN-SCREEN')).toBeTruthy();

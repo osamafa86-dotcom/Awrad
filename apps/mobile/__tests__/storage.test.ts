@@ -50,6 +50,16 @@ describe('LargeSecureStore', () => {
     await expect(store.getItem('orphan')).resolves.toBeNull();
   });
 
+  it('returns null when either store rejects', async () => {
+    const store = new LargeSecureStore();
+    await store.setItem('sb-token', SESSION);
+    const SecureStore = jest.requireMock('expo-secure-store');
+    SecureStore.getItemAsync.mockRejectedValueOnce(new Error('keychain locked'));
+    await expect(store.getItem('sb-token')).resolves.toBeNull();
+    jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('disk'));
+    await expect(store.getItem('sb-token')).resolves.toBeNull();
+  });
+
   it('removeItem clears both the key and the ciphertext', async () => {
     const store = new LargeSecureStore();
     await store.setItem('sb-token', SESSION);

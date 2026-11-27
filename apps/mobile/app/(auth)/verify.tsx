@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -10,6 +10,12 @@ import { useTheme } from '../../src/lib/theme';
 import { ar } from '../../src/messages/ar';
 
 const RESEND_SECONDS = 60;
+
+/** GoTrue reports a bad/stale code as otp_expired / invalid_otp-style errors; anything else is a failure. */
+export function isInvalidCodeError(error: { code?: string; message?: string }): boolean {
+  if (error.code) return /invalid|expired/i.test(error.code);
+  return /invalid|expired/i.test(error.message ?? '');
+}
 
 export default function Verify() {
   const { colors, type } = useTheme();
@@ -39,12 +45,12 @@ export default function Verify() {
     try {
       const { error: failure } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
       if (failure) {
-        setError(ar.auth.invalidCode);
+        setError(isInvalidCodeError(failure) ? ar.auth.invalidCode : ar.auth.verifyFailed);
         setCode('');
       }
-      // On success onAuthStateChange fires and the root SessionGate moves us into the app.
+      // On success onAuthStateChange fires and the (auth) layout's AuthRouteGuard moves us into the app.
     } catch {
-      setError(ar.auth.invalidCode);
+      setError(ar.auth.verifyFailed);
       setCode('');
     } finally {
       verifying.current = false;
@@ -68,6 +74,8 @@ export default function Verify() {
       setError(ar.auth.sendFailed);
     }
   };
+
+  if (!email) return <Redirect href="/(auth)/login" />;
 
   return (
     <AuthScreen

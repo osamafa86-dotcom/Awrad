@@ -28,6 +28,7 @@ export const ar = {
     verifySubtitle: 'أرسلنا رمزًا من 6 أرقام إلى',
     otpLabel: 'رمز الدخول المكوّن من 6 أرقام',
     invalidCode: 'الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.',
+    verifyFailed: 'تعذّر التحقّق من الرمز. تحقّق من اتصالك وحاول مرة أخرى.',
     verifying: 'جارٍ التحقّق…',
     resend: 'إعادة الإرسال',
     resendIn: (seconds: number) => `إعادة الإرسال بعد ${seconds} ث`,

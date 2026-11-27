@@ -14,18 +14,23 @@ jest.mock('../src/lib/supabase', () => ({
   },
 }));
 const mockReplace = jest.fn();
+let mockEmail: string | undefined = 'student@example.com';
 jest.mock('expo-router', () => ({
   ...jest.requireActual('expo-router'),
   router: { push: jest.fn(), replace: (...a: unknown[]) => mockReplace(...a), back: jest.fn(), canGoBack: () => true },
-  useLocalSearchParams: () => ({ email: 'student@example.com' }),
+  useLocalSearchParams: () => ({ email: mockEmail }),
+  // Outside a navigator the real Redirect cannot run; expose its target instead.
+  Redirect: ({ href }: { href: string }) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, `REDIRECT:${href}`),
 }));
 
 const otp = () => screen.getByLabelText(ar.auth.otpLabel);
-const resendButton = () => screen.getByRole('button', { name: /إعادة الإرسال/ });
+const resendButton = () => screen.getByRole('button', { name: new RegExp(`^${ar.auth.resend}`) });
 
 describe('verify screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEmail = 'student@example.com';
     jest.useFakeTimers();
   });
   afterEach(() => jest.useRealTimers());
@@ -46,6 +51,28 @@ describe('verify screen', () => {
     await fireEvent.changeText(otp(), '000000');
     expect(await screen.findByText(ar.auth.invalidCode)).toBeTruthy();
     expect(otp().props.value).toBe('');
+  });
+
+  it('shows a generic failure (not "wrong code") for other verification errors', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: {}, error: { code: 'unexpected_failure', message: 'boom' } });
+    await render(<Verify />);
+    await fireEvent.changeText(otp(), '123456');
+    expect(await screen.findByText(ar.auth.verifyFailed)).toBeTruthy();
+    expect(screen.queryByText(ar.auth.invalidCode)).toBeNull();
+  });
+
+  it('matches invalid/expired on the message when there is no code', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: {}, error: { message: 'Token has expired or is invalid' } });
+    await render(<Verify />);
+    await fireEvent.changeText(otp(), '123456');
+    expect(await screen.findByText(ar.auth.invalidCode)).toBeTruthy();
+  });
+
+  it('sends the visitor back to login when the email param is missing', async () => {
+    mockEmail = undefined;
+    await render(<Verify />);
+    expect(screen.getByText('REDIRECT:/(auth)/login')).toBeTruthy();
+    expect(screen.queryByLabelText(ar.auth.otpLabel)).toBeNull();
   });
 
   it('keeps the resend button disabled for 60 seconds with a countdown, then re-enables it', async () => {

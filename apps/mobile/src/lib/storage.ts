@@ -19,15 +19,15 @@ const KEY_BYTES = 32; // AES-256
  */
 export class LargeSecureStore implements AuthStorage {
   async getItem(key: string): Promise<string | null> {
-    const [encrypted, encryptionKey] = await Promise.all([
-      AsyncStorage.getItem(key),
-      SecureStore.getItemAsync(key),
-    ]);
-    if (!encrypted || !encryptionKey) return null;
     try {
+      const [encrypted, encryptionKey] = await Promise.all([
+        AsyncStorage.getItem(key),
+        SecureStore.getItemAsync(key),
+      ]);
+      if (!encrypted || !encryptionKey) return null;
       return this.decrypt(encryptionKey, encrypted);
     } catch {
-      // A corrupt entry is the same as no session: the user signs in again.
+      // An unreadable or corrupt entry is the same as no session: the user signs in again.
       return null;
     }
   }

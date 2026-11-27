@@ -2,7 +2,7 @@ import { render, screen, userEvent, fireEvent } from '@testing-library/react-nat
 import { useState } from 'react';
 import { I18nManager, StyleSheet } from 'react-native';
 
-import { OtpInput } from '../src/components/OtpInput';
+import { OtpInput, otpRowStyle } from '../src/components/OtpInput';
 import { ar } from '../src/messages/ar';
 
 function Harness({ error = false, onComplete }: { error?: boolean; onComplete?: (v: string) => void }) {
@@ -22,20 +22,34 @@ describe('OtpInput', () => {
     Object.defineProperty(I18nManager, 'isRTL', { value: original, configurable: true });
   });
 
-  it('lays the six boxes out left to right even under RTL, and the first digit lands in the leftmost box', async () => {
-    const user = userEvent.setup();
-    await render(<Harness />);
+  // Where native Yoga puts child 0: `row` starts at the layout start (right in RTL), `row-reverse` at the end.
+  const firstChildIsLeftmost = (flexDirection: unknown, isRTL: boolean) =>
+    flexDirection === 'row' ? !isRTL : isRTL;
 
-    const row = screen.getByTestId('otp-row');
-    const style = StyleSheet.flatten(row.props.style);
-    // direction: ltr on the row only (design rule 5) so child 0 is the leftmost box.
-    expect(style.direction).toBe('ltr');
-    expect(style.flexDirection).toBe('row');
-    expect(row.children).toHaveLength(6);
+  it.each([true, false])(
+    'on native with isRTL=%s the first digit lands in the leftmost box',
+    async (isRTL) => {
+      Object.defineProperty(I18nManager, 'isRTL', { value: isRTL, configurable: true });
+      const user = userEvent.setup();
+      await render(<Harness />);
 
-    await user.type(screen.getByLabelText(ar.auth.otpLabel), '1');
-    expect(box(0)).toHaveTextContent('1');
-    expect(box(1)).not.toHaveTextContent(/\d/);
+      const row = screen.getByTestId('otp-row');
+      const style = StyleSheet.flatten(row.props.style);
+      expect(style.flexDirection).toBe(isRTL ? 'row-reverse' : 'row');
+      expect(firstChildIsLeftmost(style.flexDirection, isRTL)).toBe(true);
+      expect(row.children).toHaveLength(6);
+
+      await user.type(screen.getByLabelText(ar.auth.otpLabel), '12');
+      expect(box(0)).toHaveTextContent('1');
+      expect(box(1)).toHaveTextContent('2');
+      expect(box(2)).not.toHaveTextContent(/\d/);
+    },
+  );
+
+  it('on web forces direction ltr with a plain row', () => {
+    expect(otpRowStyle(false, 'web')).toEqual({ direction: 'ltr', flexDirection: 'row' });
+    expect(otpRowStyle(true, 'ios')).toEqual({ flexDirection: 'row-reverse' });
+    expect(otpRowStyle(true, 'android')).toEqual({ flexDirection: 'row-reverse' });
   });
 
   it('fills boxes in order as digits are typed', async () => {
