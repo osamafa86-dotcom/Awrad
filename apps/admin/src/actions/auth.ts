@@ -3,23 +3,27 @@
 import { redirect } from 'next/navigation';
 
 import { resolveAccess, safeNext } from '@/lib/access';
-import { EMAIL_PATTERN, OTP_PATTERN, isInvalidCodeError, isUnknownEmailError } from '@/lib/auth';
+import {
+  EMAIL_PATTERN,
+  OTP_PATTERN,
+  isInvalidCodeError,
+  isUnknownEmailError,
+  type AuthErrorCode,
+  type AuthResult,
+} from '@/lib/auth';
 import { fetchProfile, type CurrentProfile } from '@/lib/supabase/profile';
 import { createClient } from '@/lib/supabase/server';
-import { ar } from '@/messages/ar';
 
-export interface AuthFormState {
-  error: string | null;
-  notice?: string | null;
-}
+// Actions return typed codes, never display text: the client components map them through ar.ts.
+const fail = (code: AuthErrorCode): AuthResult => ({ ok: false, code });
 
 const field = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 
 /** Email OTP, step 1: send a code to an invited address, then continue to /verify. */
-export async function sendCode(_previous: AuthFormState, form: FormData): Promise<AuthFormState> {
+export async function sendCode(_previous: AuthResult | null, form: FormData): Promise<AuthResult> {
   const email = field(form, 'email').toLowerCase();
   const next = field(form, 'next');
-  if (!EMAIL_PATTERN.test(email)) return { error: ar.auth.invalidEmail };
+  if (!EMAIL_PATTERN.test(email)) return fail('INVALID_EMAIL');
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({
@@ -27,9 +31,9 @@ export async function sendCode(_previous: AuthFormState, form: FormData): Promis
       // Accounts are created by invitation only: an unknown email must not self-register.
       options: { shouldCreateUser: false },
     });
-    if (error) return { error: isUnknownEmailError(error) ? ar.auth.unknownEmail : ar.auth.sendFailed };
+    if (error) return fail(isUnknownEmailError(error) ? 'UNKNOWN_EMAIL' : 'SEND_FAILED');
   } catch {
-    return { error: ar.auth.sendFailed };
+    return fail('SEND_FAILED');
   }
   const query = new URLSearchParams({ email });
   if (next) query.set('next', next);
@@ -37,20 +41,20 @@ export async function sendCode(_previous: AuthFormState, form: FormData): Promis
 }
 
 /** Email OTP, step 2: exchange the 6-digit code for a session cookie, then go where the user was headed. */
-export async function verifyCode(_previous: AuthFormState, form: FormData): Promise<AuthFormState> {
+export async function verifyCode(_previous: AuthResult | null, form: FormData): Promise<AuthResult> {
   const email = field(form, 'email').toLowerCase();
   const token = field(form, 'token');
-  if (!OTP_PATTERN.test(token)) return { error: ar.auth.invalidCode };
+  if (!OTP_PATTERN.test(token)) return fail('INVALID_CODE');
   let profile: CurrentProfile | null;
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error || !data.user) {
-      return { error: error && isInvalidCodeError(error) ? ar.auth.invalidCode : ar.auth.verifyFailed };
+      return fail(error && isInvalidCodeError(error) ? 'INVALID_CODE' : 'VERIFY_FAILED');
     }
     profile = await fetchProfile(supabase, data.user.id);
   } catch {
-    return { error: ar.auth.verifyFailed };
+    return fail('VERIFY_FAILED');
   }
   // why: a Server Action's redirect renders its target in the same request, without proxy.ts, so the
   // guard is applied here too: a student or an inactive account lands on /unauthorized, not on "/".
@@ -60,16 +64,16 @@ export async function verifyCode(_previous: AuthFormState, form: FormData): Prom
 }
 
 /** Sends a fresh code to the same address (the verify page's countdown limits how often). */
-export async function resendCode(email: string): Promise<AuthFormState> {
+export async function resendCode(email: string): Promise<AuthResult> {
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { shouldCreateUser: false },
     });
-    return error ? { error: ar.auth.sendFailed } : { error: null, notice: ar.auth.resent };
+    return error ? fail('SEND_FAILED') : { ok: true };
   } catch {
-    return { error: ar.auth.sendFailed };
+    return fail('SEND_FAILED');
   }
 }
 

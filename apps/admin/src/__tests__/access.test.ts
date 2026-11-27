@@ -59,6 +59,12 @@ describe('resolveAccess (GUARD-1)', () => {
   it.each(rows)('%s', (_name, pathname, signedIn, profile, expected) => {
     expect(resolveAccess({ pathname, signedIn, profile })).toEqual(expected);
   });
+
+  it('keeps the query string in next when sending a signed-out user to login', () => {
+    expect(resolveAccess({ pathname: '/students', search: '?group=1&q=a', signedIn: false, profile: null })).toEqual(
+      to('/login?next=%2Fstudents%3Fgroup%3D1%26q%3Da'),
+    );
+  });
 });
 
 describe('safeNext', () => {
@@ -71,6 +77,14 @@ describe('safeNext', () => {
     ['https://evil.example', '/'],
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],
+    ['/\t/evil.example', '/'],
+    ['/\n/evil.example', '/'],
+    ['/\r/evil.example', '/'],
+    ['/%09/evil.example', '/%09/evil.example'],
+    ['/\\/evil.example', '/'],
+    ['/students\\..\\..\\/evil.example', '/'],
+    ['https:/evil.example', '/'],
+    ['/students#row-3', '/students#row-3'],
     ['students', '/'],
     ['/login', '/'],
     ['/verify?email=a@b.c', '/'],

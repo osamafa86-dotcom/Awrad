@@ -11,6 +11,8 @@ import { fetchProfile } from '@/lib/supabase/profile';
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
+  // Cache-Control etc. that @supabase/ssr asks for whenever it writes the session cookie.
+  let sessionHeaders: Record<string, string> = {};
   const { url, anonKey } = supabaseEnv();
   const supabase = createServerClient(url, anonKey, {
     getAll: () => request.cookies.getAll(),
@@ -21,7 +23,8 @@ export async function proxy(request: NextRequest) {
         // why: options are @supabase/ssr's cookie attributes, the same shape Next's cookie store takes.
         response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
       }
-      for (const [key, value] of Object.entries(headers ?? {})) response.headers.set(key, value);
+      sessionHeaders = headers ?? {};
+      for (const [key, value] of Object.entries(sessionHeaders)) response.headers.set(key, value);
     },
   });
 
@@ -37,12 +40,14 @@ export async function proxy(request: NextRequest) {
     // Any auth failure (no session, Supabase unreachable) counts as signed out.
   }
 
-  const access = resolveAccess({ pathname: request.nextUrl.pathname, signedIn, profile });
+  const { pathname, search } = request.nextUrl;
+  const access = resolveAccess({ pathname, search, signedIn, profile });
   if (access.kind === 'allow') return response;
 
   const redirect = NextResponse.redirect(new URL(access.to, request.url));
-  // Carry a refreshed (or cleared) session cookie over to the redirect.
+  // Carry a refreshed (or cleared) session cookie, and its no-cache headers, over to the redirect.
   for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+  for (const [key, value] of Object.entries(sessionHeaders)) redirect.headers.set(key, value);
   return redirect;
 }
 

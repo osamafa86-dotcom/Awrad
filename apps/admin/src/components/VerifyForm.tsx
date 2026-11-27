@@ -3,18 +3,16 @@
 import Link from 'next/link';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 
-import { resendCode, verifyCode, type AuthFormState } from '@/actions/auth';
+import { resendCode, verifyCode } from '@/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RESEND_SECONDS } from '@/lib/auth';
+import { RESEND_SECONDS, authErrorText, type AuthResult } from '@/lib/auth';
 import { ar } from '@/messages/ar';
-
-const initial: AuthFormState = { error: null };
 
 /** a-verify: the 6-digit code (LTR, design rule 5), resend after a countdown, change email. */
 export function VerifyForm({ email, next }: { email: string; next: string | null }) {
-  const [state, action, verifying] = useActionState(verifyCode, initial);
-  const [resent, setResent] = useState<AuthFormState | null>(null);
+  const [state, action, verifying] = useActionState(verifyCode, null);
+  const [resent, setResent] = useState<AuthResult | null>(null);
   const [resending, startResend] = useTransition();
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const [cooldown, setCooldown] = useState(0);
@@ -33,8 +31,8 @@ export function VerifyForm({ email, next }: { email: string; next: string | null
   };
 
   // The latest outcome wins: a verify attempt clears the resend notice and vice versa.
-  const error = resent?.error ?? state.error;
-  const notice = resent?.notice ?? null;
+  const error = authErrorText(resent ?? state);
+  const notice = resent?.ok ? ar.auth.resent : null;
 
   return (
     <div className="flex flex-col gap-16">

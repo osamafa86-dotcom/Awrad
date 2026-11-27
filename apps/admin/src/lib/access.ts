@@ -12,6 +12,8 @@ export type Access = { kind: 'allow' } | { kind: 'redirect'; to: string };
 
 export interface AccessInput {
   pathname: string;
+  /** The query string including its leading `?` (or empty); kept in `next` when sending to login. */
+  search?: string;
   signedIn: boolean;
   /** The signed-in user's profile row; null when signed out or when the row is missing. */
   profile: AccessProfile | null;
@@ -35,11 +37,11 @@ export function isStaff(profile: AccessProfile | null): profile is AccessProfile
   return profile !== null && profile.isActive && profile.role !== 'student';
 }
 
-export function resolveAccess({ pathname, signedIn, profile }: AccessInput): Access {
+export function resolveAccess({ pathname, search = '', signedIn, profile }: AccessInput): Access {
   const onAuthPage = AUTH_PATHS.some((path) => inSection(pathname, path));
 
   if (!signedIn) {
-    return onAuthPage ? allow : redirect(`${LOGIN_PATH}?next=${encodeURIComponent(pathname)}`);
+    return onAuthPage ? allow : redirect(`${LOGIN_PATH}?next=${encodeURIComponent(pathname + search)}`);
   }
 
   if (!isStaff(profile)) {
@@ -55,13 +57,24 @@ export function resolveAccess({ pathname, signedIn, profile }: AccessInput): Acc
   return allow;
 }
 
+const PROBE_ORIGIN = 'http://awrad.invalid';
+
 /**
  * Where to go after signing in: a same-origin dashboard path from `?next=`, else the overview.
- * Rejects absolute and protocol-relative URLs (open redirects) and the sign-in pages themselves.
+ * The value is resolved the way the browser will resolve it (the URL parser drops tabs and newlines
+ * and treats `\` as `/`), and only a result on our own origin is kept, so `//evil`, `/\evil` and
+ * `/<tab>/evil` cannot become open redirects. The sign-in pages themselves are not a destination.
  */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
-  const pathname = next.split(/[?#]/)[0] ?? '';
-  if (AUTH_PATHS.some((path) => inSection(pathname, path))) return '/';
-  return next;
+  if (!next || !next.startsWith('/')) return '/';
+  let url: URL;
+  try {
+    url = new URL(next, PROBE_ORIGIN);
+  } catch {
+    return '/';
+  }
+  // A path that normalises to `//host` (e.g. `/a\..\..\/host`) would be protocol-relative once redirected.
+  if (url.origin !== PROBE_ORIGIN || url.pathname.startsWith('//')) return '/';
+  if (AUTH_PATHS.some((path) => inSection(url.pathname, path))) return '/';
+  return `${url.pathname}${url.search}${url.hash}`;
 }

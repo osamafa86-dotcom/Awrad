@@ -2,16 +2,16 @@
 
 import { useActionState, useState } from 'react';
 
-import { sendCode, type AuthFormState } from '@/actions/auth';
+import { sendCode } from '@/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { authErrorText } from '@/lib/auth';
 import { ar } from '@/messages/ar';
-
-const initial: AuthFormState = { error: null };
 
 /** a-login: email field (LTR, design rule 5) and «أرسل رمز الدخول». */
 export function LoginForm({ next }: { next: string | null }) {
-  const [state, action, pending] = useActionState(sendCode, initial);
+  const [state, action, pending] = useActionState(sendCode, null);
+  const error = authErrorText(state);
   // Controlled so the address survives React's form reset after a failed attempt.
   const [email, setEmail] = useState('');
 
@@ -32,12 +32,12 @@ export function LoginForm({ next }: { next: string | null }) {
           placeholder={ar.auth.emailPlaceholder}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          aria-invalid={state.error ? true : undefined}
-          aria-describedby={state.error ? 'email-error' : undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? 'email-error' : undefined}
         />
-        {state.error ? (
+        {error ? (
           <p id="email-error" role="alert" className="t-body-sm text-status-notdone">
-            {state.error}
+            {error}
           </p>
         ) : null}
       </div>
