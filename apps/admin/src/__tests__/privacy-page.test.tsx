@@ -27,14 +27,23 @@ describe('privacy policy (F-80)', () => {
     expect(policy).toContain('آخر تحديث');
   });
 
+  // Ruling FIN-7 (final review ops I3): the policy says only what is true of the deployment — a server operated for
+  // the program (not Supabase), and no backup retention promise until the backups run (docs/runbook.md §3).
+  it('describes the hosting truthfully and makes no backup promise yet', () => {
+    expect(policy).toContain('خادم يُشغَّل لصالح البرنامج');
+    expect(policy).not.toMatch(/Supabase/i);
+    expect(policy).not.toContain('النسخ الاحتياطية');
+    expect(policy).not.toContain('30 يومًا على الأكثر');
+  });
+
   it('the page renders the policy with the four section headings in order', () => {
     render(<PrivacyPage />);
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(HEADINGS);
     expect(screen.getByText(/خلال 30 يومًا من تاريخ الطلب/)).toBeInTheDocument();
-    // Deletion is described honestly: the minimal audit record and the backups are named.
+    // Deletion is described honestly: the minimal audit record and the CSV files outside the system are named.
     expect(screen.getByText(/سجلّ التدقيق/)).toBeInTheDocument();
-    expect(screen.getByText(/النسخ الاحتياطية/)).toBeInTheDocument();
+    expect(screen.getByText(/ملفات التقارير/)).toBeInTheDocument();
   });
 
   it('the public layout shows the brand and links back to the login page, without the dashboard shell', () => {

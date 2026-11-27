@@ -138,8 +138,9 @@ pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/00
 ### طلبات الدعم (F-64, BR-10) — ترحيل 0010
 `supabase/migrations/0010_support.sql`: RPC `handle_support_request(p_log_id, p_note)` للمدير أو مشرف مجموعة صاحب السجلّ
 (`FORBIDDEN` لغيرهما، و`INVALID_ITEM` لسجلّ غير موجود أو بلا طلب): تضبط `support_status = 'handled'` و`handled_by/at`
-و`handled_note` (تُقصّ، والفارغة `null`) وتكتب صفّ تدقيق `support.handle`. إعادة الفتح حين يعدّل الطالب النصّ تبقى في
-`save_log` (0006) التي تُفرغ حقول المعالجة. بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. اختباراته:
+وتكتب صفّ تدقيق `support.handle`. الملاحظة الداخلية (تُقصّ، والفارغة لا تُخزَّن) في جدول `support_notes` منذ 0016 (القرار
+FIN-8): يقرؤه المدير ومشرف مجموعة صاحب السجلّ وحدهما، ويُحذف صفّه حين يخرج الطلب من «تمّت المعالجة». إعادة الفتح حين يعدّل
+الطالب النصّ تبقى في `save_log` التي تُفرغ حقول المعالجة. بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. اختباراته:
 ```bash
 pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0010_support.test.ts
 ```

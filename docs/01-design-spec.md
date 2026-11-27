@@ -271,7 +271,7 @@
 
 ### BR-10 طلبات الدعم
 - عند حفظ سجلّ أسبوعي ونصّ `support_request_text` غير فارغ ⇒ `support_status = 'open'`. إن كان فارغًا ⇒ `'none'`.
-- المدير أو مشرف المجموعة يحوّلها إلى `'handled'` مع `handled_by`, `handled_at`, `handled_note`.
+- المدير أو مشرف المجموعة يحوّلها إلى `'handled'` مع `handled_by`, `handled_at`، والملاحظة الداخلية في جدول `support_notes` الذي لا يقرؤه الطالب (القرار FIN-8، ترحيل 0016؛ كانت عمود `logs.handled_note`).
 - إن عدّل الطالب النصّ بعد المعالجة تعود `'open'`.
 
 ### BR-11 الخصوصية والعزل
@@ -486,7 +486,7 @@ create table logs (
   support_status       support_status not null default 'none',
   handled_by           uuid references profiles(id),
   handled_at           timestamptz,
-  handled_note         text,
+  -- handled_note نُقلت إلى support_notes(log_id, note) للطاقم وحده (FIN-8، 0016)
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
   unique (user_id, period, period_start)
