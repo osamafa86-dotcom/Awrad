@@ -1,4 +1,4 @@
-import { addDays, todayIn } from '@awrad/domain';
+import { addDays } from '@awrad/domain';
 import { getStudentSummary, type StudentSummary } from '@awrad/supabase-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { isEmptySummary } from '../lib/summary';
 
 import { supabase } from '../lib/supabase';
+import { localToday } from '../lib/clock';
 import { useAppSession } from './SessionProvider';
 import { useAsyncData } from './useAsyncData';
 import { useSettings } from './useSettings';
@@ -37,7 +38,7 @@ export function useSummary(range: SummaryRange, enabled = true): UseSummary {
   const settings = useSettings();
   const { session } = useAppSession();
   const uid = session?.user.id ?? null;
-  const today = settings.loading ? null : todayIn(settings.timezone);
+  const today = settings.loading ? null : localToday(settings.timezone);
   const key = enabled && uid && today ? `${uid}|${range}|${today}` : null;
   const q = useAsyncData(key, () => {
     const { from, to } = rangeBounds(range, today ?? '');

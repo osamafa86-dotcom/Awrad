@@ -1,10 +1,11 @@
-import { addDays, isWithinBackfill, isWithinWeeklyGrace, toHijri, todayIn, type DayState } from '@awrad/domain';
+import { addDays, isWithinBackfill, isWithinWeeklyGrace, toHijri, type DayState } from '@awrad/domain';
 import { getCalendar } from '@awrad/supabase-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatDayMonth, formatHijriSpan } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { ar } from '../messages/ar';
+import { localToday } from '../lib/clock';
 import { useAppSession } from './SessionProvider';
 import { useAsyncData } from './useAsyncData';
 import { useSettings } from './useSettings';
@@ -99,7 +100,7 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
   const settings = useSettings();
   const { session } = useAppSession();
   const uid = session?.user.id ?? null;
-  const today = settings.loading ? null : todayIn(settings.timezone);
+  const today = settings.loading ? null : localToday(settings.timezone);
   const scope = uid && today ? `${uid}|${period}|${today}` : null;
 
   const [last, setLast] = useState(page);

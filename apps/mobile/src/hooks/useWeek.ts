@@ -1,5 +1,6 @@
-import { addDays, isWithinWeeklyGrace, todayIn, weekStartFor } from '@awrad/domain';
+import { addDays, isWithinWeeklyGrace, weekStartFor } from '@awrad/domain';
 
+import { localToday } from '../lib/clock';
 import { useSettings } from './useSettings';
 
 export interface Week {
@@ -19,7 +20,7 @@ export interface UseWeek extends Week {
 /** The current week (`0`) or the previous one (`-1`) in the student's zone and week-start setting. */
 export function useWeek(offset: 0 | -1): UseWeek {
   const settings = useSettings();
-  const today = todayIn(settings.timezone);
+  const today = localToday(settings.timezone);
   const weekStart = addDays(weekStartFor(today, settings.weekStartsOn), 7 * offset);
   const weekEnd = addDays(weekStart, 6);
   return {

@@ -1,4 +1,3 @@
-import { todayIn } from '@awrad/domain';
 import { router } from 'expo-router';
 import NotebookPen from 'lucide-react-native/icons/notebook-pen';
 import { useCallback, useState } from 'react';
@@ -11,6 +10,7 @@ import { useSummary, useSummaryRange } from '../hooks/useSummary';
 import { shiftMonth } from '../lib/month';
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
+import { localToday } from '../lib/clock';
 import { Button } from './Button';
 import { EmptyState } from './EmptyState';
 import { HabitBar } from './HabitBar';
@@ -31,7 +31,7 @@ export function SummaryView() {
   const settings = useSettings();
   const { range, loaded, setRange } = useSummaryRange();
   const summary = useSummary(range, loaded);
-  const today = settings.loading ? null : todayIn(settings.timezone);
+  const today = settings.loading ? null : localToday(settings.timezone);
   const currentMonth = today ? today.slice(0, 7) : null;
   const [picked, setPicked] = useState<string | null>(null);
   const month = picked ?? currentMonth;

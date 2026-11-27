@@ -1,6 +1,7 @@
-import { addDays, computeDayStatus, isWithinBackfill, todayIn, type HabitDef } from '@awrad/domain';
+import { addDays, computeDayStatus, isWithinBackfill, type HabitDef } from '@awrad/domain';
 import { useCallback, useEffect, useState } from 'react';
 
+import { localToday } from '../lib/clock';
 import {
   buildSaveInput,
   entriesFromDraft,
@@ -68,7 +69,7 @@ export function useTodayScreen({
   readOnly = false,
 }: { initialDate?: string; readOnly?: boolean } = {}): TodayScreenState {
   const settings = useSettings();
-  const today = settings.loading ? null : todayIn(settings.timezone);
+  const today = settings.loading ? null : localToday(settings.timezone);
   const [chosen, setChosen] = useState<string | null>(initialDate ?? null);
   const date = chosen ?? today;
 

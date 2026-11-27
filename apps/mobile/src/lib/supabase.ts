@@ -1,4 +1,4 @@
-import { createBrowserClient } from '@awrad/supabase-client';
+import { createBrowserClient, type TypedClient } from '@awrad/supabase-client';
 import { Platform } from 'react-native';
 
 import { ar } from '../messages/ar';
@@ -22,6 +22,17 @@ function readEnv(): { url: string; anonKey: string } {
   return { url, anonKey };
 }
 
-const env = readEnv();
+function createClient(): TypedClient {
+  // PREVIEW-2: dev-only preview mode serves the in-memory fake with fixture data (no Supabase needed).
+  // The literal env read is inlined at build time, so a normal export drops this branch and never
+  // resolves the module (Metro also blocks src/preview unless EXPO_PUBLIC_PREVIEW=1).
+  if (process.env.EXPO_PUBLIC_PREVIEW === '1') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- why: a static import would put the fake in production bundles
+    const preview = require('../preview/fakeSupabase') as typeof import('../preview/fakeSupabase');
+    return preview.createPreviewClient();
+  }
+  const env = readEnv();
+  return createBrowserClient(env.url, env.anonKey, storageFor(Platform.OS));
+}
 
-export const supabase = createBrowserClient(env.url, env.anonKey, storageFor(Platform.OS));
+export const supabase = createClient();
