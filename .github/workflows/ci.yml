@@ -23,6 +23,11 @@ jobs:
           --health-retries 10
     env:
       SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54329/awrad
+      # Dummy values so the mobile client module (and its static web export) can load in CI.
+      EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      EXPO_PUBLIC_ADMIN_URL: http://127.0.0.1:3000
+      EXPO_NO_TELEMETRY: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
