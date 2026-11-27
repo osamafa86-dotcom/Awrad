@@ -18,6 +18,7 @@ import { useLog } from './useLog';
 import { useSaveLog, type SaveError } from './useSaveLog';
 import { useSettings, type UseSettings } from './useSettings';
 import { useWeek, type Week } from './useWeek';
+import { addDays } from '@awrad/domain';
 
 // The habit list the payload was built from is stale: reload it (keeping the student's edits).
 const STALE_HABIT_ERRORS: ReadonlySet<SaveError> = new Set([
@@ -95,20 +96,34 @@ export interface WeeklyScreenState {
 }
 
 /** State and actions of the weekly review screen (F-20…F-24); mirrors useTodayScreen, keyed by week. */
-export function useWeeklyScreen(): WeeklyScreenState {
+export function useWeeklyScreen({
+  weekStart: fixedWeekStart,
+  readOnly = false,
+}: { weekStart?: string; readOnly?: boolean } = {}): WeeklyScreenState {
   const settings = useSettings();
   const currentWeek = useWeek(0);
   const previousWeek = useWeek(-1);
   const [offset, setOffset] = useState<0 | -1>(0);
-  const week = offset === 0 ? currentWeek : previousWeek;
+  // A fixed week (opened from the history list, Task 2.6) never navigates; readOnly adds no drafts or edits.
+  const shownWeek: Week = fixedWeekStart
+    ? {
+        weekStart: fixedWeekStart,
+        weekEnd: addDays(fixedWeekStart, 6),
+        canEdit: !readOnly,
+        isCurrent: fixedWeekStart === currentWeek.weekStart,
+      }
+    : offset === 0
+      ? currentWeek
+      : previousWeek;
+  const week = shownWeek;
   const weekStart = currentWeek.loading ? null : week.weekStart;
 
   const habitsQ = useActiveHabits(weekStart, 'weekly');
   const logQ = useLog('weekly', weekStart);
-  const draftQ = useDraft<WeekDraft>(weekStart ? `draft:weekly:${weekStart}` : null);
+  const draftQ = useDraft<WeekDraft>(weekStart && !readOnly ? `draft:weekly:${weekStart}` : null);
   const lastWeekQ = useLog(
     'weekly',
-    !currentWeek.loading && previousWeek.canEdit ? previousWeek.weekStart : null,
+    !fixedWeekStart && !currentWeek.loading && previousWeek.canEdit ? previousWeek.weekStart : null,
   );
   const saver = useSaveLog();
 
@@ -157,7 +172,7 @@ export function useWeeklyScreen(): WeeklyScreenState {
 
   const update = useCallback(
     (fn: (d: WeekDraft) => WeekDraft) => {
-      if (!weekStart) return;
+      if (!weekStart || readOnly) return;
       setLocal((l) =>
         l && l.weekStart === weekStart
           ? {
@@ -174,7 +189,7 @@ export function useWeeklyScreen(): WeeklyScreenState {
       // A "saved" banner no longer describes the edited week; an error stays until the next attempt.
       setBanner((b) => (b && b.state.kind !== 'error' ? null : b));
     },
-    [weekStart],
+    [weekStart, readOnly],
   );
 
   const setEntry = useCallback(
@@ -235,14 +250,15 @@ export function useWeeklyScreen(): WeeklyScreenState {
     habitsQ,
   ]);
 
-  const canPrev = offset === 0 && !currentWeek.loading && previousWeek.canEdit;
-  const canNext = offset === -1;
+  const canPrev = !fixedWeekStart && offset === 0 && !currentWeek.loading && previousWeek.canEdit;
+  const canNext = !fixedWeekStart && offset === -1;
   const goPrev = useCallback(() => {
     if (canPrev) setOffset(-1);
   }, [canPrev]);
   const goNext = useCallback(() => setOffset(0), []);
 
   const showLastWeekBanner =
+    !fixedWeekStart &&
     offset === 0 && previousWeek.canEdit && !lastWeekQ.loading && !lastWeekQ.error && !lastWeekQ.log;
 
   const shownBanner = banner && banner.weekStart === weekStart ? banner.state : null;

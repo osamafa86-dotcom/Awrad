@@ -105,8 +105,16 @@ export const fakeDb: {
   settings: Array<{ key: string; value: unknown }>;
   group: { timezone: string; week_starts_on: number } | null;
   logs: Record<string, FakeLogRow>;
-  calls: Array<{ table: string; filters: Record<string, unknown>; select?: string }>;
-} = { settings: [], group: null, logs: {}, calls: [] };
+  calls: Array<{
+    table: string;
+    filters: Record<string, unknown>;
+    select?: string;
+    order?: [string, unknown];
+    range?: [number, number];
+  }>;
+  /** Make list reads of `logs` (order/range) fail. */
+  failLogList: boolean;
+} = { settings: [], group: null, logs: {}, calls: [], failLogList: false };
 
 export function resetFakeDb(): void {
   fakeDb.settings = [
@@ -118,13 +126,14 @@ export function resetFakeDb(): void {
   fakeDb.group = { timezone: 'Asia/Riyadh', week_starts_on: 0 };
   fakeDb.logs = {};
   fakeDb.calls = [];
+  fakeDb.failLogList = false;
 }
 
 type Result = { data: unknown; error: unknown };
 
 /** Minimal chainable stand-in for the PostgREST query builder (select/eq/in/maybeSingle/await). */
 function builder(table: string) {
-  const call: { table: string; filters: Record<string, unknown>; select?: string } = {
+  const call: (typeof fakeDb.calls)[number] = {
     table,
     filters: {},
   };
@@ -136,6 +145,15 @@ function builder(table: string) {
       case 'groups':
         return { data: fakeDb.group, error: null };
       case 'logs':
+        if (call.range) {
+          if (fakeDb.failLogList) return { data: null, error: { message: 'boom' } };
+          const [from, to] = call.range;
+          const rows = Object.values(fakeDb.logs)
+            .filter((l) => l.period === call.filters.period)
+            .sort((a, b) => b.period_start.localeCompare(a.period_start))
+            .slice(from, to + 1);
+          return { data: rows, error: null };
+        }
         return { data: fakeDb.logs[String(call.filters.period_start)] ?? null, error: null };
       default:
         return { data: null, error: { message: `unexpected table ${table}` } };
@@ -152,6 +170,14 @@ function builder(table: string) {
     },
     in(column: string, values: unknown) {
       call.filters[column] = values;
+      return b;
+    },
+    order(column: string, options?: unknown) {
+      call.order = [column, options];
+      return b;
+    },
+    range(from: number, to: number) {
+      call.range = [from, to];
       return b;
     },
     maybeSingle: async () => result(),

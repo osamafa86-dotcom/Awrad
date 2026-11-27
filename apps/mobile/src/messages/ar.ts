@@ -182,6 +182,8 @@ export const ar = {
       achieved: 'حُفظ ✓ — أسبوع مُنجَز',
       failed: (remaining: number) => `حُفظ ✓ — ${remainingText(remaining)}`,
       neutral: 'أسبوع بلا تكليف',
+      readOnly: 'للقراءة فقط',
+      readOnlyBody: 'انتهت مهلة التعديل لهذا الأسبوع.',
     },
   },
   summary: {
@@ -223,6 +225,31 @@ export const ar = {
       body: 'يظهر ملخّصك بعد أول تسجيل لوردك اليومي',
       action: 'سجّل يومك',
     },
+  },
+  history: {
+    loading: 'جارٍ تحميل السجلّ…',
+    loadFailed: 'تعذّر تحميل السجلّ. تحقّق من الاتصال وأعد المحاولة.',
+    retry: 'إعادة المحاولة',
+    tabsLabel: 'نوع السجلّ',
+    tabs: { daily: 'يومي', weekly: 'أسبوعي' },
+    empty: { title: 'لا سجلّات بعد', body: 'تظهر هنا الأيام والأسابيع التي تسجّلها.' },
+    /** Badge on a row still open for editing (not shown on today). */
+    editable: 'قابل للتعديل',
+    /** Accessibility hint of a locked row. */
+    readOnlyHint: 'للقراءة فقط',
+    locked: 'مقفل',
+    /** A weekly row's trailing text: weeks carry no day state. */
+    weeklyLogged: 'مسجَّل',
+    loadingMore: 'جارٍ تحميل المزيد…',
+    chip: {
+      achieved: 'مُنجَز',
+      failed: 'بقي بنود',
+      neutral: 'بلا تكليف',
+      missing: 'غير مسجَّل',
+    },
+    back: 'رجوع',
+    detailTitle: 'تفاصيل السجلّ',
+    invalidLog: 'هذا السجلّ غير موجود.',
   },
   errors: {
     missingEnv:

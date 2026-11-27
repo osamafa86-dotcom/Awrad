@@ -77,7 +77,7 @@ export function DayStatusBanner({
           fg: colors.textSecondary,
           icon: Lock,
           title: ar.today.banner.readOnly,
-          body: ar.today.banner.readOnlyBody,
+          body: period === 'weekly' ? ar.weekly.banner.readOnlyBody : ar.today.banner.readOnlyBody,
         };
     }
   })();

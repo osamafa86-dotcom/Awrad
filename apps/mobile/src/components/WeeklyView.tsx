@@ -13,9 +13,16 @@ import { SaveBar } from './SaveBar';
 import { TextField } from './TextField';
 import { WeekHeader } from './WeekHeader';
 
+export interface WeeklyViewProps {
+  /** A fixed week (`YYYY-MM-DD`, opened from the history list): no week arrows, no last-week banner. */
+  weekStart?: string;
+  /** Outside the grace window (BR-06): no SaveBar, disabled controls, «للقراءة فقط». */
+  readOnly?: boolean;
+}
+
 /** The weekly review (F-20…F-24; DESIGN.md m20, d20). Composition only — state lives in useWeeklyScreen. */
-export function WeeklyView() {
-  const s = useWeeklyScreen();
+export function WeeklyView({ weekStart, readOnly = false }: WeeklyViewProps = {}) {
+  const s = useWeeklyScreen({ weekStart, readOnly });
   const { colors, radius, space, type } = useTheme();
 
   const body = (() => {
@@ -75,12 +82,14 @@ export function WeeklyView() {
                     habit={habit}
                     checkedIds={entry.checkedItemIds}
                     notRequired={entry.notRequired === true}
+                    disabled={readOnly}
                     onChange={(next) => s.setEntry(habit.id, { ...entry, ...next })}
                   />
                 ) : (
                   <HabitRow
                     habit={habit}
                     entry={entry}
+                    disabled={readOnly}
                     onChange={(next) => s.setEntry(habit.id, next)}
                   />
                 )}
@@ -93,6 +102,7 @@ export function WeeklyView() {
           multiline
           value={s.reviewText}
           onChangeText={s.setReviewText}
+          editable={!readOnly}
         />
         <TextField
           label={ar.weekly.supportLabel}
@@ -100,13 +110,15 @@ export function WeeklyView() {
           multiline
           value={s.supportRequestText}
           onChangeText={s.setSupportRequestText}
+          editable={!readOnly}
         />
       </>
     );
   })();
 
-  const banner =
-    s.banner?.kind === 'error' ? (
+  const banner = readOnly ? (
+    <DayStatusBanner period="weekly" state="readOnly" />
+  ) : s.banner?.kind === 'error' ? (
       <DayStatusBanner
         state="error"
         message={
@@ -126,7 +138,7 @@ export function WeeklyView() {
       />
     ) : null;
 
-  const showSaveBar = !s.loading && !s.loadError && s.habits.length > 0;
+  const showSaveBar = !readOnly && !s.loading && !s.loadError && s.habits.length > 0;
 
   return (
     <SafeAreaView
@@ -144,6 +156,7 @@ export function WeeklyView() {
             hijriAdjustment={s.settings.hijriAdjustment}
             canPrev={s.canPrev}
             canNext={s.canNext}
+            hideNav={weekStart !== undefined}
             onPrev={s.goPrev}
             onNext={s.goNext}
           />

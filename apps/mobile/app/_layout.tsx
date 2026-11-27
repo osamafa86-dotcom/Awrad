@@ -10,6 +10,7 @@ import { SessionProvider } from '../src/hooks/SessionProvider';
 import { fontMap } from '../src/lib/fonts';
 import { ensureRTL } from '../src/lib/rtl';
 import { toNavigationTheme, useTheme } from '../src/lib/theme';
+import { ar } from '../src/messages/ar';
 
 // RTL before anything renders; keep the splash up until the Arabic fonts are ready.
 ensureRTL();
@@ -42,6 +43,11 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(auth)" />
+          {/* A past day/week from the history list (F-40); the screen sets its own title. */}
+          <Stack.Screen
+            name="log/[period]/[date]"
+            options={{ presentation: 'card', headerShown: true, headerBackTitle: ar.history.back }}
+          />
         </Stack>
       </SessionProvider>
     </ThemeProvider>

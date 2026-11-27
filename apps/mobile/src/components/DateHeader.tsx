@@ -18,6 +18,8 @@ export interface DateHeaderProps {
   onNext(): void;
   canPrev: boolean;
   canNext: boolean;
+  /** Hide the previous/next arrows (a log opened from the history list stays on its date). */
+  hideNav?: boolean;
   /** One mark per active habit, in order. */
   marks: Array<{ id: string; status: EntryStatus | undefined }>;
   /** Current streak; the chip appears once it is known. */
@@ -34,7 +36,7 @@ function gregorianLabel(date: string): string {
 
 /** DESIGN.md §6 DateHeader: Hijri first and large (§2), Gregorian under it, habit marks, streak. */
 export function DateHeader(props: DateHeaderProps) {
-  const { date, today, hijriAdjustment, onPrev, onNext, canPrev, canNext, marks, streak } = props;
+  const { date, today, hijriAdjustment, onPrev, onNext, canPrev, canNext, hideNav, marks, streak } = props;
   const { colors, space, type } = useTheme();
   const relative =
     date === today ? ar.today.relToday : date === addDays(today, -1) ? ar.today.relYesterday : null;
@@ -48,16 +50,20 @@ export function DateHeader(props: DateHeaderProps) {
         style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: space.s8 }}
       >
         {/* Reading order: "previous" comes first (the start side in RTL) and points that way (§7 rule 3). */}
-        <NavButton
-          label={ar.today.prevDay}
-          icon={ChevronRight}
-          enabled={canPrev}
-          onPress={onPrev}
-        />
+        {hideNav ? null : (
+          <NavButton
+            label={ar.today.prevDay}
+            icon={ChevronRight}
+            enabled={canPrev}
+            onPress={onPrev}
+          />
+        )}
         <Text style={[type.labelMd, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>
           {ar.today.dayLabel(relative, weekday)}
         </Text>
-        <NavButton label={ar.today.nextDay} icon={ChevronLeft} enabled={canNext} onPress={onNext} />
+        {hideNav ? null : (
+          <NavButton label={ar.today.nextDay} icon={ChevronLeft} enabled={canNext} onPress={onNext} />
+        )}
       </View>
       <Text
         accessibilityRole="header"

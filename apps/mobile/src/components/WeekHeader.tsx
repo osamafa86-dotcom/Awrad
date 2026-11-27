@@ -16,6 +16,8 @@ export interface WeekHeaderProps {
   onNext(): void;
   canPrev: boolean;
   canNext: boolean;
+  /** Hide the arrows (a week opened from the history list stays fixed). */
+  hideNav?: boolean;
 }
 
 const NAV_SIZE = 40;
@@ -37,6 +39,7 @@ export function WeekHeader({
   onNext,
   canPrev,
   canNext,
+  hideNav = false,
 }: WeekHeaderProps) {
   const { colors, space, type } = useTheme();
   return (
@@ -50,11 +53,13 @@ export function WeekHeader({
       <Text style={[type.bodySm, { color: colors.textSecondary, textAlign: 'center' }]}>
         {hijriRange(weekStart, weekEnd, hijriAdjustment)}
       </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s16 }}>
-        {/* "previous" first (the start side in RTL) and pointing that way (§7 rule 3). */}
-        <NavButton label={ar.weekly.prevWeek} icon={ChevronRight} enabled={canPrev} onPress={onPrev} />
-        <NavButton label={ar.weekly.nextWeek} icon={ChevronLeft} enabled={canNext} onPress={onNext} />
-      </View>
+      {hideNav ? null : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s16 }}>
+          {/* "previous" first (the start side in RTL) and pointing that way (§7 rule 3). */}
+          <NavButton label={ar.weekly.prevWeek} icon={ChevronRight} enabled={canPrev} onPress={onPrev} />
+          <NavButton label={ar.weekly.nextWeek} icon={ChevronLeft} enabled={canNext} onPress={onNext} />
+        </View>
+      )}
     </View>
   );
 }

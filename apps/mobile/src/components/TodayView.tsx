@@ -18,10 +18,12 @@ export interface TodayViewProps {
   initialDate?: string;
   /** For days outside the edit window (Task 2.6, m23): no SaveBar, disabled controls, «للقراءة فقط». */
   readOnly?: boolean;
+  /** Opened from the history list: no previous/next arrows, the date stays fixed. */
+  lockDate?: boolean;
 }
 
 /** The daily log (F-10…F-16; DESIGN.md m10–m15, d10–d12). Composition only — state lives in useTodayScreen. */
-export function TodayView({ initialDate, readOnly = false }: TodayViewProps) {
+export function TodayView({ initialDate, readOnly = false, lockDate = false }: TodayViewProps) {
   const s = useTodayScreen({ initialDate, readOnly });
   const { colors, radius, space, type } = useTheme();
 
@@ -148,6 +150,7 @@ export function TodayView({ initialDate, readOnly = false }: TodayViewProps) {
             hijriAdjustment={s.settings.hijriAdjustment}
             canPrev={s.canPrev}
             canNext={s.canNext}
+            hideNav={lockDate}
             onPrev={s.goPrev}
             onNext={s.goNext}
             marks={s.habits.map((h) => ({
