@@ -35,7 +35,10 @@
 | `/opt/sites/awrad/secrets/` | كلمة مرور صندوق البريد، وبصمتها، وعلامة البذرة |
 | `/srv/sites/caddy/awrad.caddy` | إعداد Caddy للنطاقات الأربعة |
 
-اختصار يتكرّر أدناه، كما في README النشر:
+### الاختصار `dc` في كل الأوامر أدناه
+
+كل كتلة أوامر في هذا الدليل تفترض هذين السطرين في أولها، كما يعرّفهما README النشر و`task.sh`
+(`dc` يعمل من نسخة المستودع على الخادم):
 
 ```sh
 cd /opt/sites/awrad/repo
@@ -72,7 +75,11 @@ dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/do
 
 ```sh
 set -euo pipefail
-B=/opt/sites/awrad/backups; sudo install -d -m 700 "$B"
+cd /opt/sites/awrad/repo
+dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
+B=/opt/sites/awrad/backups
+# مملوك لمستخدم الوكيل (لا root)، فتعمل الكتابة وchmod والحذف بعده بلا sudo.
+sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" "$B"
 F="$B/awrad-$(date -u +%Y%m%dT%H%MZ).dump"
 dc exec -T db pg_dump -U supabase_admin -d postgres -Fc \
   --exclude-schema=cron --exclude-schema=net > "$F"
@@ -88,14 +95,20 @@ find "$B" -name 'awrad-*.dump' -mtime +14 -delete
 
 ### الاستعادة (جولة `task.sh`)
 
+> **غير مُجرَّبة.** تمرَّن عليها على نسخة تجريبية منفصلة قبل أي استعادة حقيقية.
+
 الاستعادة تكتب فوق البيانات الحالية. خذ نسخة من الحالي أولًا (الخطوة السابقة)، ثم:
 
 ```sh
 set -euo pipefail
+cd /opt/sites/awrad/repo
+dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
 F=/opt/sites/awrad/backups/<الملف>.dump
 dc stop awrad-admin awrad-auth awrad-rest awrad-functions      # لا كتابة أثناء الاستعادة
+# كـ supabase_admin وبلا --no-owner ولا --role: تبقى ملكية كل جدول كما في النسخة
+# (جداول auth لـ supabase_auth_admin الذي يتّصل به GoTrue، وجداول public وops لـ postgres).
 dc exec -T db pg_restore -U supabase_admin -d postgres --clean --if-exists \
-  --no-owner --role=postgres --schema=public --schema=auth --schema=ops < "$F"
+  --schema=public --schema=auth --schema=ops < "$F"
 dc up -d awrad-auth awrad-rest awrad-functions awrad-admin
 dc exec -T db psql -U postgres -d postgres -tAc \
   "select (select count(*) from profiles), (select count(*) from logs), (select count(*) from sessions);"
@@ -118,7 +131,7 @@ dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
 | `ANON_KEY` وحده | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d awrad-functions`، ثم إعادة بناء اللوحة وويب الطالب كما أعلاه. (التطبيق على المتاجر، حين يصدر، يحمله في بنائه: يلزم إصدار جديد) | لا شيء إن بُني الكل |
 | `SERVICE_ROLE_KEY` | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d awrad-functions`. الرمز القديم يبقى صالحًا ما بقي `JWT_SECRET`؛ لإبطاله دوّر `JWT_SECRET` | لا شيء |
 | `CRON_SECRET` | يُحدَّث في مكانين معًا: `.env` ثم `dc up -d awrad-functions`، و`alter database postgres set app.cron_secret = :'secret'` كـ `supabase_admin` (README النشر، خطوة التذكيرات 3)، ثم `select ensure_reminder_schedule();` في جلسة جديدة | لا شيء؛ إن اختلف السرّان تردّ الدالة 401 ولا تصل التذكيرات |
-| `POSTGRES_PASSWORD` | كلمة مرور أدوار الخدمة. على الحجم القائم: `alter role … password` لكل دور في `db-init/roles.sql` كـ `supabase_admin`، ثم `dc up -d` لكل الخدمات | انقطاع قصير |
+| `POSTGRES_PASSWORD` | كلمة مرور كل أدوار القاعدة التي تدخل بكلمة: `postgres` و`supabase_admin` (يضبطهما الصورة عند التهيئة؛ `migrate.sh` وسكربت البذرة يتّصلان بـ `postgres`)، وأدوار `db-init/roles.sql`: `authenticator` (PostgREST) و`supabase_auth_admin` (GoTrue) و`pgbouncer` و`supabase_functions_admin` و`supabase_storage_admin` و`supabase_replication_admin` و`supabase_read_only_user`. الترتيب: (1) `alter role … with password` لكلٍّ منها بالكلمة الجديدة، كـ `supabase_admin` عبر المقبس المحلي داخل الحاوية (`dc exec -T db psql -U supabase_admin -d postgres`، كما في خطوة التذكيرات 2 في README النشر)، والكلمة متغيّر psql بـ `-v`؛ (2) الكلمة الجديدة في `.env`؛ (3) `dc up -d db awrad-auth awrad-rest` (تُعاد بيئتها)؛ (4) القياس: `dc --profile tools run --rm migrate` يمرّ (لا جديد)، و`awrad-auth` و`awrad-rest` يعملان | انقطاع قصير |
 | كلمة مرور Mailpit (`MAIL_USER`، `MAIL_PASSWORD`) | تُحدَّث في أربعة أماكن: `.env`، و`secrets/mail-basicauth.txt`، و`secrets/mail-ui.htpasswd` (bcrypt)، وكتلة `basic_auth` في `/srv/sites/caddy/awrad.caddy`. ثم `dc up -d awrad-mail` و`docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` | من يقرأ الرموز يحتاج الكلمة الجديدة |
 | SMTP (لاحقًا) | غير موجود اليوم: GoTrue يرسل إلى `awrad-mail:1025`. حين يُضاف مزوّد بريد تُضبط `GOTRUE_SMTP_*` في compose بأسرار من `.env`، وتدويرها `dc up -d awrad-auth` | — |
 
@@ -134,6 +147,9 @@ dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
    (يقرؤه python من `.env`، فلا يظهر في وسائط أي عملية). مشغّل `handle_new_user` يبني الملف من الدعوة.
    بديل أبسط: يدعوه المدير طالبًا من اللوحة، ثم في جولة:
    `update profiles set role = 'supervisor' where id = '<id>';` كـ `postgres`.
+   الترقية لا تغيّر `is_tracked` ولا `group_id`: يبقى مُتابَعًا في مجموعته، وهذا مقصود لمشرف يسجّل أوراده أيضًا
+   (المواصفة §5). إن كان لا يسجّل فأطفئ «مُتابَع» من صفحته في اللوحة (أو
+   `update profiles set is_tracked = false where id = '<id>';`)، فلا يظهر في النظرة العامة والحضور.
 3. المدير يختاره في «المشرفون» للمجموعة ويحفظ. المشرف يدخل برمز البريد كأي مستخدم.
 
 ## 6. ترقية الإصدار (إعادة النشر)
