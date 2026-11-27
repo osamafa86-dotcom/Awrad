@@ -1,10 +1,6 @@
-import {
-  createClient,
-  type SupabaseClient,
-  type SupportedStorage,
-} from "@supabase/supabase-js";
-import { createServerClient as createSsrServerClient } from "@supabase/ssr";
-import type { Database } from "./database.types";
+import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js';
+import { createServerClient as createSsrServerClient } from '@supabase/ssr';
+import type { Database } from './database.types';
 
 export type { Database };
 export type TypedClient = SupabaseClient<Database>;
@@ -27,13 +23,15 @@ export function createBrowserClient(
 
 export interface CookieAdapter {
   getAll(): { name: string; value: string }[];
-  // why: options are opaque cookie attributes owned by @supabase/ssr; we only forward them.
+  // why: options are opaque cookie attributes owned by @supabase/ssr; we only forward them. `headers`
+  // (cache-control etc.) is optional so simple callers may ignore it; middleware should apply it.
   setAll(
     cookies: {
       name: string;
       value: string;
       options?: Record<string, unknown>;
     }[],
+    headers?: Record<string, string>,
   ): void;
 }
 
@@ -46,7 +44,7 @@ export function createServerClient(
   return createSsrServerClient<Database>(url, anonKey, {
     cookies: {
       getAll: () => cookies.getAll(),
-      setAll: (toSet) => cookies.setAll(toSet),
+      setAll: (toSet, headers) => cookies.setAll(toSet, headers),
     },
-  }) as unknown as TypedClient;
+  });
 }

@@ -2,43 +2,38 @@
 // Path: `supabase gen types typescript --remote=<db-url>` (works without Docker, CLI >= 3.x), run from an
 // empty temp workdir so the repo's supabase/config.jsonc is never read, then formatted with prettier so the
 // committed file is readable and byte-stable across runs.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { ROOT, dbUrl, loadEnv, run } from "./lib.mjs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ROOT, dbUrl, loadEnv, run } from './lib.mjs';
 
 loadEnv();
-const outDir = join(ROOT, "packages/supabase-client/src");
-const out = join(outDir, "database.types.ts");
+const outDir = join(ROOT, 'packages/supabase-client/src');
+const out = join(outDir, 'database.types.ts');
 mkdirSync(outDir, { recursive: true });
 
-const workdir = mkdtempSync(join(tmpdir(), "awrad-gen-types-"));
+const workdir = mkdtempSync(join(tmpdir(), 'awrad-gen-types-'));
 try {
   const raw = run(
-    "supabase",
+    'supabase',
     [
-      "gen",
-      "types",
-      "typescript",
+      'gen',
+      'types',
+      'typescript',
       `--remote=${dbUrl()}`,
-      "--schema",
-      "public",
-      "--workdir",
+      '--schema',
+      'public',
+      '--workdir',
       workdir,
     ],
     { cwd: workdir },
   );
   const formatted = run(
-    join(ROOT, "node_modules/.bin/prettier"),
-    [
-      "--stdin-filepath",
-      out,
-      "--config",
-      join(ROOT, "packages/config/prettier.config.js"),
-    ],
-    { input: raw + "\n", stdio: ["pipe", "pipe", "inherit"] },
+    join(ROOT, 'node_modules/.bin/prettier'),
+    ['--stdin-filepath', out, '--config', join(ROOT, 'packages/config/prettier.config.js')],
+    { input: raw + '\n', stdio: ['pipe', 'pipe', 'inherit'] },
   );
-  writeFileSync(out, formatted + "\n");
+  writeFileSync(out, formatted + '\n');
 } finally {
   rmSync(workdir, { recursive: true, force: true });
 }
