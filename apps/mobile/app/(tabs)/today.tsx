@@ -1,6 +1,5 @@
-import { PlaceholderScreen } from '../../src/components/PlaceholderScreen';
-import { ar } from '../../src/messages/ar';
+import { TodayView } from '../../src/components/TodayView';
 
 export default function TodayScreen() {
-  return <PlaceholderScreen title={ar.tabs.today} />;
+  return <TodayView />;
 }

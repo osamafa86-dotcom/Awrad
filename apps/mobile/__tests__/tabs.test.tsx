@@ -20,6 +20,15 @@ jest.mock('../src/hooks/SessionProvider', () => ({
   }),
 }));
 
+// The Today tab reads data; give it an empty, offline-safe backend.
+jest.mock('../src/lib/supabase', () => ({ supabase: jest.requireActual('./helpers/today-fixture').fakeSupabase }));
+jest.mock('@awrad/supabase-client', () => ({
+  fetchActiveHabits: () => Promise.resolve([]),
+  getStudentSummary: () => Promise.resolve({ currentStreak: 0 }),
+  saveLog: jest.fn(),
+  parseRpcError: () => 'UNKNOWN',
+}));
+
 const routes = {
   '(tabs)/_layout': TabLayout,
   '(tabs)/today': Today,
@@ -31,7 +40,7 @@ const routes = {
 
 describe('tab bar', () => {
   it('shows the five Arabic tabs in order: today, weekly, summary, history, settings', async () => {
-    await renderRouter(routes, { initialUrl: '/today' });
+    await renderRouter(routes, { initialUrl: '/weekly' });
 
     // The tab bar's buttons are the only buttons on a placeholder screen.
     const tabs = await screen.findAllByRole('button');
@@ -40,8 +49,8 @@ describe('tab bar', () => {
     tabs.forEach((tab, i) => expect(within(tab).getByText(expected[i]!)).toBeTruthy());
   });
 
-  it('renders the today placeholder with its title', async () => {
+  it('opens on the today screen', async () => {
     await renderRouter(routes, { initialUrl: '/today' });
-    expect((await screen.findAllByText(ar.tabs.today)).length).toBeGreaterThan(0);
+    expect(await screen.findByText(ar.today.empty)).toBeTruthy();
   });
 });

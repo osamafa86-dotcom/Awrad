@@ -1,0 +1,174 @@
+// Test fixture mirroring supabase/seed.sql (habit names are data, allowed in fixtures — AGENTS.md §3).
+import type { HabitDef, HabitItemDef } from '@awrad/domain';
+
+const id = (suffix: string): string => `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`;
+
+const ADHKAR_ITEMS = [
+  'أذكار الصباح',
+  'أذكار المساء',
+  'سبحان الله ×30',
+  'الحمد لله ×30',
+  'لا إله إلا الله ×30',
+  'الله أكبر ×30',
+  'سبحان الله وبحمده ×30',
+  'سبحان الله العظيم ×30',
+  'سبحان الله العظيم وبحمده ×30',
+  'الاستغفار ×30',
+  'الحوقلة ×30',
+  'الصلاة على النبي ﷺ ×30',
+  'أذكار الصلوات',
+];
+
+const items: HabitItemDef[] = ADHKAR_ITEMS.map((name, i) => ({
+  id: id(String(101 + i)),
+  name,
+  sortOrder: i + 1,
+  activeFrom: '2020-01-01',
+  activeTo: null,
+}));
+
+const base = { frequency: 'daily' as const, activeFrom: '2020-01-01', activeTo: null };
+
+export const quran: HabitDef = {
+  ...base,
+  id: id('a1'),
+  slug: 'quran_wird',
+  name: 'قراءة ورد القرآن',
+  targetText: 'ست أرباع يوميًا',
+  kind: 'tristate',
+  sortOrder: 1,
+  items: [],
+};
+export const adhkar: HabitDef = {
+  ...base,
+  id: id('a2'),
+  slug: 'adhkar',
+  name: 'ورد الأذكار',
+  targetText: '13 بندًا، كلٌّ على حدة',
+  kind: 'checklist',
+  sortOrder: 2,
+  items,
+};
+export const qiyam: HabitDef = {
+  ...base,
+  id: id('a3'),
+  slug: 'qiyam',
+  name: 'ورد القيام',
+  targetText: 'خمس ركعات على الأقل',
+  kind: 'tristate',
+  sortOrder: 3,
+  items: [],
+};
+export const tafsir: HabitDef = {
+  ...base,
+  id: id('a4'),
+  slug: 'tafsir_ibn_juzayy',
+  name: 'تفسير ابن جُزَي',
+  targetText: 'ست صفحات يوميًا',
+  kind: 'tristate',
+  sortOrder: 4,
+  items: [],
+};
+export const sahihayn: HabitDef = {
+  ...base,
+  id: id('a5'),
+  slug: 'sahihayn',
+  name: 'الجمع بين الصحيحين',
+  targetText: 'خمس عشرة صفحة يوميًا',
+  kind: 'tristate',
+  sortOrder: 5,
+  items: [],
+};
+
+/** The five seeded daily habits, in sort order. */
+export const dailyHabits: HabitDef[] = [quran, adhkar, qiyam, tafsir, sahihayn];
+export const tristateHabits: HabitDef[] = dailyHabits.filter((h) => h.kind === 'tristate');
+
+export interface FakeLogRow {
+  id: string;
+  user_id: string;
+  period: 'daily' | 'weekly';
+  period_start: string;
+  note: string | null;
+  log_entries: Array<{
+    id: string;
+    habit_id: string;
+    status: 'done' | 'not_done' | 'not_required';
+    log_entry_items: Array<{ entry_id: string; habit_item_id: string }>;
+  }>;
+}
+
+/** In-memory tables read by the fake `supabase.from(...)` builder. */
+export const fakeDb: {
+  settings: Array<{ key: string; value: unknown }>;
+  group: { timezone: string; week_starts_on: number } | null;
+  logs: Record<string, FakeLogRow>;
+  calls: Array<{ table: string; filters: Record<string, unknown>; select?: string }>;
+} = { settings: [], group: null, logs: {}, calls: [] };
+
+export function resetFakeDb(): void {
+  fakeDb.settings = [
+    { key: 'backfill_days', value: 2 },
+    { key: 'streak_threshold_pct', value: 100 },
+    { key: 'hijri_adjustment_days', value: 0 },
+  ];
+  fakeDb.group = { timezone: 'Asia/Riyadh', week_starts_on: 0 };
+  fakeDb.logs = {};
+  fakeDb.calls = [];
+}
+
+type Result = { data: unknown; error: unknown };
+
+/** Minimal chainable stand-in for the PostgREST query builder (select/eq/in/maybeSingle/await). */
+function builder(table: string) {
+  const call: { table: string; filters: Record<string, unknown>; select?: string } = {
+    table,
+    filters: {},
+  };
+  fakeDb.calls.push(call);
+  const result = (): Result => {
+    switch (table) {
+      case 'app_settings':
+        return { data: fakeDb.settings, error: null };
+      case 'groups':
+        return { data: fakeDb.group, error: null };
+      case 'logs':
+        return { data: fakeDb.logs[String(call.filters.period_start)] ?? null, error: null };
+      default:
+        return { data: null, error: { message: `unexpected table ${table}` } };
+    }
+  };
+  const b = {
+    select(columns?: string) {
+      call.select = columns;
+      return b;
+    },
+    eq(column: string, value: unknown) {
+      call.filters[column] = value;
+      return b;
+    },
+    in(column: string, values: unknown) {
+      call.filters[column] = values;
+      return b;
+    },
+    maybeSingle: async () => result(),
+    single: async () => result(),
+    then<T>(resolve: (r: Result) => T, reject?: (e: unknown) => T) {
+      return Promise.resolve(result()).then(resolve, reject);
+    },
+  };
+  return b;
+}
+
+export const fakeSupabase = { from: (table: string) => builder(table) };
+
+export const USER_ID = 'u-1';
+export const fakeProfile = {
+  id: USER_ID,
+  full_name: 'طالب تجريبي',
+  role: 'student',
+  group_id: 'g-1',
+  timezone: null,
+  is_active: true,
+  is_tracked: true,
+};
