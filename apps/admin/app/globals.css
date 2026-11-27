@@ -91,7 +91,7 @@ body {
   font-family: var(--font-ui);
 }
 
-/* Sheet (drawer) motion. */
+/* Sheet (drawer) and Dialog motion. */
 @keyframes sheet-in {
   from { translate: -100% 0; }
 }
@@ -99,5 +99,15 @@ body {
   from { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-sheet] { animation: none !important; }
+  [data-sheet], [data-dialog] { animation: none !important; }
+}
+
+/* Calendar «غير مُنجَز» day (DESIGN.md §7 rule 2): diagonal hatch in status/done-hatch, the same
+   geometry as the mobile CalendarCell (1.25px lines every 8px). */
+.cal-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--status-done-hatch) 0 1.25px,
+    transparent 1.25px 8px
+  );
 }

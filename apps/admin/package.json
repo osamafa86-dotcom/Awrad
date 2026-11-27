@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@awrad/design-tokens": "workspace:*",
+    "@awrad/domain": "workspace:*",
     "@awrad/supabase-client": "workspace:*",
+    "@tanstack/react-table": "9.3.1",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.81.0",
@@ -22,7 +24,8 @@
     "radix-ui": "1.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "tailwind-merge": "3.7.1"
+    "tailwind-merge": "3.7.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@awrad/config": "workspace:*",

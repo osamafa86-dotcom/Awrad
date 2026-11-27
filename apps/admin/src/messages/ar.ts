@@ -1,6 +1,26 @@
 // كل نصوص واجهة لوحة الشيخ والمشرف. لا نصّ عربيّ داخل المكوّنات.
 // نصوص الدخول منقولة حرفيًا من تطبيق الطالب (apps/mobile/src/messages/ar.ts) ليتطابق التطبيقان.
 
+/** Keeps a number-with-symbol run (`10/13`, `91%`) in reading order inside Arabic text (DESIGN.md §7 rule 4). */
+function isolate(text: string): string {
+  return `\u2066${text}\u2069`;
+}
+
+const gregorianMonths = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
+] as const;
+
 export const ar = {
   app: {
     name: 'أوراد',
@@ -49,6 +69,131 @@ export const ar = {
       SEND_FAILED: 'تعذّر إرسال الرمز. تحقّق من اتصالك وحاول مرة أخرى.',
       INVALID_CODE: 'الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.',
       VERIFY_FAILED: 'تعذّر التحقّق من الرمز. تحقّق من اتصالك وحاول مرة أخرى.',
+    },
+  },
+  dates: {
+    gregorianMonths,
+    weekdays: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    /** One-letter weekday names indexed 0 = Sunday (as the mobile calendar). */
+    weekdayShort: ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'],
+    /** «26 نوفمبر 2026» */
+    gregorian: (y: number, m: number, d: number) => `${d} ${gregorianMonths[m - 1] ?? ''} ${y}`,
+    /** «نوفمبر 2026» */
+    monthYear: (y: number, m: number) => `${gregorianMonths[m - 1] ?? ''} ${y}`,
+  },
+  students: {
+    title: 'الطلاب',
+    invite: 'دعوة طالب',
+    searchLabel: 'ابحث بالاسم',
+    searchPlaceholder: 'ابحث بالاسم',
+    groupFilter: 'المجموعة',
+    statusFilter: 'الحالة',
+    allGroups: 'كل المجموعات',
+    allStatuses: 'كل الحالات',
+    noGroup: 'بلا مجموعة',
+    status: { active: 'نشط', inactive: 'معطَّل' },
+    roles: { student: 'طالب', supervisor: 'مشرف', admin: 'مدير' },
+    columns: { name: 'الاسم', group: 'المجموعة', status: 'الحالة', joinedAt: 'تاريخ الانضمام', tracked: 'مُتابَع' },
+    tracked: { yes: 'نعم', no: 'لا' },
+    /** Rows shown after the filters out of all loaded, as a bidi-isolated counter. */
+    count: (shown: number, total: number) => `المعروض: ${isolate(`${shown}/${total}`)}`,
+    empty: { title: 'لا طلاب بعد', body: 'يظهر هنا من تدعوهم إلى البرنامج.' },
+    emptyFiltered: 'لا أحد بهذا الاسم.',
+    emptyForFilters: 'لا أحد يطابق هذه التصفية.',
+    loadFailed: 'تعذّر تحميل القائمة. تحقّق من الاتصال وأعد تحميل الصفحة.',
+    inviteForm: {
+      title: 'دعوة طالب',
+      subtitle: 'ينشئ حساب الطالب ويرسل إليه بريدًا بخطوات الدخول.',
+      fullName: 'الاسم الكامل',
+      email: 'البريد الإلكتروني',
+      emailPlaceholder: 'name@example.com',
+      group: 'المجموعة',
+      groupPlaceholder: 'اختر المجموعة',
+      joinedAt: 'تاريخ الانضمام إلى البرنامج',
+      joinedAtHint: 'افتراضيًا اليوم؛ تبدأ منه السلاسل والنسب.',
+      tracked: 'مُتابَع (يسجّل أوراده ويظهر في المتابعة)',
+      cancel: 'إلغاء',
+      submit: 'أرسل الدعوة',
+      submitting: 'جارٍ الإرسال…',
+      noGroups: 'أنشئ مجموعة أولًا من الإعدادات.',
+    },
+    detail: {
+      back: 'الطلاب',
+      group: 'المجموعة',
+      joinedAt: 'انضمّ',
+      role: 'الدور',
+      summaryTitle: 'الملخّص',
+      stats: {
+        daysLogged: 'أيام مسجَّلة',
+        completion: 'نسبة الإنجاز',
+        attendance: 'نسبة الحضور',
+        longestStreak: 'أطول سلسلة',
+        currentStreak: 'السلسلة الحالية',
+      },
+      summaryFailed: 'تعذّر تحميل الملخّص.',
+      calendarTitle: 'هذا الشهر',
+      calendarFailed: 'تعذّر تحميل التقويم.',
+      state: {
+        achieved: 'مُنجَز',
+        failed: 'غير مُنجَز',
+        neutral: 'بلا تكليف',
+        missing: 'غير مسجَّل',
+        future: 'لم يأتِ بعد',
+      },
+      /** «26 نوفمبر: مُنجَز» */
+      cellLabel: (day: string, state: string) => `${day}: ${state}`,
+      todaySuffix: (state: string) => `${state}، اليوم`,
+      logsTitle: 'آخر السجلّات',
+      logsEmpty: 'لم يسجّل بعد.',
+      logsFailed: 'تعذّر تحميل السجلّات.',
+      logColumns: { date: 'التاريخ', kind: 'النوع', state: 'الحالة', text: 'الملاحظة أو المراجعة', support: 'دعم' },
+      period: { daily: 'يومي', weekly: 'أسبوعي' },
+      weeklyLogged: 'مسجَّل',
+      supportFlag: { none: '', open: 'طلب دعم مفتوح', handled: 'طلب دعم معالَج' },
+      attendanceTitle: 'الحضور',
+      attendanceEmpty: 'لا مجالس مسجَّلة له بعد.',
+      attendanceFailed: 'تعذّر تحميل الحضور.',
+      attendanceColumns: { date: 'التاريخ', title: 'المجلس', status: 'الحالة' },
+      attendanceStatus: { present: 'حاضر', absent: 'غائب', excused: 'معذور' },
+      untitledSession: 'مجلس',
+      pct: (n: number) => isolate(`${n}%`),
+      none: '—',
+      notFound: 'هذا الحساب غير موجود أو لا تملك صلاحية عرضه.',
+    },
+    edit: {
+      title: 'تعديل البيانات',
+      fullName: 'الاسم الكامل',
+      group: 'المجموعة',
+      joinedAt: 'تاريخ الانضمام',
+      tracked: 'مُتابَع',
+      save: 'حفظ التغييرات',
+      saving: 'جارٍ الحفظ…',
+      saved: 'حُفظت التغييرات.',
+      deactivate: 'تعطيل الحساب',
+      activate: 'تفعيل الحساب',
+      dangerTitle: 'حذف الحساب',
+      dangerBody: 'يحذف الحساب وكل سجلّاته وحضوره نهائيًا، ولا يمكن التراجع.',
+      delete: 'حذف الحساب نهائيًا',
+      confirmTitle: 'حذف الحساب نهائيًا؟',
+      confirmBody: (name: string) => `سيُحذف حساب «${name}» وكل سجلّاته وحضوره، ولا يمكن استرجاعها.`,
+      confirm: 'احذف نهائيًا',
+      deleting: 'جارٍ الحذف…',
+      cancel: 'إلغاء',
+    },
+    /** Display text for each code a students Server Action returns. */
+    errors: {
+      FORBIDDEN: 'هذا الإجراء للمدير وحده.',
+      EMAIL_EXISTS: 'هذا البريد مسجَّل لحساب آخر.',
+      INVALID_INPUT: 'راجع الحقول المعلَّمة.',
+      INVITE_FAILED: 'تعذّرت الدعوة. تحقّق من الاتصال وحاول مرة أخرى.',
+      SAVE_FAILED: 'تعذّر حفظ التغييرات. حاول مرة أخرى.',
+      DELETE_FAILED: 'تعذّر حذف الحساب. حاول مرة أخرى.',
+    },
+    fieldErrors: {
+      email: 'اكتب بريدًا إلكترونيًا صحيحًا.',
+      full_name: 'اكتب الاسم.',
+      group_id: 'اختر مجموعة.',
+      joined_at: 'اختر تاريخًا لا يتجاوز اليوم.',
     },
   },
   unauthorized: {

@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** DESIGN.md §6 Button: primary · primary-disabled · secondary · quiet, sizes md (44) and lg (52). */
+/** DESIGN.md §6 Button: primary · primary-disabled · secondary · quiet · danger, sizes md (44) and lg (52). */
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-8 rounded-md border px-20 py-8 t-label-md transition-colors ' +
     'outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 ' +
@@ -17,6 +17,7 @@ const buttonVariants = cva(
           'disabled:border-sunken disabled:bg-sunken disabled:text-fg-tertiary',
         secondary: 'border-line-input bg-surface text-link hover:bg-action-tint disabled:opacity-50',
         quiet: 'border-transparent bg-transparent text-link hover:bg-action-tint disabled:opacity-50',
+        danger: 'border-status-notdone bg-status-notdone text-on-primary hover:opacity-90 disabled:opacity-50',
       },
       size: {
         md: 'min-h-44',

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { ar } from '../src/messages/ar';
 
-import { serviceClient } from './seed';
+import { signIn } from './helpers';
 import { TEST_USERS } from './users';
 
 const SECTIONS = ['نظرة عامة', 'الطلاب', 'الحضور', 'طلبات الدعم', 'العادات', 'التقارير', 'الإعدادات'];
@@ -67,33 +67,6 @@ test.describe('signed out', () => {
 });
 
 // ───────────── Tier (b): signed in — needs a Supabase stack ─────────────
-
-/** Latest one-time code for `email`, minted with the service role (no inbox needed). */
-async function oneTimeCode(email: string): Promise<string> {
-  const db = serviceClient();
-  if (!db) throw new Error('needs a Supabase stack');
-  // Fallback when generateLink is unavailable: read the last mail from Mailpit,
-  // GET http://127.0.0.1:54324/api/v1/messages, and take the 6-digit code from its body.
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    // why: GoTrue may refuse a new code within `max_frequency` (1s) of the one the form just sent.
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const { data, error } = await db.auth.admin.generateLink({ type: 'magiclink', email });
-    if (!error && data.properties.email_otp) return data.properties.email_otp;
-    lastError = error;
-  }
-  throw lastError ?? new Error(`no one-time code for ${email}`);
-}
-
-async function signIn(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('البريد الإلكتروني').fill(email);
-  await page.getByRole('button', { name: 'أرسل رمز الدخول' }).click();
-  await expect(page).toHaveURL(/\/verify\?/);
-  const code = await oneTimeCode(email);
-  await page.getByLabel('رمز الدخول المكوّن من 6 أرقام').fill(code);
-  await page.getByRole('button', { name: 'تأكيد الرمز' }).click();
-}
 
 /** On the phone the sidebar lives in a drawer: it is hidden until the header button opens it. */
 async function openSidebar(page: Page) {

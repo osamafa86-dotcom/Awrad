@@ -79,13 +79,33 @@ pnpm --filter admin e2e         # Playwright: يبني ثم يشغّل next star
 
 تشغيل الطبقة (ب) محليًا (يحتاج Docker):
 ```bash
-supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+supabase start -x studio,imgproxy,logflare,vector,realtime,storage-api,postgres-meta,supavisor
 eval "$(supabase status -o env)"      # API_URL و ANON_KEY و SERVICE_ROLE_KEY
 NEXT_PUBLIC_SUPABASE_URL=$API_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY \
 E2E_SUPABASE_URL=$API_URL E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY pnpm --filter admin e2e
 ```
 `E2E_SKIP_BUILD=1` يعيد استخدام بناء `.next` الموجود. إن لم يتوفّر متصفح Playwright فاضبط
 `PW_CHROMIUM_EXECUTABLE` على مسار Chromium مثبَّت. في CI تشغّل المهمّة `admin-e2e` الطبقتين معًا.
+`e2e/helpers.ts` يجمع `signIn()` و`oneTimeCode()` لكل الملفات؛ `e2e/students.spec.ts` يدعو حسابًا ببريد فريد
+(`new-<وقت>-<مشروع>@test.example`) ويحذفه بمفتاح الخدمة في النهاية فتبقى البذرة كما هي.
+
+### دعوة طالب (F-01) ودالة `invite-user`
+مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)
+← `supabase.functions.invoke('invite-user')` بعميل الكوكيز فيصل JWT المدير ← الدالة تتحقّق من `is_admin()` بعميل
+المستخدم، ثم بمفتاح الخدمة: تُدرج `invitations` ← `auth.admin.createUser({ email_confirm: true })` (مُشغِّل
+`handle_new_user` يبني الملف من الدعوة) ← `signInWithOtp` يرسل رمز الدخول بريدًا ترحيبيًا (محليًا في Mailpit؛ إن فشل
+تبقى الإجابة 200 مع `welcome_sent: false`). الأخطاء `403 FORBIDDEN` و`409 EMAIL_EXISTS` و`400 INVALID_INPUT`
+و`500 INVITE_FAILED`، وتُترجم في `src/messages/ar.ts`. الحذف النهائي ليس دالة Edge بل RPC `admin_delete_user` (ترحيل 0008).
+
+بنية `supabase/functions`:
+- `invite-user/index.ts` و`_shared/auth.ts`: مدخل Deno 2 لا يعمل إلا داخل Supabase Edge Runtime (`supabase start` بلا
+  `-x edge-runtime`، أو `supabase functions serve`)؛ يقرأ `SUPABASE_URL` و`SUPABASE_ANON_KEY` و`SUPABASE_SERVICE_ROLE_KEY`
+  التي يحقنها المشغّل. `deno.json` يربط `@supabase/supabase-js` بـ `npm:`. مستثناة من `tsc` وeslint في `@awrad/db`.
+- `invite-user/handler.ts`: المنطق كله، وحدة نقية بلا استيرادات، تُختبر في Node:
+```bash
+pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # handler.test.ts بتبعيات وهمية
+pnpm --filter @awrad/db test     # اختبارات قاعدة البيانات ثم اختبارات الدوال
+```
 
 ## قبل النشر (Task 5.1)
 - [ ] استبدل `extra.eas.projectId` في `apps/mobile/app.json` (القيمة المؤقتة `REPLACE_WITH_EAS_PROJECT_ID`) بمعرّف مشروع EAS؛ وإلا يعرض التطبيق «الإشعارات غير متاحة في هذا الإصدار».
