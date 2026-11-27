@@ -236,6 +236,69 @@ export const ar = {
       joined_at: 'اختر تاريخًا لا يتجاوز اليوم.',
     },
   },
+  attendance: {
+    title: 'الحضور',
+    newSession: 'مجلس جديد',
+    /** A session without a title. */
+    untitled: 'بلا عنوان',
+    /** A shared session (group_id null). */
+    allGroups: 'كل المجموعات',
+    /** A list row's marked out of listed, the counter bidi-isolated with no spaces (DESIGN.md §7 rule 4). */
+    markedLabel: (marked: number, total: number) => `المسجَّل ${isolate(`${marked}/${total}`)}`,
+    empty: { title: 'لا مجالس بعد', body: 'أنشئ مجلسًا بعد كل درس لتسجيل حضوره.' },
+    loadFailed: 'تعذّر تحميل المجالس. تحقّق من الاتصال وأعد تحميل الصفحة.',
+    form: {
+      title: 'مجلس جديد',
+      subtitle: 'اختر التاريخ والمجموعة، ثم سجّل الحضور في الصفحة التالية.',
+      date: 'التاريخ',
+      sessionTitle: 'العنوان (اختياري)',
+      titlePlaceholder: 'مثال: درس الفقه',
+      group: 'المجموعة',
+      groupPlaceholder: 'اختر المجموعة',
+      cancel: 'إلغاء',
+      submit: 'إنشاء المجلس',
+      submitting: 'جارٍ الإنشاء…',
+    },
+    fieldErrors: {
+      group_id: 'اختر المجموعة.',
+      session_date: 'اختر تاريخًا صحيحًا.',
+      title: 'العنوان طويل؛ اختصره إلى 200 حرف.',
+    },
+    detail: {
+      back: 'الحضور',
+      date: 'التاريخ',
+      group: 'المجموعة',
+      notFound: 'هذا المجلس غير موجود أو لا تملك صلاحية عرضه.',
+      noSections: 'لا أحد مُتابَع في هذا المجلس ضمن مجموعاتك.',
+      noMembers: 'لا أحد مُتابَع في هذه المجموعة.',
+    },
+    /** AttendanceSegment's four states (DESIGN.md §6). */
+    status: { unmarked: 'لم يُسجَّل', present: 'حاضر', absent: 'غائب', excused: 'معذور' },
+    allPresent: 'الكل حاضر',
+    save: 'حفظ',
+    saving: 'جارٍ الحفظ…',
+    saved: 'حُفظ الحضور.',
+    /** «المسجَّل 3/4 · حاضر 2 · غائب 1 · معذور 0» under the grid. */
+    counts: (c: { marked: number; total: number; present: number; absent: number; excused: number }) =>
+      `المسجَّل ${isolate(`${c.marked}/${c.total}`)} · حاضر ${c.present} · غائب ${c.absent} · معذور ${c.excused}`,
+    /** «آخر حفظ: 27 نوفمبر 2026، 13:05» */
+    lastSaved: (date: string, time: string) => `آخر حفظ: ${date}، ${isolate(time)}`,
+    deleteSession: 'حذف المجلس',
+    confirmTitle: 'حذف المجلس؟',
+    confirmBody: 'يُحذف المجلس وكل ما سُجّل فيه من حضور، ولا يمكن التراجع.',
+    confirm: 'احذف المجلس',
+    deleting: 'جارٍ الحذف…',
+    cancel: 'إلغاء',
+    /** Display text for each code an attendance Server Action returns. */
+    errors: {
+      FORBIDDEN: 'لا تملك صلاحية هذا الإجراء على هذا المجلس.',
+      INVALID_INPUT: 'راجع الحقول المعلَّمة.',
+      INVALID_ITEM: 'في القائمة من لا يُسجَّل حضوره في هذا المجلس. أعد تحميل الصفحة وحاول مرة أخرى.',
+      CREATE_FAILED: 'تعذّر إنشاء المجلس. حاول مرة أخرى.',
+      SAVE_FAILED: 'تعذّر حفظ الحضور. تحقّق من الاتصال وحاول مرة أخرى.',
+      DELETE_FAILED: 'تعذّر حذف المجلس. حاول مرة أخرى.',
+    },
+  },
   unauthorized: {
     /** a30: a student (or an account without a profile) opened the dashboard. */
     staffOnlyTitle: 'هذه اللوحة للمشرفين',

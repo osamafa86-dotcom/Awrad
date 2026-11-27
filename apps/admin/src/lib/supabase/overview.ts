@@ -34,7 +34,7 @@ export interface Overview {
 }
 
 /** Every group the viewer may see: all of them for an admin, the supervised ones for a supervisor. */
-async function viewerGroups(client: TypedClient, viewer: { id: string; role: Role }): Promise<OverviewGroup[]> {
+export async function viewerGroups(client: TypedClient, viewer: { id: string; role: Role }): Promise<OverviewGroup[]> {
   const { data, error } = await client.from('groups').select('id, name, timezone, week_starts_on').order('name');
   if (error) throw error;
   const groups = data.map((g) => ({ id: g.id, name: g.name, timezone: g.timezone, weekStartsOn: g.week_starts_on }));

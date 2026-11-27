@@ -36,7 +36,7 @@ export async function signIn(page: Page, email: string) {
 }
 
 /** The staff accounts the setup project signs in once per run (auth.setup.ts). */
-export type SavedRole = 'admin' | 'sup1';
+export type SavedRole = 'admin' | 'sup1' | 'sup2';
 
 /**
  * Where the setup project saves a role's signed-in browser state (git-ignored). Specs load it with

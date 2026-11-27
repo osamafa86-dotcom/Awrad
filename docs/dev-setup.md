@@ -74,8 +74,10 @@ pnpm --filter admin e2e         # Playwright: يبني ثم يشغّل next star
 - **(أ) بلا تسجيل دخول — تعمل في أي مكان.** إن لم تُضبط `NEXT_PUBLIC_*` يبني الاختبار على `http://127.0.0.1:54321`
   بمفتاح وهمي؛ لا شيء يستمع هناك فيُعامَل كل طلب كغير مسجَّل. تتحقّق من التحويل إلى `/login` وRTL وحقل البريد LTR والخطّين والوضع الداكن.
 - **(ب) بتسجيل دخول — تحتاج حزمة Supabase.** تُتخطّى ما لم تُضبط `E2E_SUPABASE_URL` و`E2E_SERVICE_ROLE_KEY`.
-  `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعتَي اختبار ودعوات وحسابات `admin@`/`sup1@`/`p1@`/`p3@test.example`
-  (مُشغِّل `handle_new_user` يبني الملفات)، والدخول عبر الواجهة برمز يولّده `auth.admin.generateLink`.
+  `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعتَي اختبار ودعوات وحسابات (مُشغِّل `handle_new_user` يبني الملفات):
+  `admin@` (مدير بلا مجموعة، غير مُتابَع)، و`sup1@`/`p1@`/`p3@test.example` في «مجموعة اختبار اللوحة» و`sup1` مشرفها،
+  و`sup2@`/`p2@test.example` في «مجموعة اختبار أخرى» و`sup2` مشرفها (كل المشرفين والطلاب مُتابَعون)؛
+  والدخول عبر الواجهة برمز يولّده `auth.admin.generateLink`.
   ثم يحفظ سجلّات يومية معلومة لـ `p1` و`p3` عبر `save_log` بجلسة المدير (`generateLink` ثم `verifyOtp` بالمفتاح العام
   `E2E_SUPABASE_ANON_KEY`)، بتواريخ نسبية إلى اليوم بمنطقة `Asia/Riyadh`؛ فحزمة تبقى أيامًا تحتفظ بسجلّات الأيام السابقة أيضًا.
 
@@ -89,12 +91,13 @@ pnpm --filter admin e2e
 ```
 `E2E_SKIP_BUILD=1` يعيد استخدام بناء `.next` الموجود. إن لم يتوفّر متصفح Playwright فاضبط
 `PW_CHROMIUM_EXECUTABLE` على مسار Chromium مثبَّت. في CI تشغّل المهمّة `admin-e2e` الطبقتين معًا.
-مشروع Playwright المسمّى `setup` (`e2e/auth.setup.ts`) يسبق `desktop` و`mobile`: يسجّل دخول `admin@` و`sup1@` مرة واحدة
-عبر الواجهة ويحفظ الجلستين في `e2e/.auth/admin.json` و`e2e/.auth/sup1.json` (خارج git)، فتحمّلهما ملفات الطبقة (ب)
+مشروع Playwright المسمّى `setup` (`e2e/auth.setup.ts`) يسبق `desktop` و`mobile`: يسجّل دخول `admin@` و`sup1@` و`sup2@` مرة واحدة
+عبر الواجهة ويحفظ الجلسات في `e2e/.auth/admin.json` و`e2e/.auth/sup1.json` و`e2e/.auth/sup2.json` (خارج git)، فتحمّلهما ملفات الطبقة (ب)
 بـ `test.use({ storageState: authFile('admin') })` بدل تسجيل دخول في كل اختبار؛ `auth.spec.ts` وحده يسجّل الدخول بنفسه
 لأن التدفق هو ما يختبره. بلا حزمة Supabase يُتخطّى المشروع ولا يحفظ شيئًا.
 `e2e/helpers.ts` يجمع `signIn()` و`oneTimeCode()` و`authFile()` لكل الملفات؛ `e2e/students.spec.ts` يدعو حسابًا ببريد فريد
-(`new-<وقت>-<مشروع>@test.example`) ويحذفه بمفتاح الخدمة في النهاية فتبقى البذرة كما هي.
+(`new-<وقت>-<مشروع>@test.example`) ويحذفه بمفتاح الخدمة في النهاية فتبقى البذرة كما هي، و`e2e/attendance.spec.ts`
+ينشئ مجالس عناوينها تبدأ بـ `e2e-مجلس` ويحذفها بمفتاح الخدمة قبل الملف وبعده.
 
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)

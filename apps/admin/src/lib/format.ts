@@ -38,3 +38,10 @@ export function formatHijriSpan(start: string, end: string, adjustmentDays = 0):
   if (a.year !== b.year) return `${a.monthName} ${a.year} – ${b.monthName} ${b.year}`;
   return `${a.month === b.month ? a.monthName : `${a.monthName} – ${b.monthName}`} ${b.year}`;
 }
+
+/** «13:05» (24-hour, Western digits) for an ISO timestamp, as the clock reads in `timeZone`. */
+export function formatClock(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(
+    new Date(iso),
+  );
+}

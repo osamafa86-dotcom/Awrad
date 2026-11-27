@@ -125,8 +125,10 @@ export default async function seed(): Promise<void> {
   const db = serviceClient();
   if (!db) return;
 
-  const groupId = await ensureGroup(db, TEST_GROUP_NAME);
-  await ensureGroup(db, OTHER_GROUP_NAME);
+  const groupIds = {
+    test: await ensureGroup(db, TEST_GROUP_NAME),
+    other: await ensureGroup(db, OTHER_GROUP_NAME),
+  };
   // A month before today, so the seeded logs fall after joining (streaks count from joined_at).
   const joinedAt = addDays(todayIn(TEST_TIMEZONE), -30);
   const ids = new Map<string, string>();
@@ -138,7 +140,7 @@ export default async function seed(): Promise<void> {
     const profile = {
       full_name: user.fullName,
       role: user.role,
-      group_id: user.inGroup ? groupId : null,
+      group_id: user.group ? groupIds[user.group] : null,
       is_tracked: user.isTracked,
       joined_at: joinedAt,
     };
@@ -157,11 +159,14 @@ export default async function seed(): Promise<void> {
 
     ids.set(key, userId);
     check(await db.from('profiles').update({ ...profile, is_active: true }).eq('id', userId));
-    if (user.role === 'supervisor') {
+    if (user.role === 'supervisor' && user.group) {
       check(
         await db
           .from('group_supervisors')
-          .upsert({ group_id: groupId, user_id: userId }, { onConflict: 'group_id,user_id', ignoreDuplicates: true }),
+          .upsert(
+            { group_id: groupIds[user.group], user_id: userId },
+            { onConflict: 'group_id,user_id', ignoreDuplicates: true },
+          ),
       );
     }
   }

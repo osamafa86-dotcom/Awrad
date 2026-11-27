@@ -8,7 +8,7 @@ import { TEST_USERS } from './users';
 // sign-ins: the flow is what it tests. Without a Supabase stack this project skips and saves nothing.
 setup.skip(!hasStack, 'needs a Supabase stack');
 
-for (const role of ['admin', 'sup1'] as const satisfies readonly SavedRole[]) {
+for (const role of ['admin', 'sup1', 'sup2'] as const satisfies readonly SavedRole[]) {
   setup(`sign in as ${role}`, async ({ page }) => {
     await signIn(page, TEST_USERS[role].email);
     await expect(page).toHaveURL(/127\.0\.0\.1:\d+\/$/);
