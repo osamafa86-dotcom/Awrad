@@ -6,7 +6,7 @@
 # Accounts: a pending `invitations` row, then GoTrue's POST /admin/users with the service-role key
 # (email_confirm) — the handle_new_user trigger builds the profile from the invitation. Logs only through
 # save_log, as the admin (set local role authenticated + request.jwt.claims, as supabase/tests do).
-# Prints counts and the demo e-mail addresses only; the service-role key never reaches the output or argv.
+# Prints counts and the demo e-mail addresses only; the service-role key never reaches the output or any argv.
 set -euo pipefail
 DIR=$(cd "$(dirname "$0")" && pwd)
 ENV_FILE=${AWRAD_ENV_FILE:?set AWRAD_ENV_FILE}
@@ -16,11 +16,30 @@ dc() { docker compose -p awrad --env-file "$ENV_FILE" -f "$DIR/docker-compose.ym
 # SQL from stdin, psql variables from -v; inside the db container over TCP (its PGPASSWORD).
 q() { dc exec -T db psql -X -q -tA -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres "$@"; }
 
-SERVICE_ROLE_KEY=$(sed -n 's/^SERVICE_ROLE_KEY=//p' "$ENV_FILE")
-[ -n "$SERVICE_ROLE_KEY" ] || { echo "seed: SERVICE_ROLE_KEY missing in $ENV_FILE"; exit 1; }
-export SERVICE_ROLE_KEY
-AUTH_CID=$(dc ps -q auth)
-[ -n "$AUTH_CID" ] || { echo "seed: the auth container is not running"; exit 1; }
+grep -q '^SERVICE_ROLE_KEY=.' "$ENV_FILE" || { echo "seed: SERVICE_ROLE_KEY missing in $ENV_FILE"; exit 1; }
+AUTH_CID=$(dc ps -q awrad-auth)
+[ -n "$AUTH_CID" ] || { echo "seed: the awrad-auth container is not running"; exit 1; }
+# GoTrue is reached from the host at its address on the project network (no published port). The POST is made
+# by python, which reads the service-role key from the env file itself: the key is in no process's argv.
+AUTH_IP=$(docker inspect -f '{{with index .NetworkSettings.Networks "awrad_default"}}{{.IPAddress}}{{end}}' "$AUTH_CID")
+[ -n "$AUTH_IP" ] || { echo "seed: no address for awrad-auth on awrad_default"; exit 1; }
+admin_create_user() {  # admin_create_user <email> <full name>
+  EMAIL=$1 NAME=$2 python3 - "$ENV_FILE" "http://$AUTH_IP:9999/admin/users" <<'PY2'
+import json, os, sys, urllib.error, urllib.request
+key = next(l.split("=", 1)[1].strip() for l in open(sys.argv[1]) if l.startswith("SERVICE_ROLE_KEY="))
+body = json.dumps({"email": os.environ["EMAIL"], "email_confirm": True,
+                   "user_metadata": {"full_name": os.environ["NAME"]}}, ensure_ascii=False).encode()
+req = urllib.request.Request(sys.argv[2], data=body, method="POST",
+                             headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # a container address: never via a proxy
+try:
+    opener.open(req, timeout=30).read()
+except urllib.error.HTTPError as e:
+    sys.exit("seed: POST /admin/users -> %d %s" % (e.code, e.read()[:200].decode("utf-8", "replace")))
+except OSError as e:
+    sys.exit("seed: POST /admin/users -> %s" % e)
+PY2
+}
 
 # 1) The demo group (spec defaults: Asia/Riyadh, week starts on Sunday).
 GROUP_ID=$(q -v name="$GROUP_NAME" <<'SQL'
@@ -45,10 +64,7 @@ select lower(:'email'), :'name', :'role'::user_role, nullif(:'gid', '')::uuid, :
        (now() at time zone 'Asia/Riyadh')::date - 14
 where not exists (select 1 from invitations where lower(email) = lower(:'email') and accepted_at is null);
 SQL
-    EMAIL=$email NAME=$name python3 -c 'import json,os; print(json.dumps({"email": os.environ["EMAIL"], "email_confirm": True, "user_metadata": {"full_name": os.environ["NAME"]}}, ensure_ascii=False))' \
-      | docker exec -i -e SERVICE_ROLE_KEY "$AUTH_CID" sh -c \
-          'wget -q -O /dev/null --header "Authorization: Bearer $SERVICE_ROLE_KEY" --header "Content-Type: application/json" --post-data "$(cat)" http://localhost:9999/admin/users' \
-      || { echo "seed: POST /admin/users failed for $email"; return 1; }
+    admin_create_user "$email" "$name" || { echo "seed: POST /admin/users failed for $email"; return 1; }
     id=$(q -v email="$email" <<<"select id from auth.users where lower(email) = lower(:'email');")
     [ -n "$id" ] || { echo "seed: $email not in auth.users after POST /admin/users"; return 1; }
     created=$((created + 1))

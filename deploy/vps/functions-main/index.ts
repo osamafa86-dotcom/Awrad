@@ -8,6 +8,8 @@ const FUNCTIONS = '/home/deno/functions';
 const JWT_SECRET = Deno.env.get('JWT_SECRET') ?? '';
 const VERIFY_JWT = Deno.env.get('VERIFY_JWT') !== 'false';
 const SECRET = new TextEncoder().encode(JWT_SECRET);
+// What the functions read (supabase/functions/_shared/auth.ts).
+const WORKER_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -48,12 +50,16 @@ Deno.serve(async (req: Request) => {
   }
 
   const importMap = `${servicePath}/deno.json`;
-  const env = Deno.env.toObject();
+  // Workers get an allow-list, not the router's whole environment (JWT_SECRET stays here).
+  const envVars = WORKER_ENV.flatMap((key): [string, string][] => {
+    const value = Deno.env.get(key);
+    return value === undefined ? [] : [[key, value]];
+  });
   try {
     const worker = await EdgeRuntime.userWorkers.create({
       servicePath,
       importMapPath: (await exists(importMap)) ? importMap : null,
-      envVars: Object.entries(env),
+      envVars,
       memoryLimitMb: 150,
       workerTimeoutMs: 300000,
       cpuTimeSoftLimitMs: 10000,

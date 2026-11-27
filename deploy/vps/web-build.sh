@@ -17,6 +17,8 @@ if grep -rlw "fakeSupabase\|__preview" apps/mobile/dist/ >/dev/null; then echo "
 
 id=$(date -u +%Y%m%d%H%M%S)
 mkdir -p /out/releases
+# Leftovers of an interrupted copy are never live: remove them.
+find /out/releases -mindepth 1 -maxdepth 1 -type d -name '*.tmp' -exec rm -rf {} +
 rm -rf "/out/releases/$id.tmp"
 cp -a apps/mobile/dist "/out/releases/$id.tmp"
 chmod -R a+rX "/out/releases/$id.tmp"

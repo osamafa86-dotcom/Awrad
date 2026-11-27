@@ -22,6 +22,9 @@ RUN --mount=type=cache,id=awrad-pnpm,target=/pnpm/store pnpm install --frozen-lo
 FROM workspace AS build
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+# The host is shared with other sites and BuildKit ignores compose memory limits: cap the Node heap here.
+ARG BUILD_HEAP_MB=1536
+ENV NODE_OPTIONS=--max-old-space-size=${BUILD_HEAP_MB}
 RUN test -n "$NEXT_PUBLIC_SUPABASE_URL" && test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
     && pnpm --filter admin exec next build \
     && test -f apps/admin/.next/standalone/apps/admin/server.js \
