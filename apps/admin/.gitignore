@@ -8,3 +8,5 @@ playwright-report/
 test-results/
 # Signed-in sessions the setup project saves (e2e/auth.setup.ts)
 e2e/.auth/
+# Admin manual screenshots (e2e/docs-screenshots.spec.ts, uploaded by docs-screenshots.yml)
+e2e/docs-out/

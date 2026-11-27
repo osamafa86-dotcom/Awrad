@@ -1,0 +1,62 @@
+name: Docs screenshots
+
+# Ruling DOC-1: the admin manual's screenshots (docs/admin-manual.md). Same stack as ci.yml's admin-e2e job
+# (local Supabase with the seed, the admin built against it); runs only the Playwright `docs` project (and
+# the `setup` project it depends on) and uploads apps/admin/e2e/docs-out as the `docs-screenshots` artifact.
+# Copy the PNGs into docs/images/admin/ by hand. Run it from the Actions tab or
+# `gh workflow run docs-screenshots.yml --ref <branch>`.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.4.0
+      - name: Start Supabase (db, auth, rest, kong, mailpit, edge functions)
+        run: supabase start -x studio,imgproxy,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+      - name: Export Supabase settings
+        run: |
+          eval "$(supabase status -o env)"
+          test -n "$API_URL" && test -n "$ANON_KEY" && test -n "$SERVICE_ROLE_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "E2E_SUPABASE_ANON_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/admin
+      - name: Take the screenshots (builds with the stack's URL and key, then next start)
+        env:
+          DOCS_SCREENSHOTS: '1'
+        run: pnpm --filter admin exec playwright test --project=docs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docs-screenshots
+          path: apps/admin/e2e/docs-out/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: docs-playwright-report
+          path: apps/admin/playwright-report/
+          if-no-files-found: ignore

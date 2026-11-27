@@ -8,6 +8,7 @@ import { defineConfig } from '@playwright/test';
 const PORT = 3100;
 const start = `pnpm exec next start -p ${PORT}`;
 const command = process.env.E2E_SKIP_BUILD === '1' ? start : `pnpm exec next build && ${start}`;
+const DOCS_SPEC = /docs-screenshots\.spec\.ts$/;
 const signedInTier = Boolean(process.env.E2E_SUPABASE_URL && process.env.E2E_SERVICE_ROLE_KEY);
 
 export default defineConfig({
@@ -32,8 +33,20 @@ export default defineConfig({
   projects: [
     // Signs admin, sup1 and sup2 in once and saves their sessions to e2e/.auth (Ruling E2E-2); skips without a stack.
     { name: 'setup', testMatch: /auth\.setup\.ts$/ },
-    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } }, dependencies: ['setup'] },
-    { name: 'mobile', use: { viewport: { width: 390, height: 844 } }, dependencies: ['setup'] },
+    {
+      name: 'desktop',
+      testIgnore: DOCS_SPEC,
+      use: { viewport: { width: 1440, height: 900 } },
+      dependencies: ['setup'],
+    },
+    { name: 'mobile', testIgnore: DOCS_SPEC, use: { viewport: { width: 390, height: 844 } }, dependencies: ['setup'] },
+    // Ruling DOC-1: the admin manual's screenshots (.github/workflows/docs-screenshots.yml), light, at 2x.
+    {
+      name: 'docs',
+      testMatch: DOCS_SPEC,
+      use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: 'light' },
+      dependencies: ['setup'],
+    },
   ],
   webServer: {
     command,
