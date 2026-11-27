@@ -107,7 +107,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # The version installed and tested in the dev container (see docs/dev-setup.md).
+          version: 3.4.0
       - name: Start Supabase (db, auth, rest, kong, mailpit)
         # Applies supabase/migrations and supabase/seed.sql; config in supabase/config.jsonc.
         run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
