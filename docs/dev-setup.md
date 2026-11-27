@@ -202,7 +202,7 @@ pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # 
 pnpm --filter @awrad/db test     # اختبارات قاعدة البيانات ثم اختبارات الدوال
 ```
 
-### التذكيرات (§12) — ترحيل 0013 ودالة `send-reminders`
+### التذكيرات (§12) — ترحيلا 0013 و0014 ودالة `send-reminders`
 `supabase/migrations/0013_reminders.sql`:
 - `reminder_log(user_id, kind daily|weekly, sent_for, sent_at)` فريد على `(user_id, kind, sent_for)`؛ `sent_for` اليوم المحلي
   (يومي) أو بداية الأسبوع (أسبوعي). RLS مفعّلة **بلا سياسات**: لا يراها المستخدم المسجَّل ولا يكتبها، و`service_role` وحده
@@ -216,9 +216,16 @@ pnpm --filter @awrad/db test     # اختبارات قاعدة البيانات 
   بعد حذف مهمّة بالاسم نفسه إن وُجدت، وترجع `true`. إن غاب `pg_cron` أو `pg_net` أو أحد الإعدادين: `notice` و`false`.
   الترحيل يستدعيها في آخره؛ **محليًا وفي CI لا يوجد pg_cron ولا pg_net**، فيطبع `db:reset` الـ notice ولا يجدول شيئًا.
 
+- **ترحيل 0014 (القرار REM-3)** يستبدل `due_reminders`: التذكيران مفتاحان مستقلّان. اليومي يُطفأ بـ `reminder_time` فارغ،
+  والأسبوعي بـ `weekly_reminder` وحده ويُرسَل في آخر يوم من أسبوع المجموعة عند ساعة
+  `coalesce(reminder_time, default_reminder_time)` — فمن أطفأ اليومي يبقى له الأسبوعي على الساعة الافتراضية. و«الآن» واحد
+  للساعة واليوم: `app.test_now` إن ضُبط (للاختبارات، كما في `local_today`) وإلا `p_now`.
+- **الدقائق مُهمَلة عمدًا:** المهمّة تعمل كل ساعة عند الدقيقة 0 وتطابق الساعة وحدها، فتذكير `21:30` يصل نحو `21:00`.
+- `reminder_log` يمنع إرسالًا ثانيًا **في الساعة نفسها** (إعادة محاولة أو استدعاء يدوي)؛ الساعة التالية تستبعدها مطابقة الساعة أصلًا.
+
 بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. الاختبارات:
 ```bash
-pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0013_reminders.test.ts
+pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0013_reminders.test.ts tests/0014_reminders_weekly_time.test.ts
 pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # send-reminders/handler.test.ts وinvite-user
 ```
 
@@ -226,8 +233,9 @@ pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # 
 `due_reminders`، `fetch` إلى Expo، حذف `push_tokens` بالرمز، `upsert` في `reminder_log` بـ `ignoreDuplicates`)؛ `handler.ts`
 المنطق النقي: 401 بلا `Bearer <CRON_SECRET>` صحيح (أو إن لم يُضبط)، رسالة لكل رمز على دفعات 100 إلى
 `https://exp.host/--/api/v2/push/send`، حذف الرموز التي تذكرتها `DeviceNotRegistered`، ثم صفّ `reminder_log` لكل تذكير
-مستحقّ **أيًّا كان ردّ Expo** (فلا يتكرّر في الساعة التالية)، والجواب `{ due, sent, failed, deletedTokens }` (والسجلّ أعداد
-فقط). النصوص العربية في `messages.ts` وحده. الدالة **بلا verify_jwt** (`supabase/config.jsonc` ← `functions.send-reminders`،
+مستحقّ **أيًّا كان ردّ Expo** (فلا يتكرّر في الساعة نفسها)، والجواب `{ due, sent, failed, deletedTokens, deleteFailures,
+logFailures }` (فشل الحذف أو كتابة السجلّ يُعدّ ويُطبع بـ `console.error` أعدادًا فقط، ولا يُرمى). التبعيات (عميل الخدمة) لا
+تُبنى إلا بعد مطابقة السرّ. النصوص العربية في `messages.ts` وحده. الدالة **بلا verify_jwt** (`supabase/config.jsonc` ← `functions.send-reminders`،
 وفي staging قائمة `NO_VERIFY_JWT` في `deploy/vps/functions-main/index.ts`) لأن المستدعي مهمّة cron لا مستخدم.
 
 تمكين الجدولة (Cloud في Task 5.1، وstaging في `deploy/vps/README.md`)، مرّة، بدور يملك قاعدة البيانات (`postgres` على Cloud،

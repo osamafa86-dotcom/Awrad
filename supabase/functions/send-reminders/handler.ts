@@ -42,6 +42,10 @@ export interface SendResult {
   /** Messages with an error ticket or in a batch that failed as a whole. */
   failed: number;
   deletedTokens: number;
+  /** 1 when deleting the DeviceNotRegistered tokens failed (they are retried on the next send), else 0. */
+  deleteFailures: number;
+  /** 1 when writing reminder_log failed, else 0. */
+  logFailures: number;
 }
 
 interface PushMessage {
@@ -93,12 +97,21 @@ async function push(fetch: FetchLike, batch: PushMessage[]): Promise<Ticket[] | 
 
 /**
  * Sends the reminders due at `now`: one push per token, 100 per Expo request; deletes the tokens Expo calls
- * DeviceNotRegistered; then logs every due reminder whatever Expo answered, so a failed hour is not resent.
- * Only `dueReminders` may throw (nothing to send without it); every later failure is counted, not thrown.
+ * DeviceNotRegistered; then logs every due reminder whatever Expo answered. reminder_log keeps a second run in
+ * the same hour (a retry, a manual call) from sending again; the next hour is excluded by due_reminders' hour
+ * match anyway. Only `dueReminders` may throw (nothing to send without it); every later failure is counted, and
+ * the delete/log failures are also reported with console.error (counts only), never thrown.
  */
 export async function handleSend(deps: SendDeps, now: Date): Promise<SendResult> {
   const due = await deps.dueReminders(now);
-  const result: SendResult = { due: due.length, sent: 0, failed: 0, deletedTokens: 0 };
+  const result: SendResult = {
+    due: due.length,
+    sent: 0,
+    failed: 0,
+    deletedTokens: 0,
+    deleteFailures: 0,
+    logFailures: 0,
+  };
   if (due.length === 0) return result;
 
   const unregistered: string[] = [];
@@ -121,14 +134,18 @@ export async function handleSend(deps: SendDeps, now: Date): Promise<SendResult>
       await deps.deleteTokens(stale);
       result.deletedTokens = stale.length;
     } catch {
-      // Kept for the next run: Expo will say DeviceNotRegistered again.
+      // Kept for the next send: Expo will say DeviceNotRegistered again.
+      result.deleteFailures = 1;
+      console.error('send-reminders: deleting tokens failed', JSON.stringify({ deleteFailures: 1 }));
     }
   }
 
   try {
     await deps.logSent(due.map(({ user_id, kind, sent_for }) => ({ user_id, kind, sent_for })));
   } catch {
-    // Not fatal: at worst the same reminder goes out again next hour.
+    // Not fatal: only a second run within this same hour could send these reminders again.
+    result.logFailures = 1;
+    console.error('send-reminders: writing reminder_log failed', JSON.stringify({ logFailures: 1 }));
   }
   return result;
 }
@@ -145,14 +162,17 @@ function sameSecret(given: string, expected: string): boolean {
   return diff === 0;
 }
 
-/** POST /send-reminders from the hourly job: `Authorization: Bearer <CRON_SECRET>`, else 401 and nothing sent. */
+/**
+ * POST /send-reminders from the hourly job: `Authorization: Bearer <CRON_SECRET>`, else 401 and nothing sent.
+ * The deps are built only after the secret matched, so an unauthenticated call does no work at all.
+ */
 export async function handleRequest(
   req: { authorization: string | null; secret: string | undefined; now: Date },
-  deps: SendDeps,
+  makeDeps: () => SendDeps,
 ): Promise<SendResponse> {
   const given = /^Bearer\s+(.+)$/i.exec(req.authorization ?? '')?.[1] ?? '';
   if (!req.secret || !given || !sameSecret(given, req.secret)) {
     return { status: 401, body: { code: 'UNAUTHORIZED' } };
   }
-  return { status: 200, body: await handleSend(deps, req.now) };
+  return { status: 200, body: await handleSend(makeDeps(), req.now) };
 }

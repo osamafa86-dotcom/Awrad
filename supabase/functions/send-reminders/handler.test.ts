@@ -112,7 +112,7 @@ describe('handleSend', () => {
       { to: 'ExponentPushToken[a]', title: 'أوراد', body: REMINDER_COPY.weekly, sound: 'default', data: { kind: 'weekly' } },
       { to: 'ExponentPushToken[b]', title: 'أوراد', body: REMINDER_COPY.weekly, sound: 'default', data: { kind: 'weekly' } },
     ]);
-    expect(result).toEqual({ due: 2, sent: 4, failed: 0, deletedTokens: 0 });
+    expect(result).toEqual({ due: 2, sent: 4, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
   });
 
   it('uses the agreed Arabic copy (messages.ts)', () => {
@@ -131,7 +131,7 @@ describe('handleSend', () => {
     const { deps, expo } = makeDeps(many);
     const result = await handleSend(deps, NOW);
     expect(expo.requests.map((r) => r.length)).toEqual([100, 100, 50]);
-    expect(result).toEqual({ due: 2, sent: 250, failed: 0, deletedTokens: 0 });
+    expect(result).toEqual({ due: 2, sent: 250, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
   });
 
   it('deletes exactly the token whose ticket says DeviceNotRegistered', async () => {
@@ -139,7 +139,7 @@ describe('handleSend', () => {
     const result = await handleSend(deps, NOW);
     expect(deps.deleteTokens).toHaveBeenCalledTimes(1);
     expect(deps.deleteTokens).toHaveBeenCalledWith(['ExponentPushToken[b]']);
-    expect(result).toEqual({ due: 2, sent: 2, failed: 2, deletedTokens: 1 });
+    expect(result).toEqual({ due: 2, sent: 2, failed: 2, deletedTokens: 1, logFailures: 0, deleteFailures: 0 });
   });
 
   it('logs every due reminder once the messages are out', async () => {
@@ -154,14 +154,14 @@ describe('handleSend', () => {
   it('logging is idempotent: a second run over rows already logged changes nothing and does not fail', async () => {
     await handleSend(setup.deps, NOW);
     const again = await handleSend(setup.deps, NOW);
-    expect(again).toEqual({ due: 2, sent: 4, failed: 0, deletedTokens: 0 });
+    expect(again).toEqual({ due: 2, sent: 4, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
     expect(setup.log.rows.size).toBe(2);
   });
 
-  it('an Expo 5xx marks the batch failed but still logs the reminders (no re-spam next hour)', async () => {
+  it('an Expo 5xx marks the batch failed but still logs the reminders (no second send within the hour)', async () => {
     const { deps, log } = makeDeps([daily, weekly], fakeExpo({ status: 503 }));
     const result = await handleSend(deps, NOW);
-    expect(result).toEqual({ due: 2, sent: 0, failed: 4, deletedTokens: 0 });
+    expect(result).toEqual({ due: 2, sent: 0, failed: 4, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
     expect(deps.deleteTokens).not.toHaveBeenCalled();
     expect(log.rows.size).toBe(2);
   });
@@ -177,20 +177,34 @@ describe('handleSend', () => {
     });
     expo.fetch.mockImplementation(ok);
     const result = await handleSend(deps, NOW);
-    expect(result).toEqual({ due: 1, sent: 20, failed: 100, deletedTokens: 0 });
+    expect(result).toEqual({ due: 1, sent: 20, failed: 100, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
     expect(log.rows.size).toBe(1);
   });
 
-  it('never throws when deleting tokens or writing the log fails', async () => {
+  it('never throws when deleting tokens or writing the log fails: it counts and reports the failures', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { deps } = makeDeps([daily], fakeExpo({ unregistered: ['ExponentPushToken[a]'] }));
     deps.deleteTokens.mockRejectedValue(new Error('db down'));
     deps.logSent.mockRejectedValue(new Error('db down'));
-    expect(await handleSend(deps, NOW)).toEqual({ due: 1, sent: 1, failed: 1, deletedTokens: 0 });
+    expect(await handleSend(deps, NOW)).toEqual({
+      due: 1,
+      sent: 1,
+      failed: 1,
+      deletedTokens: 0,
+      logFailures: 1,
+      deleteFailures: 1,
+    });
+    // Counts only: nothing of the token or the error text reaches the log.
+    expect(errors.mock.calls).toEqual([
+      ['send-reminders: deleting tokens failed', JSON.stringify({ deleteFailures: 1 })],
+      ['send-reminders: writing reminder_log failed', JSON.stringify({ logFailures: 1 })],
+    ]);
+    errors.mockRestore();
   });
 
   it('nothing due: no Expo request, no log write', async () => {
     const { deps, expo } = makeDeps([]);
-    expect(await handleSend(deps, NOW)).toEqual({ due: 0, sent: 0, failed: 0, deletedTokens: 0 });
+    expect(await handleSend(deps, NOW)).toEqual({ due: 0, sent: 0, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 });
     expect(expo.fetch).not.toHaveBeenCalled();
     expect(deps.logSent).not.toHaveBeenCalled();
   });
@@ -202,30 +216,30 @@ describe('handleRequest', () => {
     ['a wrong secret', 'Bearer not-the-secret'],
     ['the secret without Bearer', SECRET],
     ['an empty bearer', 'Bearer '],
-  ])('answers 401 to %s and sends nothing', async (_name, authorization) => {
-    const { deps } = makeDeps([daily]);
-    expect(await handleRequest({ authorization, secret: SECRET, now: NOW }, deps)).toEqual({
+  ])('answers 401 to %s without building the deps (so nothing is sent)', async (_name, authorization) => {
+    const factory = vi.fn(() => makeDeps([daily]).deps);
+    expect(await handleRequest({ authorization, secret: SECRET, now: NOW }, factory)).toEqual({
       status: 401,
       body: { code: 'UNAUTHORIZED' },
     });
-    expect(deps.dueReminders).not.toHaveBeenCalled();
+    expect(factory).not.toHaveBeenCalled();
   });
 
-  it('answers 401 to everyone while CRON_SECRET is not configured', async () => {
-    const { deps } = makeDeps([daily]);
-    expect(await handleRequest({ authorization: 'Bearer ', secret: '', now: NOW }, deps)).toMatchObject({
+  it('answers 401 to everyone while CRON_SECRET is not configured, without building the deps', async () => {
+    const factory = vi.fn(() => makeDeps([daily]).deps);
+    expect(await handleRequest({ authorization: 'Bearer ', secret: '', now: NOW }, factory)).toMatchObject({
       status: 401,
     });
-    expect(await handleRequest({ authorization: 'Bearer undefined', secret: undefined, now: NOW }, deps)).toMatchObject({
-      status: 401,
-    });
-    expect(deps.dueReminders).not.toHaveBeenCalled();
+    expect(
+      await handleRequest({ authorization: 'Bearer undefined', secret: undefined, now: NOW }, factory),
+    ).toMatchObject({ status: 401 });
+    expect(factory).not.toHaveBeenCalled();
   });
 
   it('with the right secret runs the send and answers 200 with the counts', async () => {
     const { deps } = makeDeps([daily]);
     expect(
-      await handleRequest({ authorization: `Bearer ${SECRET}`, secret: SECRET, now: NOW }, deps),
-    ).toEqual({ status: 200, body: { due: 1, sent: 2, failed: 0, deletedTokens: 0 } });
+      await handleRequest({ authorization: `Bearer ${SECRET}`, secret: SECRET, now: NOW }, () => deps),
+    ).toEqual({ status: 200, body: { due: 1, sent: 2, failed: 0, deletedTokens: 0, logFailures: 0, deleteFailures: 0 } });
   });
 });

@@ -62,12 +62,17 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
    `create extension if not exists pg_cron; create extension if not exists pg_net;`
    الصورة تحمّل `pg_cron` مسبقًا (`shared_preload_libraries`) و`cron.database_name = 'postgres'`؛ إن اختلف أحدهما في
    إصدار الصورة فأوقف هنا وأبلغ.
-3. كـ `supabase_admin` أيضًا، والسرّ يُمرَّر من الملف لا من سطر الأوامر:
-   ```sql
+3. كـ `supabase_admin` أيضًا. السرّ يُقرأ من `.env` إلى متغيّر psql (`-v`) فلا يُكتب في نصّ SQL ولا في سجلّ الأوامر، و`:'secret'`
+   يقتبسه psql:
+   ```sh
+   CRON_SECRET=$(sudo grep -m1 '^CRON_SECRET=' /opt/sites/awrad/.env | cut -d= -f2-)
+   docker exec -i awrad-db-1 psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -v secret="$CRON_SECRET" <<'SQL'
    alter database postgres set app.functions_url = 'https://awrad-api.emdatra.org/functions/v1';
-   alter database postgres set app.cron_secret = '<CRON_SECRET من .env>';
+   alter database postgres set app.cron_secret = :'secret';
+   SQL
+   unset CRON_SECRET
    ```
-   ثم **في جلسة جديدة**: `select ensure_reminder_schedule();` ← `t`.
+   ثم **في جلسة جديدة** (الإعدادات تسري على الجلسات الجديدة): `select ensure_reminder_schedule();` ← `t`.
    (بديل لا يمرّ بـ Caddy: `http://awrad-functions:9000` — `db` و`awrad-functions` على شبكة المشروع نفسها، والموجّه
    يتوقّع `/send-reminders` مباشرة؛ استعمله إن لم يكن للقاعدة خروج إلى الإنترنت.)
 4. القياس (أعداد فقط، لا أسرار ولا رموز):

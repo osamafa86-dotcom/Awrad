@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   try {
     const { status, body } = await handleRequest(
       { authorization: req.headers.get('Authorization'), secret: Deno.env.get('CRON_SECRET'), now: new Date() },
-      deps(),
+      deps, // built only once the secret matched: a missing service env var cannot turn a 401 into a 500
     );
     // Counts only: never tokens, ids or emails.
     if (status === 200) console.log('send-reminders', JSON.stringify(body));
