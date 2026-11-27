@@ -6,10 +6,8 @@ import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 
 // shadcn-style DropdownMenu on Radix: a row's secondary actions (a06 «أرشفة», «حذف»).
-/** Right-to-left by default: Radix does not read <html dir> and would lay the menu and its arrow keys out LTR. */
-export function DropdownMenu({ dir = 'rtl', ...props }: ComponentProps<typeof MenuPrimitive.Root>) {
-  return <MenuPrimitive.Root dir={dir} {...props} />;
-}
+// Right-to-left from RtlProvider (the root layout).
+export const DropdownMenu = MenuPrimitive.Root;
 export const DropdownMenuTrigger = MenuPrimitive.Trigger;
 
 export function DropdownMenuContent({ className, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {

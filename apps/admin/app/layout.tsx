@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { IBM_Plex_Sans_Arabic, Markazi_Text } from 'next/font/google';
 import type { ReactNode } from 'react';
 
+import { RtlProvider } from '@/components/RtlProvider';
 import { ar } from '@/messages/ar';
 
 import './globals.css';
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="min-h-dvh bg-canvas text-fg-primary antialiased">{children}</body>
+      <body className="min-h-dvh bg-canvas text-fg-primary antialiased">
+        <RtlProvider>{children}</RtlProvider>
+      </body>
     </html>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
-import { Tabs } from 'radix-ui';
 import { useState } from 'react';
 
+import { Tabs, TabsContent, TabsCount, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { HABIT_FREQUENCIES, isArchived, type HabitFrequency, type HabitView } from '@/lib/habits';
 import { ar } from '@/messages/ar';
 
@@ -42,28 +42,21 @@ export function HabitsView({ habits, today, hijriAdjustment, initialTab }: Habit
         <HabitForm mode="create" today={today} defaultFrequency={tab} onCreated={setTab} />
       </div>
 
-      {/* why: Radix does not read <html dir>; without it the tabs and everything inside them render LTR. */}
-      <Tabs.Root dir="rtl" value={tab} onValueChange={(value) => setTab(value as HabitFrequency)} className="flex flex-col gap-24">
-        <Tabs.List aria-label={t.title} className="flex gap-24 border-b border-line-subtle">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as HabitFrequency)} className="flex flex-col gap-24">
+        <TabsList aria-label={t.title}>
           {HABIT_FREQUENCIES.map((frequency) => (
-            <Tabs.Trigger
-              key={frequency}
-              value={frequency}
-              className="-mb-px flex min-h-44 items-center gap-8 border-b-2 border-transparent px-4 t-label-md text-fg-secondary outline-none focus-visible:ring-2 focus-visible:ring-line-focus data-[state=active]:border-action data-[state=active]:text-link"
-            >
+            <TabsTrigger key={frequency} value={frequency}>
               {t.tabs[frequency]}
-              <span className="rounded-full bg-sunken px-8 t-label-sm text-fg-secondary tabular-nums">
-                {of(frequency).filter((habit) => !isArchived(habit)).length}
-              </span>
-            </Tabs.Trigger>
+              <TabsCount>{of(frequency).filter((habit) => !isArchived(habit)).length}</TabsCount>
+            </TabsTrigger>
           ))}
-        </Tabs.List>
+        </TabsList>
         {HABIT_FREQUENCIES.map((frequency) => (
-          <Tabs.Content key={frequency} value={frequency} className="outline-none">
+          <TabsContent key={frequency} value={frequency} className="outline-none">
             <HabitTable frequency={frequency} habits={of(frequency)} today={today} hijriAdjustment={hijriAdjustment} />
-          </Tabs.Content>
+          </TabsContent>
         ))}
-      </Tabs.Root>
+      </Tabs>
 
       <p className="t-body-sm text-fg-secondary">{t.deleteNote}</p>
     </div>
