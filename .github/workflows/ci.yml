@@ -33,6 +33,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:
       - uses: actions/checkout@v4
+      # deploy/vps renders for any environment (Task 5.1a): no Docker, under a second.
+      - run: bash deploy/vps/check-env.sh
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

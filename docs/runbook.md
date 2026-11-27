@@ -16,16 +16,18 @@
 
 مشروع Docker Compose باسم `awrad` من [`deploy/vps/docker-compose.yml`](../deploy/vps/docker-compose.yml)،
 خلف Caddy المشترك على الخادم (شبكة `deploy_default`). لا منفذ منشور.
+هذا الدليل للنسخة التجريبية (`SITE=awrad`)؛ بيئةٌ ثانية من الملفات نفسها في
+[README النشر: «بيئة ثانية على الخادم نفسه»](../deploy/vps/README.md#بيئة-ثانية-على-الخادم-نفسه).
 
 | الخدمة | الصورة | ما تفعله | يصلها الناس عبر |
 |---|---|---|---|
 | `db` | `supabase/postgres:17.12.0.002` | قاعدة البيانات، وفيها `pg_cron` و`pg_net`. البيانات في الحجم `pgdata` | — (داخلية) |
 | `migrate` (مرّة) | `postgres:17-alpine` | يطبّق `supabase/migrations/*.sql` ثم البذرة مرّة (`migrate.sh`) | — |
-| `awrad-auth` | `supabase/gotrue:v2.198.0` | الدخول برمز البريد | `awrad-api.emdatra.org/auth/v1` |
-| `awrad-rest` | `postgrest/postgrest:v16.6` | واجهة REST وRPC | `awrad-api.emdatra.org/rest/v1` |
-| `awrad-functions` | `supabase/edge-runtime:v1.79.5` | `invite-user` و`send-reminders` | `awrad-api.emdatra.org/functions/v1` |
-| `awrad-mail` | `axllent/mailpit:v1.34.0` | يستقبل كل البريد (رموز الدخول). في الذاكرة: يُمحى عند إعادة التشغيل | `awrad-mail.emdatra.org` (بكلمة مرور) |
-| `awrad-admin` | `awrad-admin:latest` (يُبنى محليًا) | لوحة الشيخ (Next.js) | `awrad.emdatra.org` |
+| `auth` (يصلها Caddy بـ `awrad-auth`) | `supabase/gotrue:v2.198.0` | الدخول برمز البريد | `awrad-api.emdatra.org/auth/v1` |
+| `rest` (يصلها Caddy بـ `awrad-rest`) | `postgrest/postgrest:v16.6` | واجهة REST وRPC | `awrad-api.emdatra.org/rest/v1` |
+| `functions` (يصلها Caddy بـ `awrad-functions`) | `supabase/edge-runtime:v1.79.5` | `invite-user` و`send-reminders` | `awrad-api.emdatra.org/functions/v1` |
+| `mail` (يصلها Caddy بـ `awrad-mail`) | `axllent/mailpit:v1.34.0` | يستقبل كل البريد (رموز الدخول). في الذاكرة: يُمحى عند إعادة التشغيل | `awrad-mail.emdatra.org` (بكلمة مرور) |
+| `admin` (يصلها Caddy بـ `awrad-admin`) | `awrad-admin:latest` (يُبنى محليًا) | لوحة الشيخ (Next.js) | `awrad.emdatra.org` |
 | `web-build` (مرّة) | `awrad-workspace:latest` | يصدّر ويب الطالب إلى `/srv/sites/www/awrad-app/current` | `awrad-app.emdatra.org` (Caddy يخدمه ساكنًا) |
 
 | المسار على الخادم | ما فيه |
@@ -104,12 +106,12 @@ set -euo pipefail
 cd /opt/sites/awrad/repo
 dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
 F=/opt/sites/awrad/backups/<الملف>.dump
-dc stop awrad-admin awrad-auth awrad-rest awrad-functions      # لا كتابة أثناء الاستعادة
+dc stop admin auth rest functions      # لا كتابة أثناء الاستعادة
 # كـ supabase_admin وبلا --no-owner ولا --role: تبقى ملكية كل جدول كما في النسخة
 # (جداول auth لـ supabase_auth_admin الذي يتّصل به GoTrue، وجداول public وops لـ postgres).
 dc exec -T db pg_restore -U supabase_admin -d postgres --clean --if-exists \
   --schema=public --schema=auth --schema=ops < "$F"
-dc up -d awrad-auth awrad-rest awrad-functions awrad-admin
+dc up -d auth rest functions admin
 dc exec -T db psql -U postgres -d postgres -tAc \
   "select (select count(*) from profiles), (select count(*) from logs), (select count(*) from sessions);"
 dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
@@ -127,13 +129,13 @@ dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
 
 | السرّ | ماذا يتطلّب تدويره | أثره على المستخدمين |
 |---|---|---|
-| `JWT_SECRET` | يُولَّد معه `ANON_KEY` و`SERVICE_ROLE_KEY` جديدان (رموز JWT موقّعة به، بالدورين `anon` و`service_role`). على الحجم القائم: `alter database postgres set "app.settings.jwt_secret" to …` كـ `supabase_admin` (`db-init/jwt.sql` لا يعمل إلا عند التهيئة). ثم `dc up -d awrad-auth awrad-rest awrad-functions`، وإعادة بناء اللوحة وويب الطالب لأن `ANON_KEY` مبنيّ فيهما: `dc --profile build build`، `dc up -d awrad-admin`، ثم `web-build` | يخرج الجميع ويدخلون برمز جديد |
-| `ANON_KEY` وحده | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d awrad-functions`، ثم إعادة بناء اللوحة وويب الطالب كما أعلاه. (التطبيق على المتاجر، حين يصدر، يحمله في بنائه: يلزم إصدار جديد) | لا شيء إن بُني الكل |
-| `SERVICE_ROLE_KEY` | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d awrad-functions`. الرمز القديم يبقى صالحًا ما بقي `JWT_SECRET`؛ لإبطاله دوّر `JWT_SECRET` | لا شيء |
-| `CRON_SECRET` | يُحدَّث في مكانين معًا: `.env` ثم `dc up -d awrad-functions`، و`alter database postgres set app.cron_secret = :'secret'` كـ `supabase_admin` (README النشر، خطوة التذكيرات 3)، ثم `select ensure_reminder_schedule();` في جلسة جديدة | لا شيء؛ إن اختلف السرّان تردّ الدالة 401 ولا تصل التذكيرات |
-| `POSTGRES_PASSWORD` | كلمة مرور كل أدوار القاعدة التي تدخل بكلمة: `postgres` و`supabase_admin` (يضبطهما الصورة عند التهيئة؛ `migrate.sh` وسكربت البذرة يتّصلان بـ `postgres`)، وأدوار `db-init/roles.sql`: `authenticator` (PostgREST) و`supabase_auth_admin` (GoTrue) و`pgbouncer` و`supabase_functions_admin` و`supabase_storage_admin` و`supabase_replication_admin` و`supabase_read_only_user`. الترتيب: (1) `alter role … with password` لكلٍّ منها بالكلمة الجديدة، كـ `supabase_admin` عبر المقبس المحلي داخل الحاوية (`dc exec -T db psql -U supabase_admin -d postgres`، كما في خطوة التذكيرات 2 في README النشر)، والكلمة متغيّر psql بـ `-v`؛ (2) الكلمة الجديدة في `.env`؛ (3) `dc up -d db awrad-auth awrad-rest` (تُعاد بيئتها)؛ (4) القياس: `dc --profile tools run --rm migrate` يمرّ (لا جديد)، و`awrad-auth` و`awrad-rest` يعملان | انقطاع قصير |
-| كلمة مرور Mailpit (`MAIL_USER`، `MAIL_PASSWORD`) | تُحدَّث في أربعة أماكن: `.env`، و`secrets/mail-basicauth.txt`، و`secrets/mail-ui.htpasswd` (bcrypt)، وكتلة `basic_auth` في `/srv/sites/caddy/awrad.caddy`. ثم `dc up -d awrad-mail` و`docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` | من يقرأ الرموز يحتاج الكلمة الجديدة |
-| SMTP (لاحقًا) | غير موجود اليوم: GoTrue يرسل إلى `awrad-mail:1025`. حين يُضاف مزوّد بريد تُضبط `GOTRUE_SMTP_*` في compose بأسرار من `.env`، وتدويرها `dc up -d awrad-auth` | — |
+| `JWT_SECRET` | يُولَّد معه `ANON_KEY` و`SERVICE_ROLE_KEY` جديدان (رموز JWT موقّعة به، بالدورين `anon` و`service_role`). على الحجم القائم: `alter database postgres set "app.settings.jwt_secret" to …` كـ `supabase_admin` (`db-init/jwt.sql` لا يعمل إلا عند التهيئة). ثم `dc up -d auth rest functions`، وإعادة بناء اللوحة وويب الطالب لأن `ANON_KEY` مبنيّ فيهما: `dc --profile build build`، `dc up -d admin`، ثم `web-build` | يخرج الجميع ويدخلون برمز جديد |
+| `ANON_KEY` وحده | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d functions`، ثم إعادة بناء اللوحة وويب الطالب كما أعلاه. (التطبيق على المتاجر، حين يصدر، يحمله في بنائه: يلزم إصدار جديد) | لا شيء إن بُني الكل |
+| `SERVICE_ROLE_KEY` | يُوقَّع بـ `JWT_SECRET` الحالي. `dc up -d functions`. الرمز القديم يبقى صالحًا ما بقي `JWT_SECRET`؛ لإبطاله دوّر `JWT_SECRET` | لا شيء |
+| `CRON_SECRET` | يُحدَّث في مكانين معًا: `.env` ثم `dc up -d functions`، و`alter database postgres set app.cron_secret = :'secret'` كـ `supabase_admin` (README النشر، خطوة التذكيرات 3)، ثم `select ensure_reminder_schedule();` في جلسة جديدة | لا شيء؛ إن اختلف السرّان تردّ الدالة 401 ولا تصل التذكيرات |
+| `POSTGRES_PASSWORD` | كلمة مرور كل أدوار القاعدة التي تدخل بكلمة: `postgres` و`supabase_admin` (يضبطهما الصورة عند التهيئة؛ `migrate.sh` وسكربت البذرة يتّصلان بـ `postgres`)، وأدوار `db-init/roles.sql`: `authenticator` (PostgREST) و`supabase_auth_admin` (GoTrue) و`pgbouncer` و`supabase_functions_admin` و`supabase_storage_admin` و`supabase_replication_admin` و`supabase_read_only_user`. الترتيب: (1) `alter role … with password` لكلٍّ منها بالكلمة الجديدة، كـ `supabase_admin` عبر المقبس المحلي داخل الحاوية (`dc exec -T db psql -U supabase_admin -d postgres`، كما في خطوة التذكيرات 2 في README النشر)، والكلمة متغيّر psql بـ `-v`؛ (2) الكلمة الجديدة في `.env`؛ (3) `dc up -d db auth rest` (تُعاد بيئتها)؛ (4) القياس: `dc --profile tools run --rm migrate` يمرّ (لا جديد)، و`awrad-auth` و`awrad-rest` يعملان | انقطاع قصير |
+| كلمة مرور Mailpit (`MAIL_USER`، `MAIL_PASSWORD`) | تُحدَّث في أربعة أماكن: `.env`، و`secrets/mail-basicauth.txt`، و`secrets/mail-ui.htpasswd` (bcrypt)، وكتلة `basic_auth` في `/srv/sites/caddy/awrad.caddy`. ثم `dc up -d mail` و`docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` | من يقرأ الرموز يحتاج الكلمة الجديدة |
+| SMTP (لاحقًا) | غير موجود اليوم: GoTrue يرسل إلى `awrad-mail:1025`. حين يُضاف مزوّد بريد تُضبط `GOTRUE_SMTP_*` في compose بأسرار من `.env`، وتدويرها `dc up -d auth` | — |
 
 تحقّق بعد كل تدوير: دخول برمز إلى اللوحة، وفي ساعة التذكير التالية §7.
 
@@ -218,14 +220,14 @@ select kind, sent_for, count(*) from reminder_log group by 1, 2 order by 2 desc 
 select platform, count(*) from push_tokens group by 1;
 ```
 
-وسجلّ الحاوية: `dc logs --since 2h awrad-functions | grep send-reminders` (أعداد فقط، بلا رموز ولا عناوين).
+وسجلّ الحاوية: `dc logs --since 2h functions | grep send-reminders` (أعداد فقط، بلا رموز ولا عناوين).
 
 | ما تراه | السبب المرجّح | العلاج |
 |---|---|---|
 | لا صفّ في `cron.job` | لم تُجدول، أو أُعيدت تهيئة القاعدة | `select ensure_reminder_schedule();` في جلسة جديدة؛ إن ردّت `f` فالامتدادان أو الإعدادان غائبان (README النشر، التذكيرات) |
 | `job_run_details` بحالة `failed` | خطأ SQL في الطلب | اقرأ `return_message` لآخر صفّ |
 | `401` في `net._http_response` | `app.cron_secret` يخالف `CRON_SECRET` في `.env` | أعد ضبطهما معًا (§4، `CRON_SECRET`) |
-| لا ردود إطلاقًا، أو أخطاء اتصال | `app.functions_url` خاطئ أو `awrad-functions` متوقّفة | `show app.functions_url;` في جلسة جديدة؛ `dc ps awrad-functions` |
+| لا ردود إطلاقًا، أو أخطاء اتصال | `app.functions_url` خاطئ أو `awrad-functions` متوقّفة | `show app.functions_url;` في جلسة جديدة؛ `dc ps functions` |
 | `200` و`due` = 0 | لا مستحقّ: لا أجهزة، أو الكل سجّل، أو ليست ساعتهم | طبيعي؛ راجع وقت تذكير الطالب ومنطقته |
 | `sent` > 0 لكن الطالب لم يرَ شيئًا | الإشعارات ممنوعة على جهازه، أو Expo قبلها ولم يسلّمها | تحقّق من إذن الإشعارات في جهازه |
 | `failed` > 0 | Expo رفض الرسائل؛ `DeviceNotRegistered` يحذف الرمز وحده (`deletedTokens`) | الطالب يفتح التطبيق فيسجّل جهازه من جديد |
@@ -239,8 +241,8 @@ select platform, count(*) from push_tokens group by 1;
 
 1. افتح `https://awrad-mail.emdatra.org` بكلمة المرور من `secrets/mail-basicauth.txt`. الرسالة هناك؟ فالإرسال سليم.
 2. Mailpit في الذاكرة: إعادة تشغيله تمحو الرسائل، والحدّ 500 رسالة.
-3. ليست هناك؟ `dc logs --since 30m awrad-auth` (حدود المعدّل: رسالة لكل مستخدم في الثانية، و60 رسالة في الساعة)،
-   و`dc ps awrad-mail`.
+3. ليست هناك؟ `dc logs --since 30m auth` (حدود المعدّل: رسالة لكل مستخدم في الثانية، و60 رسالة في الساعة)،
+   و`dc ps mail`.
 4. «هذا البريد غير مسجَّل لدينا» عند الدخول: لا حساب بهذا البريد (يُدعى أولًا).
 
 ## 8. التراجع

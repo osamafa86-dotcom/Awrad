@@ -1,11 +1,13 @@
 #!/bin/sh
-# The student web (Expo static export) for awrad-app.emdatra.org. Runs inside the `web-build` service
-# (workspace target of Dockerfile.admin); /out is /srv/sites/www/awrad-app on the host, which the main Caddy
-# serves as /srv/www/awrad-app/current.
+# The student web (Expo static export) for https://$APP_HOST. Runs inside the `web-build` service
+# (workspace target of Dockerfile.admin); /out is $WEB_ROOT on the host (default /srv/sites/www/$SITE-app),
+# which the main Caddy serves from its /srv/www/<same name>/current. The URLs come from docker-compose.yml.
 # Atomic: the export is copied to /out/releases/<id>, then the relative symlink /out/current is swapped in one
 # rename (mv -T); only the two newest releases are kept. Prints counts only.
 set -eu
-: "${EXPO_PUBLIC_SUPABASE_URL:?}" "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?}" "${EXPO_PUBLIC_ADMIN_URL:?}"
+: "${EXPO_PUBLIC_SUPABASE_URL:?web-build: EXPO_PUBLIC_SUPABASE_URL غائب — يضبطه docker-compose.yml من API_HOST}"
+: "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?web-build: EXPO_PUBLIC_SUPABASE_ANON_KEY غائب — يضبطه docker-compose.yml من ANON_KEY}"
+: "${EXPO_PUBLIC_ADMIN_URL:?web-build: EXPO_PUBLIC_ADMIN_URL غائب — يضبطه docker-compose.yml من ADMIN_HOST}"
 unset EXPO_PUBLIC_PREVIEW
 # A writable HOME and TMPDIR of our own (Expo keeps state in ~/.expo and caches under TMPDIR), no telemetry, CI mode.
 # corepack prepared pnpm as root at image build time; keep finding that cache after HOME moves.

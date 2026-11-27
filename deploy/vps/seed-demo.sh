@@ -1,28 +1,43 @@
 #!/usr/bin/env bash
-# Demo accounts and data for the staging stack (DEP-4). Run on the server by the ops task, once (it keeps a
+# Demo accounts and data for a stack on the VPS (DEP-4). Run on the server by the ops task, once (it keeps a
 # marker); every step also converges on its own, so a re-run after an interruption repairs instead of
 # duplicating:
-#   AWRAD_ENV_FILE=/opt/sites/awrad/.env bash deploy/vps/seed-demo.sh
+#   SITE=awrad AWRAD_ENV_FILE=/opt/sites/awrad/.env bash deploy/vps/seed-demo.sh
+# SITE and the four hosts come from the environment, else from the env file (SITE defaults to awrad, as in
+# docker-compose.yml); a missing host stops it before anything is written. The accounts are <name>@$ADMIN_HOST.
 # Accounts: a pending `invitations` row, then GoTrue's POST /admin/users with the service-role key
 # (email_confirm) — the handle_new_user trigger builds the profile from the invitation. Logs only through
 # save_log, as the admin (set local role authenticated + request.jwt.claims, as supabase/tests do).
 # Prints counts and the demo e-mail addresses only; the service-role key never reaches the output or any argv.
 set -euo pipefail
 DIR=$(cd "$(dirname "$0")" && pwd)
-ENV_FILE=${AWRAD_ENV_FILE:?set AWRAD_ENV_FILE}
+ENV_FILE=${AWRAD_ENV_FILE:?seed: AWRAD_ENV_FILE غائب — مسار .env للبيئة، مثل /opt/sites/awrad/.env}
+[ -r "$ENV_FILE" ] || { echo "seed: لا يُقرأ $ENV_FILE"; exit 1; }
 GROUP_NAME='المجموعة التجريبية'
 
-dc() { docker compose -p awrad --env-file "$ENV_FILE" -f "$DIR/docker-compose.yml" "$@"; }
+# envval <KEY> → the value in the env file (empty if absent)
+envval() { sed -n "s/^$1=//p" "$ENV_FILE" | head -1; }
+SITE=${SITE:-$(envval SITE)}; SITE=${SITE:-awrad}
+for v in ADMIN_HOST APP_HOST API_HOST MAIL_HOST; do
+  [ -n "${!v:-}" ] || printf -v "$v" '%s' "$(envval "$v")"
+  [ -n "${!v}" ] || { echo "seed: $v غائب — ضعه في $ENV_FILE أو في البيئة (compose يحتاج الأسماء الأربعة)"; exit 1; }
+done
+# compose reads the same values (the environment wins over --env-file), so the two can never disagree.
+export SITE ADMIN_HOST APP_HOST API_HOST MAIL_HOST
+DOMAIN=$ADMIN_HOST
+echo "seed: SITE=$SITE · accounts @$DOMAIN"
+
+dc() { docker compose -p "$SITE" --env-file "$ENV_FILE" -f "$DIR/docker-compose.yml" "$@"; }
 # SQL from stdin, psql variables from -v; inside the db container over TCP (its PGPASSWORD).
 q() { dc exec -T db psql -X -q -tA -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres "$@"; }
 
 grep -q '^SERVICE_ROLE_KEY=.' "$ENV_FILE" || { echo "seed: SERVICE_ROLE_KEY missing in $ENV_FILE"; exit 1; }
-AUTH_CID=$(dc ps -q awrad-auth)
-[ -n "$AUTH_CID" ] || { echo "seed: the awrad-auth container is not running"; exit 1; }
+AUTH_CID=$(dc ps -q auth)
+[ -n "$AUTH_CID" ] || { echo "seed: the auth container ($SITE-auth) is not running"; exit 1; }
 # GoTrue is reached from the host at its address on the project network (no published port). The POST is made
 # by python, which reads the service-role key from the env file itself: the key is in no process's argv.
-AUTH_IP=$(docker inspect -f '{{with index .NetworkSettings.Networks "awrad_default"}}{{.IPAddress}}{{end}}' "$AUTH_CID")
-[ -n "$AUTH_IP" ] || { echo "seed: no address for awrad-auth on awrad_default"; exit 1; }
+AUTH_IP=$(docker inspect -f "{{with index .NetworkSettings.Networks \"${SITE}_default\"}}{{.IPAddress}}{{end}}" "$AUTH_CID")
+[ -n "$AUTH_IP" ] || { echo "seed: no address for $SITE-auth on ${SITE}_default"; exit 1; }
 admin_create_user() {  # admin_create_user <email> <full name>
   EMAIL=$1 NAME=$2 python3 - "$ENV_FILE" "http://$AUTH_IP:9999/admin/users" <<'PY2'
 import json, os, sys, urllib.error, urllib.request
@@ -79,17 +94,17 @@ SQL
   printf -v "ID_${role}_${email%%@*}" '%s' "$id"
 }
 
-ensure_user admin@awrad.emdatra.org      'الشيخ (تجريبي)'         admin      0 false
-ensure_user supervisor@awrad.emdatra.org 'المشرف التجريبي'         supervisor 1 true
-ensure_user student1@awrad.emdatra.org   'الطالب التجريبي الأول'   student    1 true
-ensure_user student2@awrad.emdatra.org   'الطالب التجريبي الثاني'  student    1 true
+ensure_user "admin@$DOMAIN"      'الشيخ (تجريبي)'         admin      0 false
+ensure_user "supervisor@$DOMAIN" 'المشرف التجريبي'         supervisor 1 true
+ensure_user "student1@$DOMAIN"   'الطالب التجريبي الأول'   student    1 true
+ensure_user "student2@$DOMAIN"   'الطالب التجريبي الثاني'  student    1 true
 # shellcheck disable=SC2154  # set by ensure_user (printf -v)
 ADMIN=$ID_admin_admin SUP=$ID_supervisor_supervisor S1=$ID_student_student1 S2=$ID_student_student2
 
 q -v gid="$GROUP_ID" -v sup="$SUP" <<'SQL'
 insert into group_supervisors (group_id, user_id) values (:'gid'::uuid, :'sup'::uuid) on conflict do nothing;
 SQL
-echo "seed: accounts created now $created · profiles $(q <<<"select count(*) from profiles p join auth.users u on u.id = p.id where u.email like '%@awrad.emdatra.org' and p.is_active;") active · supervisors of the group $(q -v gid="$GROUP_ID" <<<"select count(*) from group_supervisors where group_id = :'gid'::uuid;")"
+echo "seed: accounts created now $created · profiles $(q -v pat="%@$DOMAIN" <<<"select count(*) from profiles p join auth.users u on u.id = p.id where u.email like :'pat' and p.is_active;") active · supervisors of the group $(q -v gid="$GROUP_ID" <<<"select count(*) from group_supervisors where group_id = :'gid'::uuid;")"
 
 # 3) Logs for the last 10 days, through save_log only, as the admin (who may write for others and outside the
 #    backfill window). outcome: done = every habit done; partial = the first three done, the rest not;

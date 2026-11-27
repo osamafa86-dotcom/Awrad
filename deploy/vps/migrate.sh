@@ -4,8 +4,11 @@
 # recorded in ops.schema_migrations (schema `ops`, not exposed by PostgREST) in the same transaction that
 # applies it. Ends with NOTIFY pgrst so a running PostgREST reloads its schema cache. Exit 0 = up to date.
 set -eu
-export PGHOST="${PGHOST:-awrad-db}" PGPORT="${PGPORT:-5432}" PGUSER=postgres PGDATABASE=postgres
-export PGPASSWORD="${POSTGRES_PASSWORD:?}" PGOPTIONS="-c client_min_messages=warning"
+# PGHOST is the db's alias on the project network (${SITE}-db), set by docker-compose.yml.
+: "${PGHOST:?migrate: PGHOST غائب — يضبطه docker-compose.yml (<SITE>-db)؛ شغّل الخدمة migrate عبر compose}"
+: "${POSTGRES_PASSWORD:?migrate: POSTGRES_PASSWORD غائب — ضعه في .env}"
+export PGHOST PGPORT="${PGPORT:-5432}" PGUSER=postgres PGDATABASE=postgres
+export PGPASSWORD="$POSTGRES_PASSWORD" PGOPTIONS="-c client_min_messages=warning"
 q() { psql -X -q -v ON_ERROR_STOP=1 "$@"; }
 
 i=0
