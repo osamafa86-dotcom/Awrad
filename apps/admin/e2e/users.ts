@@ -55,3 +55,12 @@ export const SEEDED_SUPPORT = {
 
 /** The student whose open deletion request support.spec.ts executes. */
 export const DELETION_REQUESTER = 'p4' as const;
+
+/** Names of the habits habits.spec.ts creates (and removes); they never belong in a seeded log. */
+export const E2E_HABIT_PREFIX = 'e2e-عادة';
+
+/**
+ * Habits made by tests: habits.spec.ts's, and the DB tests' (supabase/tests, `test_hab_` slug and name)
+ * when they share a local stack. The seed leaves them out of its logs and removes unlogged leftovers.
+ */
+export const TEST_HABIT_PREFIXES = ['test_hab_', E2E_HABIT_PREFIX] as const;

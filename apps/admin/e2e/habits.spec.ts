@@ -6,7 +6,7 @@ import { ar } from '../src/messages/ar';
 
 import { authFile, hasStack } from './helpers';
 import { serviceClient } from './seed';
-import { TEST_TIMEZONE } from './users';
+import { E2E_HABIT_PREFIX, TEST_TIMEZONE } from './users';
 
 const t = ar.habits;
 
@@ -26,7 +26,7 @@ test.describe('habits, signed out', () => {
  * habits), so the hooks can remove them and any leftovers of an interrupted run. They are all weekly: a
  * daily habit would change the completion of the days the overview spec reads.
  */
-const PREFIX = 'e2e-عادة';
+const PREFIX = E2E_HABIT_PREFIX;
 
 async function removeTestHabits() {
   const db = serviceClient();

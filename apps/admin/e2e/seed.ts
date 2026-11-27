@@ -7,6 +7,7 @@ import {
   SEEDED_LOGS,
   SEEDED_SUPPORT,
   TEST_GROUP_NAME,
+  TEST_HABIT_PREFIXES,
   TEST_TIMEZONE,
   TEST_USERS,
   type TestUserKey,
@@ -60,21 +61,43 @@ async function sessionFor(db: SupabaseClient, email: string): Promise<SupabaseCl
 
 type Outcome = (typeof SEEDED_LOGS)[number]['outcome'];
 
+/** A habit a test created (TEST_HABIT_PREFIXES on its slug or name). */
+function isTestHabit(habit: { slug: string; name: string }): boolean {
+  return TEST_HABIT_PREFIXES.some((prefix) => habit.slug.startsWith(prefix) || habit.name.startsWith(prefix));
+}
+
 /**
- * save_log's p_entries for a `frequency` log on `date`: every active habit done (checklists with every
- * active item checked), or, for `failed`, every tristate habit not_done, so the day is failed under any
+ * Removes test habits an interrupted run left behind, before any log is saved: save_log needs an entry
+ * for every active habit (MISSING_ENTRY), and a seeded log that refers to one would stop its spec's own
+ * cleanup (HABIT_HAS_LOGS). Items go with their habit (on delete cascade).
+ */
+async function removeLeftoverTestHabits(db: SupabaseClient): Promise<void> {
+  const habits = check(await db.from('habits').select('id, slug, name')).data as Array<{
+    id: string;
+    slug: string;
+    name: string;
+  }>;
+  const leftovers = habits.filter(isTestHabit).map((habit) => habit.id);
+  if (leftovers.length > 0) check(await db.from('habits').delete().in('id', leftovers));
+}
+
+/**
+ * save_log's p_entries for a `frequency` log on `date`: every active habit but test ones done (checklists
+ * with every active item checked), or, for `failed`, every tristate habit not_done, so the day is failed under any
  * streak_threshold_pct (the checklists alone stay below it). Habits are data (AGENTS.md §3).
  */
 async function entriesFor(client: SupabaseClient, frequency: 'daily' | 'weekly', date: string, outcome: Outcome) {
-  const habits = check(
-    await client
-      .from('habits')
-      .select('id, kind')
-      .eq('frequency', frequency)
-      .lte('active_from', date)
-      .or(`active_to.is.null,active_to.gte.${date}`)
-      .order('sort_order'),
-  ).data as Array<{ id: string; kind: 'tristate' | 'checklist' }>;
+  const habits = (
+    check(
+      await client
+        .from('habits')
+        .select('id, slug, name, kind')
+        .eq('frequency', frequency)
+        .lte('active_from', date)
+        .or(`active_to.is.null,active_to.gte.${date}`)
+        .order('sort_order'),
+    ).data as Array<{ id: string; slug: string; name: string; kind: 'tristate' | 'checklist' }>
+  ).filter((habit) => !isTestHabit(habit));
   const items = check(
     await client
       .from('habit_items')
@@ -270,6 +293,7 @@ export default async function seed(): Promise<void> {
     ids.set(key, await ensureUser(db, key, groupIds, joinedAt, existing.get(TEST_USERS[key].email)));
   }
 
+  await removeLeftoverTestHabits(db);
   await seedLogs(db, ids);
   await resetSupportFixtures(db);
 }
