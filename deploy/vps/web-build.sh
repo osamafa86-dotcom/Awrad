@@ -8,6 +8,8 @@ set -eu
 : "${EXPO_PUBLIC_SUPABASE_URL:?}" "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?}" "${EXPO_PUBLIC_ADMIN_URL:?}"
 unset EXPO_PUBLIC_PREVIEW
 # A writable HOME and TMPDIR of our own (Expo keeps state in ~/.expo and caches under TMPDIR), no telemetry, CI mode.
+# corepack prepared pnpm as root at image build time; keep finding that cache after HOME moves.
+export COREPACK_HOME="${COREPACK_HOME:-$HOME/.cache/node/corepack}"
 export HOME=/tmp/home TMPDIR=/tmp/expo-tmp EXPO_NO_TELEMETRY=1 CI=1
 mkdir -p "$HOME" "$TMPDIR"
 diag() {
