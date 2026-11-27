@@ -401,18 +401,22 @@ describe('0006_save_log', () => {
     };
     const logId = await save(p1, { ...args, support: 'help' });
     await db.query(
-      `update logs set support_status = 'handled', handled_by = $2, handled_at = now(),
-                       handled_note = 'done' where id = $1`,
+      `update logs set support_status = 'handled', handled_by = $2, handled_at = now() where id = $1`,
       [logId, fx.sup1],
     );
-    const read = async () =>
-      (
-        await p1.query<{
-          support_status: string;
-          handled_by: string | null;
-          handled_note: string | null;
-        }>('select support_status, handled_by, handled_note from logs where id = $1', [logId])
-      ).rows[0];
+    // Since 0016 the internal note lives in the staff-only support_notes table (read here as the owner).
+    await db.query(`insert into support_notes (log_id, note) values ($1, 'done')`, [logId]);
+    const read = async () => ({
+      ...(
+        await p1.query<{ support_status: string; handled_by: string | null }>(
+          'select support_status, handled_by from logs where id = $1',
+          [logId],
+        )
+      ).rows[0],
+      handled_note:
+        (await db.query<{ note: string }>('select note from support_notes where log_id = $1', [logId])).rows[0]
+          ?.note ?? null,
+    });
 
     await save(p1, { ...args, support: 'help', note: 'edited note' });
     expect(await read()).toEqual({

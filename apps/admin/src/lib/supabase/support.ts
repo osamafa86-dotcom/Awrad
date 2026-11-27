@@ -9,7 +9,7 @@ import { HANDLED_WINDOW_DAYS, type DeletionRequest, type SupportRequest, type Su
 import { fetchAllPages, IDS_PER_QUERY } from './postgrest';
 
 const LOG_COLUMNS =
-  'id, user_id, period, period_start, review_text, support_request_text, support_status, handled_by, handled_at, handled_note';
+  'id, user_id, period, period_start, review_text, support_request_text, support_status, handled_by, handled_at';
 
 interface Person {
   name: string;
@@ -38,6 +38,22 @@ async function people(client: TypedClient, ids: string[]): Promise<Map<string, P
 }
 
 /**
+ * The internal note of each handled request. It lives in the staff-only `support_notes` table (Ruling FIN-8), never
+ * on the student-readable logs row; RLS lets the admin and the supervisor of the owner's group read it.
+ */
+async function notes(client: TypedClient, logIds: string[]): Promise<Map<string, string>> {
+  if (logIds.length === 0) return new Map();
+  const pages = await Promise.all(
+    chunk(logIds, IDS_PER_QUERY).map(async (part) => {
+      const { data, error } = await client.from('support_notes').select('log_id, note').in('log_id', part);
+      if (error) throw error;
+      return data;
+    }),
+  );
+  return new Map(pages.flat().map((row) => [row.log_id, row.note]));
+}
+
+/**
  * The requests of one status. «open»: every open one, newest week first. «handled»: those handled in the last
  * HANDLED_WINDOW_DAYS days, most recently handled first. Both paged (PostgREST's max_rows would cut them off).
  */
@@ -56,10 +72,13 @@ export async function listSupportRequests(
     // id last: a unique tiebreaker, so the pages do not overlap.
     return ordered.order('id').range(from, to);
   });
-  const who = await people(
-    client,
-    rows.flatMap((row) => (row.handled_by ? [row.user_id, row.handled_by] : [row.user_id])),
-  );
+  const [who, noteOf] = await Promise.all([
+    people(
+      client,
+      rows.flatMap((row) => (row.handled_by ? [row.user_id, row.handled_by] : [row.user_id])),
+    ),
+    status === 'handled' ? notes(client, rows.map((row) => row.id)) : Promise.resolve(new Map<string, string>()),
+  ]);
   return rows.map((row) => ({
     id: row.id,
     userId: row.user_id,
@@ -72,7 +91,7 @@ export async function listSupportRequests(
     status,
     handledAt: row.handled_at,
     handledByName: row.handled_by ? (who.get(row.handled_by)?.name ?? null) : null,
-    handledNote: row.handled_note,
+    handledNote: noteOf.get(row.id) ?? null,
   }));
 }
 

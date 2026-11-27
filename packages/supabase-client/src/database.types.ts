@@ -415,7 +415,6 @@ export type Database = {
           created_at: string;
           handled_at: string | null;
           handled_by: string | null;
-          handled_note: string | null;
           id: string;
           note: string | null;
           period: Database['public']['Enums']['habit_frequency'];
@@ -431,7 +430,6 @@ export type Database = {
           created_at?: string;
           handled_at?: string | null;
           handled_by?: string | null;
-          handled_note?: string | null;
           id?: string;
           note?: string | null;
           period: Database['public']['Enums']['habit_frequency'];
@@ -446,7 +444,6 @@ export type Database = {
           created_at?: string;
           handled_at?: string | null;
           handled_by?: string | null;
-          handled_note?: string | null;
           id?: string;
           note?: string | null;
           period?: Database['public']['Enums']['habit_frequency'];
@@ -634,6 +631,40 @@ export type Database = {
           },
         ];
       };
+      support_notes: {
+        Row: {
+          log_id: string;
+          note: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          log_id: string;
+          note: string;
+          updated_at?: string;
+        };
+        Update: {
+          log_id?: string;
+          note?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'support_notes_log_id_fkey';
+            columns: ['log_id'];
+            isOneToOne: true;
+            referencedRelation: 'logs';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'support_notes_log_id_fkey';
+            columns: ['log_id'];
+            isOneToOne: true;
+            referencedRelation: 'v_entry_weights';
+            referencedColumns: ['log_id'];
+          },
+        ];
+      };
     };
     Views: {
       v_day_status: {
@@ -728,7 +759,9 @@ export type Database = {
         Args: { p_new: Json; p_old_habit_id: string; p_switch_date: string };
         Returns: string;
       };
+      audit_diff: { Args: { p_columns: string[]; p_new: Json; p_old: Json }; Returns: Json };
       can_view_user: { Args: { p_user: string }; Returns: boolean };
+      clear_invalid_timezones: { Args: Record<PropertyKey, never>; Returns: undefined };
       current_user_role: {
         Args: Record<PropertyKey, never>;
         Returns: Database['public']['Enums']['user_role'];
@@ -787,6 +820,7 @@ export type Database = {
       setting_int: { Args: { p_key: string }; Returns: number };
       setting_text: { Args: { p_key: string }; Returns: string };
       setting_value_is_valid: { Args: { p_key: string; p_value: Json }; Returns: boolean };
+      timezone_is_usable: { Args: { p_zone: string }; Returns: boolean };
       update_app_settings: { Args: { p_values: Json }; Returns: undefined };
       upsert_group: {
         Args: {

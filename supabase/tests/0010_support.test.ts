@@ -63,9 +63,11 @@ interface SupportRow {
   handled_note: string | null;
 }
 
+// Since 0016 the internal note is in the staff-only support_notes table, not on the logs row.
 async function supportOf(logId: string): Promise<SupportRow> {
   const result = await db.query<SupportRow>(
-    'select support_status, handled_by, handled_at, handled_note from logs where id = $1',
+    `select l.support_status, l.handled_by, l.handled_at, n.note as handled_note
+       from logs l left join support_notes n on n.log_id = l.id where l.id = $1`,
     [logId],
   );
   return result.rows[0]!;

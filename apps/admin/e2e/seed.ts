@@ -270,7 +270,7 @@ export async function resetSupportFixtures(db: SupabaseClient | null = serviceCl
         support_status: 'open',
         handled_by: null,
         handled_at: null,
-        handled_note: null,
+        // The internal note (support_notes, Ruling FIN-8) is removed by the DB when the request leaves 'handled'.
       })
       .eq('user_id', p1)
       .eq('period', 'weekly')
