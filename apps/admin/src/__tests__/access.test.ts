@@ -53,6 +53,11 @@ const rows: Row[] = [
   ['an admin may open /habits', '/habits', true, admin, allow],
   ['an admin may open /settings', '/settings', true, admin, allow],
   ['an admin may open the overview', '/', true, admin, allow],
+
+  // Route handlers answer for themselves with a JSON status (EXP-1), never a redirect to an HTML page.
+  ['signed out on an API route is left to the route (401)', '/api/export', false, null, allow],
+  ['a student on an API route is left to the route (403)', '/api/export', true, student, allow],
+  ['a path that only starts with "api" is a page', '/apix', false, null, to('/login?next=%2Fapix')],
 ];
 
 describe('resolveAccess (GUARD-1)', () => {

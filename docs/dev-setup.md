@@ -130,6 +130,22 @@ pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/00
 (`admin_delete_user`؛ صفّ الطلب يُحذف مع الحساب، وصفّ التدقيق هو السجلّ) و«رفض الطلب» يضبط `handled_at/handled_by`
 تحت RLS المدير. بطاقة «طلبات دعم مفتوحة» في النظرة العامة تفتح `/support`.
 
+### التقارير والتصدير (F-65)
+الصفحة `/reports` (المدير والمشرف): نوع التقرير (يومي · أسبوعي · حضور)، والفترة («هذا الشهر» افتراضيًا، «الشهر الماضي»،
+«آخر 30 يومًا»، أو تاريخان ميلاديان يظهر الهجري بجانب كلٍّ منهما)، والمجموعة؛ و«تنزيل CSV» رابط عادي إلى
+`GET /api/export?kind=daily|weekly|attendance&from=YYYY-MM-DD&to=YYYY-MM-DD&group=<uuid>|all` (`app/api/export/route.ts`).
+المسار يقرأ بعميل الكوكيز فتحدّ RLS الصفوف (المشرف يرى مجموعاته فقط مهما كان `group`): غير المسجَّل `401` والطالب أو
+الحساب غير المفعَّل `403` واستعلام خاطئ (تاريخ غير صحيح، `from > to`، فترة أطول من 366 يومًا) `400`، كلها JSON؛ ولهذا
+يترك الحارس (`resolveAccess`) مسارات `/api/` لمعالجها بدل التحويل إلى `/login`. الملف `text/csv; charset=utf-8` باسم
+`awrad-<kind>-<from>_<to>.csv`، يبدأ بعلامة BOM (فيفتحه Excel بالعربية)، وكل حقل بين علامتَي تنصيص وأسطره `\r\n`، والنصّ
+الذي يبدأ بـ `= + - @` أو جدولة يُسبق بفاصلة عليا (`src/lib/csv.ts`). الصفوف في `src/lib/export-rows.ts` (حالة اليوم
+بـ `computeDayStatus` وعتبة `streak_threshold_pct`، والهجري بـ `hijri_adjustment_days`): صفّ لكل شخص مُتابَع نشط في كل يوم
+(من انضمامه إلى «اليوم» بمنطقة مجموعته) أو أسبوع يبدأ في الفترة، أو لكل تعليم حضور في مجالس الفترة.
+تجربته يدويًا: `curl -b <كوكيز الجلسة> 'http://localhost:3000/api/export?kind=daily&from=2026-11-01&to=2026-11-30' -o r.csv`
+ثم `head -c 3 r.csv | xxd` يُظهر `efbb bf`. في e2e (`e2e/reports.spec.ts`) يُنزَّل الملف بالنقر على الرابط مع
+`page.waitForEvent('download')` ثم يُقرأ من `download.path()`؛ والطلب المباشر بجلسة الدور عبر `page.request.get()`.
+البذرة لا تضع في سجلّاتها عادات الاختبار (`test_hab_`، `e2e-عادة`) وتحذف بقاياها غير المسجَّلة قبل الحفظ.
+
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)
 ← `supabase.functions.invoke('invite-user')` بعميل الكوكيز فيصل JWT المدير ← الدالة تتحقّق من `is_admin()` بعميل
