@@ -17,6 +17,14 @@ export interface ImportReport {
     unmappedNames: number;
     invalidDates: number;
     rowErrors: number;
+    /** FIN-2: logs carrying a daily note, a weekly review, a weekly support request (closed on import). */
+    notes: number;
+    reviews: number;
+    supportRequests: number;
+    /** FIN-9: planned logs left out because a log exists (dry run: would be). */
+    skippedExisting: number;
+    /** M6: undated weekly responses filed under the week that had just ended. */
+    weeksInferred: number;
   };
   students: {
     name: string;
@@ -33,6 +41,8 @@ export interface ImportReport {
   rowErrors: ImportPlan['rowErrors'];
   accountsToCreate: ImportPlan['accountsToCreate'];
   ignoredColumns: ImportPlan['ignoredColumns'];
+  weeksInferred: ImportPlan['weeksInferred'];
+  skippedExisting: ExecuteResult['skippedExisting'];
   result: ExecuteResult;
 }
 
@@ -83,6 +93,11 @@ export function buildReport(
       unmappedNames: plan.unmappedNames.length,
       invalidDates: plan.invalidDates.length,
       rowErrors: plan.rowErrors.length,
+      notes: plan.toImport.filter((l) => l.note).length,
+      reviews: plan.toImport.filter((l) => l.reviewText).length,
+      supportRequests: plan.toImport.filter((l) => l.supportRequestText).length,
+      skippedExisting: result.skippedExisting.length,
+      weeksInferred: plan.weeksInferred.length,
     },
     students: [...students.values()],
     toImport: plan.toImport.map(({ source, row, name, periodStart }) => ({
@@ -97,6 +112,8 @@ export function buildReport(
     rowErrors: plan.rowErrors,
     accountsToCreate: plan.accountsToCreate,
     ignoredColumns: plan.ignoredColumns,
+    weeksInferred: plan.weeksInferred,
+    skippedExisting: result.skippedExisting,
     result,
   };
 }
@@ -105,29 +122,53 @@ const where = (source: Source | 'account', row: number) =>
   row > 0 ? `${messages.source[source]} صفّ ${row}` : messages.source[source];
 const nameOf = (name: string) => name || messages.noName;
 
-/** The Arabic summary printed after a run. */
-export function formatSummary(report: ImportReport, reportPath = 'report.json'): string {
+/**
+ * The Arabic summary printed after a run. `countsOnly` (Ruling FIN-5, runs on the server, whose ops log is pushed to
+ * git): the numbers only — no name, email, sheet value or column title; report.json keeps the details.
+ */
+export function formatSummary(
+  report: ImportReport,
+  reportPath = 'report.json',
+  options: { countsOnly?: boolean } = {},
+): string {
   const { counts, result } = report;
-  const planned = report.mode === 'dry-run' ? 'ستُستورد' : 'في الخطة';
+  const detail = !options.countsOnly;
+  const dry = report.mode === 'dry-run';
+  const planned = dry ? 'ستُستورد' : 'في الخطة';
   const lines: string[] = [
-    report.mode === 'dry-run'
-      ? 'معاينة الاستيراد — لم يُكتب شيء في قاعدة البيانات'
-      : 'تنفيذ الاستيراد',
+    dry ? 'معاينة الاستيراد — لم يُكتب شيء في قاعدة البيانات' : 'تنفيذ الاستيراد',
     '',
     `سجلّات ${planned}: ${counts.dailyLogs} يومي، ${counts.weeklyLogs} أسبوعي؛ علامات حضور: ${counts.attendanceMarks}`,
-    `الطلاب: ${counts.students}؛ حسابات معطَّلة ${report.mode === 'dry-run' ? 'ستُنشأ' : 'مطلوبة'}: ${counts.accountsToCreate}`,
+    `نصوص معها: ${counts.notes} ملاحظة، ${counts.reviews} مراجعة، ${counts.supportRequests} طلب دعم (تُعلَّم «تمّت المعالجة»)`,
+    `الطلاب: ${counts.students}؛ حسابات معطَّلة ${dry ? 'ستُنشأ' : 'مطلوبة'}: ${counts.accountsToCreate}`,
   ];
-  for (const account of report.accountsToCreate) lines.push(`  • ${account.name}`);
+  if (detail) for (const account of report.accountsToCreate) lines.push(`  • ${account.name}`);
+
+  lines.push(`سجلّات موجودة ${dry ? 'ستُترك' : 'تُركت'} كما هي: ${counts.skippedExisting}`);
+  if (detail) {
+    for (const k of report.skippedExisting) {
+      lines.push(`  • ${where(k.source, k.row)}: ${nameOf(k.name)} ${k.periodStart}`);
+    }
+  }
+
+  if (counts.weeksInferred > 0) {
+    lines.push(`ردود أسبوعية بلا أسبوع نُسبت إلى الأسبوع المنتهي (أُرسلت في أيام المهلة): ${counts.weeksInferred}`);
+    if (detail) {
+      for (const w of report.weeksInferred) {
+        lines.push(`  • ${where('weekly', w.row)}: ${nameOf(w.name)} أُرسل ${w.sentOn} ← أسبوع ${w.periodStart}`);
+      }
+    }
+  }
 
   lines.push(`ردود مكرّرة حُسمت بالأحدث: ${counts.duplicatesResolved}`);
-  for (const d of report.duplicatesResolved) {
+  if (detail) for (const d of report.duplicatesResolved) {
     lines.push(
       `  • ${where(d.source, d.row)}: ${nameOf(d.name)} ${d.periodStart} ← اعتُمد الصفّ ${d.keptRow}`,
     );
   }
 
   lines.push(`أسماء غير مطابقة (لن تُستورد): ${counts.unmappedNames}`);
-  for (const u of report.unmappedNames) {
+  if (detail) for (const u of report.unmappedNames) {
     const hint =
       u.suggestions.length > 0
         ? ` — هل هو: ${u.suggestions.map((s) => `${s.fullName} (${s.profileId})`).join('، ')}؟`
@@ -136,14 +177,14 @@ export function formatSummary(report: ImportReport, reportPath = 'report.json'):
   }
 
   lines.push(`تواريخ غير صالحة: ${counts.invalidDates}`);
-  for (const d of report.invalidDates) {
+  if (detail) for (const d of report.invalidDates) {
     lines.push(
       `  • ${d.row > 1 ? where(d.source, d.row) : `عنوان عمود في ${messages.source[d.source]}`}: ${nameOf(d.name)} «${d.value}»`,
     );
   }
 
   lines.push(`صفوف ستُرفض: ${counts.rowErrors}`);
-  for (const e of report.rowErrors) {
+  if (detail) for (const e of report.rowErrors) {
     lines.push(
       `  • ${where(e.source, e.row)}: ${nameOf(e.name)} ${e.date} «${e.column}» = «${e.value}» — ${messages.rowError[e.code]}`,
     );
@@ -151,7 +192,7 @@ export function formatSummary(report: ImportReport, reportPath = 'report.json'):
 
   if (report.ignoredColumns.length > 0) {
     const list = report.ignoredColumns.map((c) => `«${c.header}» (${messages.source[c.source]})`);
-    lines.push(`أعمدة بلا ربط (تُتجاهل): ${list.join('، ')}`);
+    lines.push(`أعمدة بلا ربط (تُتجاهل): ${detail ? list.join('، ') : list.length}`);
   }
 
   lines.push('');
@@ -159,14 +200,16 @@ export function formatSummary(report: ImportReport, reportPath = 'report.json'):
     lines.push('للتنفيذ أعد التشغيل نفسه مع --execute');
   } else {
     lines.push(`حُفظ: ${result.logsSaved} سجلًّا و${result.attendanceSaved} علامة حضور`);
+    lines.push(`طلبات دعم مستوردة أُغلقت: ${result.supportHandled}`);
     lines.push(
       `حسابات أُنشئت: ${result.accountsCreated.length}؛ أُعيد استعمالها: ${result.accountsReused.length}`,
     );
-    for (const a of result.accountsCreated) lines.push(`  • ${a.name} ← ${a.email}`);
+    if (detail) for (const a of result.accountsCreated) lines.push(`  • ${a.name} ← ${a.email}`);
     lines.push(`تاريخ الانضمام عُدِّل لـ ${result.joinedAtUpdated} طالب`);
     lines.push(`إخفاقات: ${result.failures.length}`);
-    for (const f of result.failures)
-      lines.push(`  • ${where(f.source, f.row)}: ${nameOf(f.name)} — ${f.code}`);
+    if (detail) {
+      for (const f of result.failures) lines.push(`  • ${where(f.source, f.row)}: ${nameOf(f.name)} — ${f.code}`);
+    }
   }
   lines.push(`التقرير الكامل: ${reportPath}`);
   return lines.join('\n');

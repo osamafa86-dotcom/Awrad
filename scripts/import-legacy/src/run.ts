@@ -1,7 +1,9 @@
 // Executing an import plan over a direct Postgres connection (SUPABASE_DB_URL), as spec §14 says:
 // accounts for allowed missing names, then per student one transaction calling save_log() under an
 // admin claims session (so the editing window does not apply), attendance through set_attendance(),
-// and joined_at moved back to the oldest imported date. Safe to re-run (BR-12 upserts, lookups).
+// and joined_at moved back to the oldest imported date. A log that exists already is never overwritten
+// (Ruling FIN-9): it is skipped and reported, so re-runs are idempotent. Texts travel with the log
+// (Ruling FIN-2); an imported support request is marked handled at once.
 import type pg from 'pg';
 import type {
   GroupInfo,
@@ -45,11 +47,23 @@ export interface ImportFailure {
   code: string;
 }
 
+/** A planned log left out because the student already has a log for that period (Ruling FIN-9). */
+export interface SkippedLog {
+  source: 'daily' | 'weekly';
+  row: number;
+  name: string;
+  periodStart: string;
+}
+
 export interface ExecuteResult {
   dryRun: boolean;
   accountsCreated: { name: string; email: string }[];
   accountsReused: string[];
   logsSaved: number;
+  /** Execute: skipped because a log exists. Dry run: what would be skipped (findExistingLogs, read-only). */
+  skippedExisting: SkippedLog[];
+  /** Imported support requests marked handled (FIN-2: the inbox is not flooded with old requests). */
+  supportHandled: number;
   attendanceSaved: number;
   joinedAtUpdated: number;
   failures: ImportFailure[];
@@ -58,11 +72,13 @@ export interface ExecuteResult {
 export const LEGACY_EMAIL_DOMAIN = 'legacy.awrad.local';
 /** The title of the shared sessions the attendance grid is imported into (data, not UI). */
 export const IMPORTED_SESSION_TITLE = 'مجلس مستورد من الجداول القديمة';
+/** The staff note on an imported support request, closed on import (data, not UI; FIN-2). */
+export const IMPORTED_SUPPORT_NOTE = 'طلب مستورد من الجداول القديمة؛ أُغلق عند الاستيراد';
 
 // ───────────── catalogue ─────────────
 export async function loadCatalog(
   db: Db,
-): Promise<{ habits: HabitInfo[]; profiles: ProfileInfo[]; groups: GroupInfo[] }> {
+): Promise<{ habits: HabitInfo[]; profiles: ProfileInfo[]; groups: GroupInfo[]; weeklyGraceDays: number }> {
   const habits = await db.query<Omit<HabitInfo, 'items'>>(
     `select id, slug, name, kind::text as kind, frequency::text as frequency,
             active_from::text as "activeFrom", active_to::text as "activeTo"
@@ -81,7 +97,11 @@ export async function loadCatalog(
   const groups = await db.query<GroupInfo>(
     `select id, name, week_starts_on::int as "weekStartsOn" from groups order by name`,
   );
+  const grace = await db.query<{ days: number | null }>(
+    `select (value #>> '{}')::int as days from app_settings where key = 'weekly_grace_days'`,
+  );
   return {
+    weeklyGraceDays: grace.rows[0]?.days ?? 3,
     habits: habits.rows.map((h) => ({
       ...h,
       items: items.rows
@@ -246,6 +266,61 @@ async function withActive(db: Db, userIds: string[], fn: () => Promise<void>): P
     await db.query('update profiles set is_active = false where id = any($1::uuid[])', [ids]);
 }
 
+const logKey = (userId: string, period: string, periodStart: string) => `${userId}|${period}|${periodStart}`;
+
+/** The (user, period, period_start) keys among these users that already have a log. */
+async function existingKeys(db: Db, userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const found = await db.query<{ user_id: string; period: string; period_start: string }>(
+    `select user_id::text, period::text, period_start::text from logs where user_id = any($1::uuid[])`,
+    [userIds],
+  );
+  return new Set(found.rows.map((r) => logKey(r.user_id, r.period, r.period_start)));
+}
+
+/**
+ * The planned logs of existing profiles that already have a log for that period (Ruling FIN-9) — read-only, for the
+ * dry run's report. Accounts still to create have no logs yet.
+ */
+export async function findExistingLogs(db: Db, plan: ImportPlan): Promise<SkippedLog[]> {
+  const ofProfiles = plan.toImport.filter((log) => log.target.kind === 'profile');
+  const userOf = (log: PlannedLog) => (log.target as { profileId: string }).profileId;
+  const keys = await existingKeys(db, [...new Set(ofProfiles.map(userOf))]);
+  return ofProfiles
+    .filter((log) => keys.has(logKey(userOf(log), log.period, log.periodStart)))
+    .map(({ source, row, name, periodStart }) => ({ source, row, name, periodStart }));
+}
+
+/** One planned log under a savepoint: save_log, then (FIN-2) close an imported support request. */
+async function saveOne(db: Db, log: PlannedLog, userId: string): Promise<{ error: string | null; handled: boolean }> {
+  await db.query('savepoint import_row');
+  try {
+    const saved = await db.query<{ id: string }>(
+      `select save_log(p_period => $1::habit_frequency, p_period_start => $2::date, p_entries => $3::jsonb,
+                       p_note => $4, p_review_text => $5, p_support_request_text => $6,
+                       p_user_id => $7::uuid) as id`,
+      [
+        log.period,
+        log.periodStart,
+        JSON.stringify(log.entries),
+        log.note ?? null,
+        log.reviewText ?? null,
+        log.supportRequestText ?? null,
+        userId,
+      ],
+    );
+    const handled = Boolean(log.supportRequestText);
+    if (handled) {
+      await db.query('select handle_support_request($1::uuid, $2)', [saved.rows[0]!.id, IMPORTED_SUPPORT_NOTE]);
+    }
+    await db.query('release savepoint import_row');
+    return { error: null, handled };
+  } catch (error) {
+    await db.query('rollback to savepoint import_row');
+    return { error: error instanceof Error ? error.message : String(error), handled: false };
+  }
+}
+
 async function tryStatement(db: Db, sql: string, params: unknown[]): Promise<string | null> {
   await db.query('savepoint import_row');
   try {
@@ -278,6 +353,8 @@ export async function executeImport(
     accountsCreated: [],
     accountsReused: [],
     logsSaved: 0,
+    skippedExisting: [],
+    supportHandled: 0,
     attendanceSaved: 0,
     joinedAtUpdated: 0,
     failures: [],
@@ -320,29 +397,30 @@ export async function executeImport(
     if (current === undefined || date < current) oldest.set(userId, date);
   };
 
-  // 2) logs: one transaction per student
+  // 2) logs: one transaction per student; a log that exists is never overwritten (FIN-9)
   const withUser = (list: PlannedLog[]) => list.filter((log) => userOf(log.target) !== null);
   for (const [userId, logs] of groupBy(withUser(plan.toImport), (log) => userOf(log.target)!)) {
-    await transaction(db, () =>
-      withActive(db, [userId], async () => {
+    await transaction(db, async () => {
+      // Read inside the student's transaction, just before the writes (the import runs at a quiet hour).
+      const existing = await existingKeys(db, [userId]);
+      await withActive(db, [userId], async () => {
         await asAdmin(db, adminId);
         for (const log of logs) {
-          const code = await tryStatement(
-            db,
-            `select save_log(p_period => $1::habit_frequency, p_period_start => $2::date,
-                             p_entries => $3::jsonb, p_user_id => $4::uuid)`,
-            [log.period, log.periodStart, JSON.stringify(log.entries), userId],
-          );
-          if (code)
-            result.failures.push({ source: log.source, row: log.row, name: log.name, code });
+          if (existing.has(logKey(userId, log.period, log.periodStart))) {
+            result.skippedExisting.push({ source: log.source, row: log.row, name: log.name, periodStart: log.periodStart });
+            continue;
+          }
+          const { error, handled } = await saveOne(db, log, userId);
+          if (error) result.failures.push({ source: log.source, row: log.row, name: log.name, code: error });
           else {
             result.logsSaved += 1;
+            if (handled) result.supportHandled += 1;
             saw(userId, log.periodStart);
           }
         }
         await asSystem(db);
-      }),
-    );
+      });
+    });
   }
 
   // 3) attendance: one shared imported session per date, one transaction per session

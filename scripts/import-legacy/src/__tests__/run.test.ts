@@ -17,7 +17,15 @@ import {
 } from '../map.ts';
 import { parseAttendanceCsv, parseDailyCsv, parseWeeklyCsv } from '../parse.ts';
 import { buildReport, formatSummary } from '../report.ts';
-import { createAuthUser, executeImport, loadCatalog, resolveAdmin, type Db } from '../run.ts';
+import {
+  createAuthUser,
+  executeImport,
+  findExistingLogs,
+  IMPORTED_SUPPORT_NOTE,
+  loadCatalog,
+  resolveAdmin,
+  type Db,
+} from '../run.ts';
 
 const fixture = (name: string) =>
   readFileSync(new URL(`../../fixtures/${name}`, import.meta.url), 'utf8');
@@ -37,6 +45,7 @@ const emptyPlan = (): ImportPlan => ({
   rowErrors: [],
   accountsToCreate: [],
   ignoredColumns: [],
+  weeksInferred: [],
 });
 
 describe('executeImport in dry-run mode', () => {
@@ -418,7 +427,8 @@ describe('executeImport against the local database', () => {
       ...emptyPlan(),
       toImport: [
         { ...first!, row: 90, periodStart: '2099-01-01' },
-        { ...first!, row: 91 },
+        // A day not imported yet: an existing log would be skipped, not saved (FIN-9).
+        { ...first!, row: 91, periodStart: '2025-02-01' },
       ],
     };
     const result = await executeImport(bad, {
@@ -432,4 +442,136 @@ describe('executeImport against the local database', () => {
       { source: 'daily', row: 90, name: first!.name, code: 'FUTURE_DATE' },
     ]);
   });
+
+  // Ruling FIN-2: legacy notes, reviews and support requests are imported; imported support requests are marked
+  // handled at once (with a staff note saying so), so the support inbox is not flooded with years of old requests.
+  it('saves the note, the review and the support request, and closes imported support requests', async () => {
+    const [daily] = plan.toImport.filter((l) => l.period === 'daily' && l.target.kind === 'profile');
+    const [weekly] = plan.toImport.filter((l) => l.period === 'weekly' && l.target.kind === 'profile');
+    const texts: ImportPlan = {
+      ...emptyPlan(),
+      toImport: [
+        { ...daily!, periodStart: '2025-02-10', note: 'ملاحظة قديمة' },
+        {
+          ...weekly!,
+          periodStart: '2025-02-09',
+          reviewText: 'مراجعة قديمة',
+          supportRequestText: 'طلب قديم',
+        },
+      ],
+    };
+    const result = await executeImport(texts, { dryRun: false, db, adminId: ids.adminId, auth: { mode: 'direct' } });
+    expect(result.failures).toEqual([]);
+    expect(result.supportHandled).toBe(1);
+    const user = (daily!.target as { profileId: string }).profileId;
+    const rows = await db.query(
+      `select l.period::text, l.note, l.review_text, l.support_request_text, l.support_status::text,
+              l.handled_by, n.note as internal
+         from logs l left join support_notes n on n.log_id = l.id
+        where l.user_id = $1 and l.period_start in ('2025-02-10', '2025-02-09') order by l.period`,
+      [user],
+    );
+    expect(rows.rows).toEqual([
+      {
+        period: 'daily',
+        note: 'ملاحظة قديمة',
+        review_text: null,
+        support_request_text: null,
+        support_status: 'none',
+        handled_by: null,
+        internal: null,
+      },
+      {
+        period: 'weekly',
+        note: null,
+        review_text: 'مراجعة قديمة',
+        support_request_text: 'طلب قديم',
+        support_status: 'handled',
+        handled_by: ids.adminId,
+        internal: IMPORTED_SUPPORT_NOTE,
+      },
+    ]);
+  });
+
+  // Ruling FIN-9: an import never overwrites a log that exists (a student's own entry since the app went live, or
+  // an earlier import): the row is skipped and reported, and a re-run stays idempotent.
+  it('never overwrites an existing log: a student-made log is skipped, reported, and left as it was', async () => {
+    const student = await clientAs('ahmad@test');
+    const [legacy] = plan.toImport.filter((l) => l.period === 'daily' && l.name === 'أحمد التجريبي');
+    const day = '2025-04-01';
+    try {
+      await db.query('update profiles set joined_at = $2 where id = $1', [ids.ahmad, '2025-03-01']);
+      const habitsToday = await db.query<{ id: string; kind: string }>(
+        `select id, kind::text from habits where frequency = 'daily' and active_from <= $1
+            and (active_to is null or active_to >= $1)`,
+        [day],
+      );
+      await student.rpc(
+        'save_log',
+        {
+          p_period: 'daily',
+          p_period_start: day,
+          p_entries: JSON.stringify(habitsToday.rows.map((h) => ({ habit_id: h.id, status: 'not_required' }))),
+          p_note: 'كتبها الطالب في التطبيق',
+        },
+        { settings: { 'app.test_now': `${day}T12:00:00Z` } },
+      );
+    } finally {
+      await student.end();
+    }
+    const before = await db.query(
+      `select l.note, l.updated_at, array_agg(e.status::text order by e.habit_id) as statuses
+         from logs l join log_entries e on e.log_id = l.id
+        where l.user_id = $1 and l.period = 'daily' and l.period_start = $2 group by l.id`,
+      [ids.ahmad, day],
+    );
+
+    const overlapping: ImportPlan = {
+      ...emptyPlan(),
+      toImport: [{ ...legacy!, row: 77, periodStart: day, note: 'من الجدول' }, { ...legacy!, row: 78, periodStart: '2025-04-02' }],
+    };
+    const result = await executeImport(overlapping, { dryRun: false, db, adminId: ids.adminId, auth: { mode: 'direct' } });
+    expect(result.skippedExisting).toEqual([{ source: 'daily', row: 77, name: legacy!.name, periodStart: day }]);
+    expect(result.logsSaved).toBe(1);
+    const after = await db.query(
+      `select l.note, l.updated_at, array_agg(e.status::text order by e.habit_id) as statuses
+         from logs l join log_entries e on e.log_id = l.id
+        where l.user_id = $1 and l.period = 'daily' and l.period_start = $2 group by l.id`,
+      [ids.ahmad, day],
+    );
+    expect(after.rows).toEqual(before.rows);
+
+    const again = await executeImport(overlapping, { dryRun: false, db, adminId: ids.adminId, auth: { mode: 'direct' } });
+    expect(again.logsSaved).toBe(0);
+    expect(again.skippedExisting.map((s) => s.row)).toEqual([77, 78]);
+
+    const report = buildReport(overlapping, again, { files: {} });
+    expect(report.counts.skippedExisting).toBe(2);
+    expect(formatSummary(report)).toContain('سجلّات موجودة تُركت كما هي: 2');
+  });
+
+  it('a dry run lists the logs that exist already (read-only check)', async () => {
+    const [legacy] = plan.toImport.filter((l) => l.period === 'daily' && l.name === 'أحمد التجريبي');
+    const preview: ImportPlan = { ...emptyPlan(), toImport: [{ ...legacy!, row: 79, periodStart: '2025-04-01' }] };
+    const existing = await findExistingLogs(db, preview);
+    expect(existing).toEqual([{ source: 'daily', row: 79, name: legacy!.name, periodStart: '2025-04-01' }]);
+  });
 });
+
+// Ruling FIN-5: on the server the summary goes to an ops log that is pushed to git, so it carries counts only.
+describe('the counts-only summary', () => {
+  it('prints the numbers and no name, email or value from the sheets', async () => {
+    const plan: ImportPlan = {
+      ...emptyPlan(),
+      unmappedNames: [{ name: 'خالد المثالى', rows: 2, suggestions: [{ profileId: 'p-1', fullName: 'خالد المثالي', distance: 0 }] }],
+      accountsToCreate: [{ name: 'يوسف النموذجي', groupId: null }],
+      invalidDates: [{ source: 'daily', row: 7, name: 'سالم', value: '30/02/2025' }],
+    };
+    const result = await executeImport(plan, { dryRun: true });
+    const text = formatSummary(buildReport(plan, result, { files: {} }), '/import/report.json', { countsOnly: true });
+    expect(text).toContain('أسماء غير مطابقة (لن تُستورد): 1');
+    expect(text).toContain('/import/report.json');
+    for (const secret of ['خالد', 'يوسف', 'سالم', '30/02/2025', 'p-1']) expect(text).not.toContain(secret);
+  });
+});
+

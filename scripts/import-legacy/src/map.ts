@@ -55,8 +55,18 @@ export interface LegacyData {
 }
 
 // ───────────── mapping.json ─────────────
-/** A habit slug, or for a checklist `{ slug, items: { "<form option>": "<habit item name>" } }`. */
-export type ColumnSpec = string | { slug: string; items?: Record<string, string> };
+/**
+ * The texts a log carries besides its entries (Ruling FIN-2, spec §2.3): the daily note, the weekly review and the
+ * weekly support request. Imported support requests are marked handled at once (run.ts).
+ */
+export type TextKind = 'note' | 'review' | 'support';
+const TEXT_KINDS: Record<Frequency, TextKind[]> = { daily: ['note'], weekly: ['review', 'support'] };
+
+/**
+ * A habit slug, or for a checklist `{ slug, items: { "<form option>": "<habit item name>" } }`, or for a text column
+ * `{ text: "note" }` (daily) / `{ text: "review" | "support" }` (weekly).
+ */
+export type ColumnSpec = string | { slug: string; items?: Record<string, string> } | { text: TextKind };
 /** A profile id, an account to create (inactive, placeholder email), or null = not imported. */
 export type StudentSpec =
   string | { createMissingAsInactive: true; groupId?: string | null } | null;
@@ -75,6 +85,10 @@ export interface ColumnTarget {
   /** Form option label → habit item name (labels not listed are item names themselves). */
   itemLabels: Record<string, string>;
 }
+export interface TextTarget {
+  header: string;
+  kind: TextKind;
+}
 export type StudentTarget =
   | { kind: 'profile'; profileId: string; weekStartsOn: number }
   | { kind: 'create'; name: string; groupId: string | null; weekStartsOn: number };
@@ -89,6 +103,10 @@ export interface Mapping {
   habits: HabitInfo[];
   daily: ColumnTarget[];
   weekly: ColumnTarget[];
+  /** Text columns per sheet (note; review, support). */
+  texts: Record<Frequency, TextTarget[]>;
+  /** BR-06 weekly grace (app_settings weekly_grace_days): decides the week of an undated weekly response (M6). */
+  weeklyGraceDays: number;
   /** Every sheet name seen (and every name in the file); null = not imported. */
   students: Record<string, StudentTarget | null>;
   /** Near matches (≤ 2 edits after normalisation) for each name without a target. */
@@ -109,6 +127,10 @@ export interface PlannedLog {
   period: Frequency;
   periodStart: string;
   entries: PlannedEntry[];
+  /** Trimmed, only when the cell had text (FIN-2). */
+  note?: string;
+  reviewText?: string;
+  supportRequestText?: string;
 }
 export interface PlannedAttendance {
   row: number;
@@ -143,6 +165,11 @@ export interface ImportPlan {
   rowErrors: RowError[];
   accountsToCreate: { name: string; groupId: string | null }[];
   ignoredColumns: { source: 'daily' | 'weekly'; header: string }[];
+  /**
+   * Weekly responses without a week column sent within the grace days after a week ended: filed under that week
+   * (a late review), not the one the timestamp falls in (M6). Listed so the dry run shows every such choice.
+   */
+  weeksInferred: { row: number; name: string; sentOn: string; periodStart: string }[];
 }
 
 const MAX_SUGGESTION_DISTANCE = 2;
@@ -226,6 +253,39 @@ function guessColumns(
   return columns;
 }
 
+/** Header words that suggest a text column in the draft (a suggestion to review, like the habit guesses). */
+const TEXT_HINTS: Record<TextKind, RegExp> = { note: /ملاحظ|note/i, review: /مراجع|review/i, support: /دعم|support/i };
+
+function guessTexts(headers: string[], taken: ColumnTarget[], frequency: Frequency): TextTarget[] {
+  const free = headers.filter((header) => !taken.some((c) => c.header === header));
+  return TEXT_KINDS[frequency].flatMap((kind) => {
+    const header = free.find((h) => TEXT_HINTS[kind].test(normalizeArabicName(h)));
+    return header ? [{ header, kind }] : [];
+  });
+}
+
+function resolveTexts(
+  specs: Record<string, ColumnSpec> | undefined,
+  frequency: Frequency,
+  errors: string[],
+): TextTarget[] {
+  const texts: TextTarget[] = [];
+  for (const [rawHeader, spec] of Object.entries(specs ?? {})) {
+    if (typeof spec !== 'object' || spec === null || !('text' in spec)) continue;
+    const header = cleanText(rawHeader);
+    if (!TEXT_KINDS[frequency].includes(spec.text)) {
+      errors.push(`العمود «${header}»: النصّ ${String(spec.text)} لا يكون في ملف ${frequency}`);
+      continue;
+    }
+    if (texts.some((t) => t.kind === spec.text)) {
+      errors.push(`العمود «${header}»: عمود آخر مربوط بالنصّ ${spec.text}`);
+      continue;
+    }
+    texts.push({ header, kind: spec.text });
+  }
+  return texts;
+}
+
 function resolveColumns(
   specs: Record<string, ColumnSpec> | undefined,
   habits: HabitInfo[],
@@ -234,6 +294,7 @@ function resolveColumns(
 ): ColumnTarget[] {
   const columns: ColumnTarget[] = [];
   for (const [rawHeader, spec] of Object.entries(specs ?? {})) {
+    if (typeof spec === 'object' && spec !== null && 'text' in spec) continue; // resolveTexts
     const header = cleanText(rawHeader);
     const slug = typeof spec === 'string' ? spec : spec?.slug;
     const habit = habits.find((h) => h.slug === slug);
@@ -266,17 +327,22 @@ export function buildMapping(
   rows: LegacyData,
   habits: HabitInfo[],
   profiles: ProfileInfo[],
-  options: { file?: MappingFile; groups?: GroupInfo[] } = {},
+  options: { file?: MappingFile; groups?: GroupInfo[]; weeklyGraceDays?: number } = {},
 ): Mapping {
-  const { file, groups = [] } = options;
+  const { file, groups = [], weeklyGraceDays = 3 } = options;
   const errors: string[] = [];
   const students: Record<string, StudentTarget | null> = {};
   let daily: ColumnTarget[];
   let weekly: ColumnTarget[];
+  let texts: Record<Frequency, TextTarget[]>;
 
   if (file) {
     daily = resolveColumns(file.daily, habits, 'daily', errors);
     weekly = resolveColumns(file.weekly, habits, 'weekly', errors);
+    texts = {
+      daily: resolveTexts(file.daily, 'daily', errors),
+      weekly: resolveTexts(file.weekly, 'weekly', errors),
+    };
     for (const [rawName, spec] of Object.entries(file.students ?? {})) {
       const name = cleanText(rawName);
       if (spec === null) {
@@ -306,6 +372,10 @@ export function buildMapping(
   } else {
     daily = guessColumns(answerHeaders(rows.daily), habits, 'daily');
     weekly = guessColumns(answerHeaders(rows.weekly), habits, 'weekly');
+    texts = {
+      daily: guessTexts(answerHeaders(rows.daily), daily, 'daily'),
+      weekly: guessTexts(answerHeaders(rows.weekly), weekly, 'weekly'),
+    };
   }
   if (file?.blankPolicy && !['not_required', 'not_done'].includes(file.blankPolicy)) {
     errors.push(`blankPolicy غير صالحة: ${file.blankPolicy}`);
@@ -338,6 +408,8 @@ export function buildMapping(
     habits,
     daily,
     weekly,
+    texts,
+    weeklyGraceDays,
     students,
     suggestions,
   };
@@ -345,15 +417,16 @@ export function buildMapping(
 
 /** The mapping as a mapping.json (the draft written for review: null = still to decide). */
 export function toMappingFile(mapping: Mapping): MappingFile {
-  const columns = (list: ColumnTarget[]) =>
-    Object.fromEntries(
-      list.map((c): [string, ColumnSpec] => [
+  const columns = (list: ColumnTarget[], texts: TextTarget[]) =>
+    Object.fromEntries([
+      ...list.map((c): [string, ColumnSpec] => [
         c.header,
         Object.keys(c.itemLabels).length > 0
           ? { slug: c.habit.slug, items: c.itemLabels }
           : c.habit.slug,
       ]),
-    );
+      ...texts.map((t): [string, ColumnSpec] => [t.header, { text: t.kind }]),
+    ]);
   const students = Object.fromEntries(
     Object.entries(mapping.students).map(([name, target]): [string, StudentSpec] => [
       name,
@@ -367,8 +440,8 @@ export function toMappingFile(mapping: Mapping): MappingFile {
   return {
     blankPolicy: mapping.blankPolicy,
     dateOrder: mapping.dateOrder,
-    daily: columns(mapping.daily),
-    weekly: columns(mapping.weekly),
+    daily: columns(mapping.daily, mapping.texts.daily),
+    weekly: columns(mapping.weekly, mapping.texts.weekly),
     students,
   };
 }
@@ -376,6 +449,18 @@ export function toMappingFile(mapping: Mapping): MappingFile {
 // ───────────── planImport ─────────────
 const isActiveOn = (dated: Dated, date: string) =>
   dated.activeFrom <= date && (dated.activeTo === null || date <= dated.activeTo);
+
+/** `date` moved by `days` (YYYY-MM-DD, UTC arithmetic). */
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to`. */
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
 
 /** The start of the week holding `date` (as SQL week_start(): 0 = Sunday). */
 export function weekStart(date: string, weekStartsOn: number): string {
@@ -453,6 +538,7 @@ export function planImport(rows: LegacyData, mapping: Mapping): ImportPlan {
     rowErrors: [],
     accountsToCreate: [],
     ignoredColumns: [],
+    weeksInferred: [],
   };
   const unmapped = new Map<string, number>();
   const countUnmapped = (name: string) => unmapped.set(name, (unmapped.get(name) ?? 0) + 1);
@@ -460,8 +546,9 @@ export function planImport(rows: LegacyData, mapping: Mapping): ImportPlan {
   for (const period of ['daily', 'weekly'] as const) {
     const sheet = rows[period] ?? [];
     const columns = mapping[period];
+    const texts = mapping.texts[period];
     for (const header of answerHeaders(sheet)) {
-      if (!columns.some((c) => c.header === header)) {
+      if (!columns.some((c) => c.header === header) && !texts.some((t) => t.header === header)) {
         plan.ignoredColumns.push({ source: period, header });
       }
     }
@@ -486,7 +573,13 @@ export function planImport(rows: LegacyData, mapping: Mapping): ImportPlan {
         continue;
       }
       // save_log checks habits and items on p_period_start: the week start for weekly logs.
-      const periodStart = period === 'weekly' ? weekStart(date, target.weekStartsOn) : date;
+      let periodStart = period === 'weekly' ? weekStart(date, target.weekStartsOn) : date;
+      // M6: an undated weekly response sent within the grace days after a week ended is that week's late review
+      // (BR-06 lets the student save it until start + 6 + grace), not an early one for the week it was sent in.
+      if (period === 'weekly' && row.date === null && daysBetween(periodStart, date) < mapping.weeklyGraceDays) {
+        periodStart = addDays(periodStart, -7);
+        plan.weeksInferred.push({ row: row.row, name: row.name, sentOn: date, periodStart });
+      }
       const errors: RowError[] = [];
       const entries: PlannedEntry[] = [];
       const fail = (column: string, code: RowErrorCode, value: string) =>
@@ -512,8 +605,16 @@ export function planImport(rows: LegacyData, mapping: Mapping): ImportPlan {
         if (!isActiveOn(column.habit, periodStart) && cell !== '')
           fail(column.header, 'INACTIVE_HABIT', cell);
       }
+      const log: PlannedLog = { source: period, row: row.row, name: row.name, target, period, periodStart, entries };
+      for (const text of texts) {
+        const value = (row.answers[text.header] ?? '').trim();
+        if (value === '') continue;
+        if (text.kind === 'note') log.note = value;
+        else if (text.kind === 'review') log.reviewText = value;
+        else log.supportRequestText = value;
+      }
       const candidate: Candidate = {
-        log: { source: period, row: row.row, name: row.name, target, period, periodStart, entries },
+        log,
         stamp: parseTimestamp(row.timestamp, mapping.dateOrder) ?? '',
         errors,
       };

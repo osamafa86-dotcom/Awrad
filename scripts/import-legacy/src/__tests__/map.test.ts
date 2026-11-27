@@ -217,10 +217,11 @@ describe('buildMapping without a mapping file (the draft to review)', () => {
   });
 
   it('serialises to a mapping file with null for every name still to decide', () => {
+    // «ملاحظات» is guessed as the daily note column (Ruling FIN-2), to review like the habit guesses.
     expect(toMappingFile(draft)).toEqual({
       blankPolicy: 'not_required',
       dateOrder: 'dmy',
-      daily: { 'قراءة ورد القرآن (ست أرباع)': 'quran_wird', 'ورد القيام': 'qiyam' },
+      daily: { 'قراءة ورد القرآن (ست أرباع)': 'quran_wird', 'ورد القيام': 'qiyam', ملاحظات: { text: 'note' } },
       weekly: {},
       students: {
         'أحمد التجريبي': AHMAD,
@@ -578,3 +579,98 @@ describe('planImport checks weekly activity on the week start, as save_log does'
     });
   });
 });
+
+// Ruling FIN-2 (D11 «نعم، كل ما يمكن»): the daily note, the weekly review and the weekly support request travel with
+// the log through save_log; a mapping file names their columns as { "text": "note" | "review" | "support" }.
+describe('text columns (daily note, weekly review and support request)', () => {
+  const withTexts: MappingFile = {
+    ...file,
+    daily: { ...file.daily, ملاحظات: { text: 'note' } },
+    weekly: { ...file.weekly, مراجعتك: { text: 'review' }, 'ما تحتاج فيه دعمًا': { text: 'support' } },
+  };
+  const weeklyCsv =
+    'الطابع الزمني,اسمك,الأسبوع,درس الفقه,مراجعتك,ما تحتاج فيه دعمًا\n' +
+    '07/03/2025 21:00:00,أحمد التجريبي,02/03/2025,تم,"  أسبوع جيد  ","أحتاج مساعدة"\n' +
+    '07/03/2025 20:00:00,خالد المثالي,02/03/2025,تم,,\n';
+  const rows: LegacyData = { daily: data.daily, weekly: parseWeeklyCsv(weeklyCsv) };
+  const plan = planImport(rows, buildMapping(rows, habits, profiles, { file: withTexts, groups }));
+  const log = (period: string, name: string, start: string) =>
+    plan.toImport.find((l) => l.period === period && l.name === name && l.periodStart === start);
+
+  it('carries the daily note, trimmed, with its line breaks', () => {
+    expect(log('daily', 'أحمد التجريبي', '2025-03-02')?.note).toBe('تصحيح\nلسجلّ اليوم');
+    expect(log('daily', 'أحمد التجريبي', '2025-03-01')?.note).toBeUndefined();
+  });
+
+  it('carries the weekly review and support request; empty cells carry nothing', () => {
+    expect(log('weekly', 'أحمد التجريبي', '2025-03-02')).toMatchObject({
+      reviewText: 'أسبوع جيد',
+      supportRequestText: 'أحتاج مساعدة',
+    });
+    const khalid = log('weekly', 'خالد المثالي', '2025-03-02');
+    expect(khalid).not.toHaveProperty('reviewText');
+    expect(khalid).not.toHaveProperty('supportRequestText');
+  });
+
+  it('a mapped text column is no longer reported as ignored', () => {
+    expect(plan.ignoredColumns).toEqual([]);
+  });
+
+  it('the draft guesses note, review and support columns by their headers', () => {
+    const draft = buildMapping(rows, habits, profiles, { groups });
+    const written = toMappingFile(draft);
+    expect(written.daily?.['ملاحظات']).toEqual({ text: 'note' });
+    expect(written.weekly?.['مراجعتك']).toEqual({ text: 'review' });
+    expect(written.weekly?.['ما تحتاج فيه دعمًا']).toEqual({ text: 'support' });
+  });
+
+  it('rejects a text kind that does not fit the file (a review in the daily sheet)', () => {
+    const bad: MappingFile = { ...file, daily: { ملاحظات: { text: 'review' } } };
+    expect(() => buildMapping(rows, habits, profiles, { file: bad, groups })).toThrow(/ملاحظات/);
+  });
+});
+
+// Final review ops M6: a weekly sheet without «الأسبوع» took the week from the timestamp's day, so a review sent in the
+// grace days after its week (BR-06) landed in the next week and lost to that week's own review as a "duplicate".
+describe('weekly rows without a week column (M6)', () => {
+  const csv = (rowsText: string) => parseWeeklyCsv(`الطابع الزمني,اسمك,درس الفقه\n${rowsText}`);
+
+  it('a review sent within the grace days after the week ends belongs to that week, and is reported', () => {
+    // Sun 2025-03-09 starts a week; Mon 2025-03-10 is day 1 of it, inside the 3 grace days of the week of 03-02.
+    const rows: LegacyData = { weekly: csv('10/03/2025 09:00:00,أحمد التجريبي,تم\n') };
+    const plan = planImport(rows, buildMapping(rows, habits, profiles, { file, groups }));
+    expect(plan.toImport.map((l) => l.periodStart)).toEqual(['2025-03-02']);
+    expect(plan.weeksInferred).toEqual([
+      { row: 2, name: 'أحمد التجريبي', sentOn: '2025-03-10', periodStart: '2025-03-02' },
+    ]);
+  });
+
+  it('a late review and the next week own review no longer collide', () => {
+    const rows: LegacyData = {
+      weekly: csv('10/03/2025 09:00:00,أحمد التجريبي,تم\n15/03/2025 21:00:00,أحمد التجريبي,لم يتم\n'),
+    };
+    const plan = planImport(rows, buildMapping(rows, habits, profiles, { file, groups }));
+    expect(plan.toImport.map((l) => l.periodStart).sort()).toEqual(['2025-03-02', '2025-03-09']);
+    expect(plan.duplicatesResolved).toEqual([]);
+  });
+
+  it('after the grace days the timestamp week is used, and the grace length follows the setting', () => {
+    const rows: LegacyData = { weekly: csv('12/03/2025 09:00:00,أحمد التجريبي,تم\n') };
+    expect(
+      planImport(rows, buildMapping(rows, habits, profiles, { file, groups })).toImport[0]?.periodStart,
+    ).toBe('2025-03-09');
+    const strict = buildMapping(rows, habits, profiles, { file, groups, weeklyGraceDays: 0 });
+    const early: LegacyData = { weekly: csv('10/03/2025 09:00:00,أحمد التجريبي,تم\n') };
+    expect(planImport(early, { ...strict }).toImport[0]?.periodStart).toBe('2025-03-09');
+  });
+
+  it('an explicit week column is never second-guessed', () => {
+    const rows: LegacyData = {
+      weekly: parseWeeklyCsv('الطابع الزمني,اسمك,الأسبوع,درس الفقه\n10/03/2025 09:00:00,أحمد التجريبي,09/03/2025,تم\n'),
+    };
+    const plan = planImport(rows, buildMapping(rows, habits, profiles, { file, groups }));
+    expect(plan.toImport[0]?.periodStart).toBe('2025-03-09');
+    expect(plan.weeksInferred).toEqual([]);
+  });
+});
+
