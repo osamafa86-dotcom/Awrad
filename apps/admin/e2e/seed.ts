@@ -53,7 +53,8 @@ type Outcome = (typeof SEEDED_LOGS)[number]['outcome'];
 
 /**
  * save_log's p_entries for `date`: every active daily habit done (checklists with every active item
- * checked), or, for `failed`, the first tristate habit not_done. Habits are data (AGENTS.md §3).
+ * checked), or, for `failed`, every tristate habit not_done, so the day is failed under any
+ * streak_threshold_pct (the checklists alone stay below it). Habits are data (AGENTS.md §3).
  */
 async function dailyEntries(client: SupabaseClient, date: string, outcome: Outcome) {
   const habits = check(
@@ -76,11 +77,15 @@ async function dailyEntries(client: SupabaseClient, date: string, outcome: Outco
       .lte('active_from', date)
       .or(`active_to.is.null,active_to.gte.${date}`),
   ).data as Array<{ id: string; habit_id: string }>;
-  const failing = outcome === 'failed' ? habits.find((h) => h.kind === 'tristate')?.id : undefined;
+  const failed = outcome === 'failed';
+  if (failed && !habits.some((h) => h.kind === 'tristate')) {
+    // Without one the "failed" day would silently be saved as all done.
+    throw new Error(`seed: no active daily tristate habit on ${date} to mark not_done`);
+  }
   return habits.map((h) =>
     h.kind === 'checklist'
       ? { habit_id: h.id, status: 'done', checked_item_ids: items.filter((i) => i.habit_id === h.id).map((i) => i.id) }
-      : { habit_id: h.id, status: h.id === failing ? 'not_done' : 'done' },
+      : { habit_id: h.id, status: failed ? 'not_done' : 'done' },
   );
 }
 
@@ -92,16 +97,21 @@ async function dailyEntries(client: SupabaseClient, date: string, outcome: Outco
  */
 async function seedLogs(db: SupabaseClient, ids: Map<string, string>): Promise<void> {
   const admin = await sessionFor(db, TEST_USERS.admin.email);
-  const today = todayIn(TEST_TIMEZONE);
-  for (const log of SEEDED_LOGS) {
-    const date = addDays(today, -log.daysAgo);
-    const saved = await admin.rpc('save_log', {
-      p_user_id: ids.get(log.user),
-      p_period: 'daily',
-      p_period_start: date,
-      p_entries: await dailyEntries(admin, date, log.outcome),
-    });
-    if (saved.error) throw saved.error;
+  try {
+    const today = todayIn(TEST_TIMEZONE);
+    for (const log of SEEDED_LOGS) {
+      const date = addDays(today, -log.daysAgo);
+      const saved = await admin.rpc('save_log', {
+        p_user_id: ids.get(log.user),
+        p_period: 'daily',
+        p_period_start: date,
+        p_entries: await dailyEntries(admin, date, log.outcome),
+      });
+      if (saved.error) throw saved.error;
+    }
+  } finally {
+    // This session only (the signed-in sessions the setup project saves stay valid).
+    await admin.auth.signOut({ scope: 'local' });
   }
 }
 

@@ -30,8 +30,10 @@ export default defineConfig({
     launchOptions: process.env.PW_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE } : {},
   },
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
-    { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
+    // Signs admin and sup1 in once and saves their sessions to e2e/.auth (Ruling E2E-2); skips without a stack.
+    { name: 'setup', testMatch: /auth\.setup\.ts$/ },
+    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } }, dependencies: ['setup'] },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 } }, dependencies: ['setup'] },
   ],
   webServer: {
     command,

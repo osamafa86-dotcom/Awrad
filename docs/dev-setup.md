@@ -89,7 +89,11 @@ pnpm --filter admin e2e
 ```
 `E2E_SKIP_BUILD=1` يعيد استخدام بناء `.next` الموجود. إن لم يتوفّر متصفح Playwright فاضبط
 `PW_CHROMIUM_EXECUTABLE` على مسار Chromium مثبَّت. في CI تشغّل المهمّة `admin-e2e` الطبقتين معًا.
-`e2e/helpers.ts` يجمع `signIn()` و`oneTimeCode()` لكل الملفات؛ `e2e/students.spec.ts` يدعو حسابًا ببريد فريد
+مشروع Playwright المسمّى `setup` (`e2e/auth.setup.ts`) يسبق `desktop` و`mobile`: يسجّل دخول `admin@` و`sup1@` مرة واحدة
+عبر الواجهة ويحفظ الجلستين في `e2e/.auth/admin.json` و`e2e/.auth/sup1.json` (خارج git)، فتحمّلهما ملفات الطبقة (ب)
+بـ `test.use({ storageState: authFile('admin') })` بدل تسجيل دخول في كل اختبار؛ `auth.spec.ts` وحده يسجّل الدخول بنفسه
+لأن التدفق هو ما يختبره. بلا حزمة Supabase يُتخطّى المشروع ولا يحفظ شيئًا.
+`e2e/helpers.ts` يجمع `signIn()` و`oneTimeCode()` و`authFile()` لكل الملفات؛ `e2e/students.spec.ts` يدعو حسابًا ببريد فريد
 (`new-<وقت>-<مشروع>@test.example`) ويحذفه بمفتاح الخدمة في النهاية فتبقى البذرة كما هي.
 
 ### دعوة طالب (F-01) ودالة `invite-user`

@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { expect, type Page } from '@playwright/test';
 
 import { serviceClient } from './seed';
@@ -31,4 +33,16 @@ export async function signIn(page: Page, email: string) {
   const code = await oneTimeCode(email);
   await page.getByLabel('رمز الدخول المكوّن من 6 أرقام').fill(code);
   await page.getByRole('button', { name: 'تأكيد الرمز' }).click();
+}
+
+/** The staff accounts the setup project signs in once per run (auth.setup.ts). */
+export type SavedRole = 'admin' | 'sup1';
+
+/**
+ * Where the setup project saves a role's signed-in browser state (git-ignored). Specs load it with
+ * `test.use({ storageState: authFile('admin') })` instead of signing in again (Ruling E2E-2).
+ */
+export function authFile(role: SavedRole): string {
+  // why: Playwright runs from the admin app (pnpm --filter admin e2e, and CI's working directory).
+  return path.resolve('e2e/.auth', `${role}.json`);
 }

@@ -6,3 +6,5 @@ next-env.d.ts
 # Playwright
 playwright-report/
 test-results/
+# Signed-in sessions the setup project saves (e2e/auth.setup.ts)
+e2e/.auth/
