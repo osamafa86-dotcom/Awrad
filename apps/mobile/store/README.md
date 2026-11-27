@@ -18,7 +18,8 @@ apps/mobile/store/
   screenshots/ar-SA/        # 1_today.png  2_summary.png  3_weekly.png
 ```
 
-يقرؤها خط النشر في مستودع appstore-release (`apps/awrad.yml`) هكذا:
+يقرؤها خط النشر في مستودع appstore-release (`apps/awrad.yml`) هكذا — مسارات الآباء (القرار DEP-10a: قائمة Play
+خارج شجرة iOS)، والمسودة `draft/awrad-yml` هناك تُحدَّث لتطابقها:
 
 | المفتاح | يقرأ |
 |---|---|
@@ -89,4 +90,5 @@ python3 -I apps/mobile/store/tools/derive-assets.py <مجلد-التصديرات
 3. **الإنجليزية:** لغة العرض الحالية العربية وحدها؛ إضافة `en-US` لاحقة.
 4. **`store.social_media`:** جواب سؤال «وسائل التواصل» في استبيان التصنيف العمري إقرارٌ من المالك لآبل، ولا يُخمَّن من الشيفرة. التطبيق لا يعرض محتوى طالب لطالب آخر، لكن القرار للمالك.
 5. **بريد التواصل:** `docs/privacy-policy.md` (السطر 40) ما زال فيه البديل `privacy@<domain>`؛ يلزم بريد حقيقي (تشترطه آبل وGoogle، ويُدخل أيضًا في حقل التواصل بـ Play وبيانات المراجعة في ASC).
-6. **رابط الخصوصية داخل التطبيق:** يظهر صفّ «سياسة الخصوصية» في الإعدادات فقط إن وُجد `EXPO_PUBLIC_ADMIN_URL` وقت البناء؛ يجب ضبطه في بناء المتاجر (`.env.production`، DEP-11).
+6. **رابط الخصوصية داخل التطبيق:** يظهر صفّ «سياسة الخصوصية» في الإعدادات فقط إن وُجد `EXPO_PUBLIC_ADMIN_URL` وقت البناء؛ يجب ضبطه في بناء المتاجر. القرار DEP-11 بعد تعديله (FIN-7): `apps/mobile/.env.production` **لا يُرفع** إلى المستودع (`.gitignore` الجذر يستثني `.env*`)؛ خطوة `prepare` في خط النشر تكتبه من القيم العامّة الثلاث (`EXPO_PUBLIC_SUPABASE_URL` و`EXPO_PUBLIC_SUPABASE_ANON_KEY` و`EXPO_PUBLIC_ADMIN_URL`، في `apps/awrad.yml`) وتفشل إن فرغ أحدها.
+7. **الإشعارات في بناء المتاجر:** معرّف مشروع Expo (`extra.eas.projectId`)، ومفاتيح FCM V1 مرفوعة إلى مشروع Expo مع `android.googleServicesFile` في `app.json`، ومفتاح APNs وقدرة Push على `org.mafatih.awrad` — بدونها لا يصل تذكير (انظر `docs/dev-setup.md` «قبل النشر»).

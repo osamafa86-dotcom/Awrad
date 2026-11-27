@@ -254,3 +254,7 @@ select jobname, schedule from cron.job;   -- send-reminders | 0 * * * *
 
 ## قبل النشر (Task 5.1)
 - [ ] استبدل `extra.eas.projectId` في `apps/mobile/app.json` (القيمة المؤقتة `REPLACE_WITH_EAS_PROJECT_ID`) بمعرّف مشروع EAS؛ وإلا يعرض التطبيق «الإشعارات غير متاحة في هذا الإصدار».
+- [ ] Expo Push يحتاج أيضًا: مفاتيح FCM V1 مرفوعة إلى مشروع Expo، و`android.googleServicesFile` في `app.json` (بدونه يرمي `getExpoPushTokenAsync` على Android)، ومفتاح APNs وقدرة Push على `org.mafatih.awrad`.
+- [ ] الإعداد العامّ لبناء المتاجر (DEP-11 بعد تعديله): `apps/mobile/.env.production` لا يُرفع؛ تكتبه خطوة `prepare` في خط النشر من `EXPO_PUBLIC_SUPABASE_URL` و`EXPO_PUBLIC_SUPABASE_ANON_KEY` و`EXPO_PUBLIC_ADMIN_URL`.
+- [ ] بريد الإنتاج (FIN-4): مزوّد SMTP في `/opt/sites/$SITE/.env` (`SMTP_HOST` و`SMTP_PORT` و`SMTP_USER` و`SMTP_PASS` و`SMTP_SENDER`، و`RATE_LIMIT_EMAIL_SENT` بحجم الدعوات)، مع SPF/DKIM لنطاق المرسِل — انظر `deploy/vps/README.md`.
+- [ ] النسخ الاحتياطي (FIN-6): المؤقّت الليلي لـ `deploy/vps/backup.sh` وأوّل `restore-rehearsal.sh` ناجح — بوّابة قبل بيانات حقيقية (`docs/runbook.md` §3).

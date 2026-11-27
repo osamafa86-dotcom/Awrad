@@ -4,10 +4,12 @@
 # -p "$SITE" is required: the file names no project (no top-level `name:`), so the project — and with it the
 # volumes (<project>_pgdata), the project network (<project>_default) and the containers — comes from -p.
 # Omitting -p is a caller's error (compose would fall back to the directory name, "vps").
-# From the --env-file: SITE (default awrad; must equal -p), ADMIN_HOST, APP_HOST, API_HOST, MAIL_HOST (no
-# defaults: a missing host fails `docker compose config`), AWRAD_SECRETS (default /opt/sites/$SITE/secrets),
-# WEB_ROOT (default /srv/sites/www/$SITE-app), and the secrets. See env.example and README.md.
-# The path defaults nest (${AWRAD_SECRETS:-/opt/sites/${SITE:-awrad}/secrets}), which the Compose spec allows;
+# From the --env-file: SITE (required, no default — final review ops M4: a production .env without it would have
+# joined staging's aliases; must equal -p), ADMIN_HOST, APP_HOST, API_HOST, MAIL_HOST (no defaults: a missing one
+# fails `docker compose config`), AWRAD_SECRETS (default /opt/sites/$SITE/secrets), WEB_ROOT (default
+# /srv/sites/www/$SITE-app), AWRAD_IMPORT (default /opt/sites/$SITE/import), SMTP_* (default: the Mailpit below),
+# and the secrets. See env.example and README.md.
+# The path defaults nest (${AWRAD_SECRETS:-/opt/sites/${SITE:?…}/secrets}), which the Compose spec allows;
 # the ops task still sets AWRAD_SECRETS and WEB_ROOT explicitly, so a deploy never depends on it.
 # No Kong, no Studio, and NO published ports: the main Caddy (deploy-caddy-1, on the external network
 # deploy_default) is the only way in, by the ${SITE}-* aliases below.
@@ -54,7 +56,7 @@ services:
     networks:
       default:
         aliases:
-          - ${SITE:-awrad}-db
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-db
 
   # One-shot: `docker compose run --rm migrate` (migrations, then seed.sql once, then NOTIFY pgrst).
   migrate:
@@ -62,7 +64,7 @@ services:
     entrypoint: ["sh", "/work/migrate.sh"]
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-      PGHOST: ${SITE:-awrad}-db
+      PGHOST: ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-db
     volumes:
       - ./migrate.sh:/work/migrate.sh:ro
       - ../../supabase/migrations:/work/migrations:ro
@@ -84,7 +86,7 @@ services:
       GOTRUE_API_PORT: "9999"
       API_EXTERNAL_URL: https://${API_HOST:?ضع API_HOST في .env (اسم الواجهة)}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:?}@${SITE:-awrad}-db:5432/postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:?}@${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-db:5432/postgres
       GOTRUE_SITE_URL: https://${ADMIN_HOST:?ضع ADMIN_HOST في .env (اسم لوحة الشيخ)}
       GOTRUE_URI_ALLOW_LIST: https://${ADMIN_HOST:?ضع ADMIN_HOST في .env (اسم لوحة الشيخ)},https://${APP_HOST:?ضع APP_HOST في .env (اسم ويب الطالب)}
       GOTRUE_DISABLE_SIGNUP: "true"
@@ -97,12 +99,22 @@ services:
       GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_MAILER_OTP_EXP: "600"
-      GOTRUE_SMTP_HOST: ${SITE:-awrad}-mail
-      GOTRUE_SMTP_PORT: "1025"
-      GOTRUE_SMTP_ADMIN_EMAIL: noreply@${ADMIN_HOST:?ضع ADMIN_HOST في .env (اسم لوحة الشيخ)}
+      # Mail (Ruling FIN-4): an SMTP provider from .env for production (SMTP_PASS is a secret: masked like the
+      # others); without these keys staging keeps its Mailpit (no auth). RATE_LIMIT_EMAIL_SENT is GoTrue's emails per
+      # hour for the whole instance — size it for bulk invites in production (D12: up to 300 students).
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-mail}
+      GOTRUE_SMTP_PORT: "${SMTP_PORT:-1025}"
+      GOTRUE_SMTP_USER: "${SMTP_USER:-}"
+      GOTRUE_SMTP_PASS: "${SMTP_PASS:-}"
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_SENDER:-noreply@${ADMIN_HOST:?ضع ADMIN_HOST في .env (اسم لوحة الشيخ)}}
       GOTRUE_SMTP_SENDER_NAME: أوراد
       GOTRUE_SMTP_MAX_FREQUENCY: 1s
-      GOTRUE_RATE_LIMIT_EMAIL_SENT: "60"
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "${RATE_LIMIT_EMAIL_SENT:-60}"
+      # Per-client limits on /otp and /verify (a 6-digit code is otherwise brute-forceable; final review ops I1,
+      # Ruling FIN-3): GoTrue applies them only when this header names the client. awrad.caddy.tmpl sets it from
+      # {client_ip} (replacing any value a client sent). Until the main Caddyfile trusts Cloudflare's ranges
+      # (a mahfazapay round), {client_ip} is the Cloudflare edge: coarser, still better than no limit.
+      GOTRUE_RATE_LIMIT_HEADER: X-Real-Client-IP
       # The 6-digit code in the email (the app signs in with signInWithOtp + verifyOtp type=email).
       GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: https://${API_HOST:?ضع API_HOST في .env (اسم الواجهة)}/auth-templates/magic-link.html
       GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: رمز الدخول إلى أوراد
@@ -117,10 +129,10 @@ services:
     networks:
       default:
         aliases:
-          - ${SITE:-awrad}-auth
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-auth
       web:
         aliases:
-          - ${SITE:-awrad}-auth
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-auth
 
   rest:
     <<: *restart
@@ -130,7 +142,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:?}@${SITE:-awrad}-db:5432/postgres
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:?}@${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-db:5432/postgres
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: anon
       PGRST_JWT_SECRET: ${JWT_SECRET:?}
@@ -141,10 +153,10 @@ services:
     networks:
       default:
         aliases:
-          - ${SITE:-awrad}-rest
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-rest
       web:
         aliases:
-          - ${SITE:-awrad}-rest
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-rest
 
   functions:
     <<: *restart
@@ -170,10 +182,10 @@ services:
     networks:
       default:
         aliases:
-          - ${SITE:-awrad}-functions
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-functions
       web:
         aliases:
-          - ${SITE:-awrad}-functions
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-functions
 
   mail:
     <<: *restart
@@ -190,7 +202,7 @@ services:
       # Metadata only (Caddy serves the inbox there); it also makes MAIL_HOST required like the other hosts.
       awrad.public-url: https://${MAIL_HOST:?ضع MAIL_HOST في .env (اسم صندوق البريد)}
     volumes:
-      - ${AWRAD_SECRETS:-/opt/sites/${SITE:-awrad}/secrets}/mail-ui.htpasswd:/run/secrets/mail-ui.htpasswd:ro
+      - ${AWRAD_SECRETS:-/opt/sites/${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}/secrets}/mail-ui.htpasswd:/run/secrets/mail-ui.htpasswd:ro
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 10s
@@ -200,14 +212,14 @@ services:
     networks:
       default:
         aliases:
-          - ${SITE:-awrad}-mail
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-mail
       web:
         aliases:
-          - ${SITE:-awrad}-mail
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-mail
 
   admin:
     <<: *restart
-    image: ${SITE:-awrad}-admin:latest
+    image: ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-admin:latest
     build:
       context: ../..
       dockerfile: deploy/vps/Dockerfile.admin
@@ -225,12 +237,12 @@ services:
     networks:
       web:
         aliases:
-          - ${SITE:-awrad}-admin
+          - ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-admin
 
   # One-shot: `docker compose --profile build run --rm web-build` — the Expo web export, swapped atomically
   # into $WEB_ROOT/current (see web-build.sh).
   web-build:
-    image: ${SITE:-awrad}-workspace:latest
+    image: ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-workspace:latest
     build:
       context: ../..
       dockerfile: deploy/vps/Dockerfile.admin
@@ -243,10 +255,40 @@ services:
       # Sized by the ops task from the memory free right before the export (WEB_BUILD_MEM ≤ 3g, heap ≈ 75%).
       NODE_OPTIONS: --max-old-space-size=${WEB_BUILD_HEAP:-1536}
     volumes:
-      - ${WEB_ROOT:-/srv/sites/www/${SITE:-awrad}-app}:/out
+      - ${WEB_ROOT:-/srv/sites/www/${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-app}:/out
     mem_limit: ${WEB_BUILD_MEM:-2048m}
     networks: [default]
     profiles: [build]
+
+  # One-shot (Ruling FIN-5): the legacy Google Sheets import (scripts/import-legacy) inside the project network, so
+  # the database is reached as ${SITE}-db with no published port and the keys stay in .env (libpq variables, not a
+  # URL or argv). The CSVs, mapping.json and report.json (names inside, 600) live in $AWRAD_IMPORT on the host,
+  # outside both repositories; the output carries counts only (--counts-only is part of the entrypoint).
+  #   dc --profile tools run --rm import --daily /import/daily.csv … --mapping /import/mapping.json \
+  #      --report /import/report.json [--execute]          (docs/runbook.md «استيراد الجداول القديمة»)
+  import:
+    image: ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-workspace:latest
+    build:
+      context: ../..
+      dockerfile: deploy/vps/Dockerfile.admin
+      target: workspace
+    entrypoint: ["node", "scripts/import-legacy/src/index.ts", "--counts-only"]
+    environment:
+      PGHOST: ${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}-db
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: postgres
+      # Accounts for students who left (createMissingAsInactive) go through GoTrue's admin API.
+      SUPABASE_URL: https://${API_HOST:?ضع API_HOST في .env (اسم الواجهة)}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?}
+    volumes:
+      - ${AWRAD_IMPORT:-/opt/sites/${SITE:?ضع SITE في .env (اسم البيئة، مثل awrad)}/import}:/import
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [default]
+    profiles: [tools]
 
 volumes:
   pgdata:

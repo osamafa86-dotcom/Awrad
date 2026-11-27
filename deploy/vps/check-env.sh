@@ -153,13 +153,26 @@ for f, n in (("API_EXTERNAL_URL: https://%s" % api, 1), ("GOTRUE_SITE_URL: https
              ("GOTRUE_URI_ALLOW_LIST: https://%s,https://%s" % (admin, app), 1),
              ("GOTRUE_SMTP_HOST: %s-mail" % site, 1), ("GOTRUE_SMTP_ADMIN_EMAIL: noreply@%s" % admin, 1),
              ("GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: https://%s/auth-templates/magic-link.html" % api, 1),
-             ("@%s-db:5432/postgres" % site, 2), ("PGHOST: %s-db" % site, 1),
-             ("SUPABASE_URL: https://%s" % api, 1), ("NEXT_PUBLIC_SUPABASE_URL: https://%s" % api, 2),
+             ("@%s-db:5432/postgres" % site, 2), ("PGHOST: %s-db" % site, 2),
+             ("GOTRUE_RATE_LIMIT_HEADER: X-Real-Client-IP", 1),
+             ('GOTRUE_SMTP_PORT: "1025"', 1), ('GOTRUE_SMTP_USER: ""', 1), ('GOTRUE_SMTP_PASS: ""', 1),
+             ('GOTRUE_RATE_LIMIT_EMAIL_SENT: "60"', 1),
+             ("- /opt/sites/%s/import:/import" % site, 1),
+             ("SUPABASE_URL: https://%s" % api, 2), ("NEXT_PUBLIC_SUPABASE_URL: https://%s" % api, 2),
              ("EXPO_PUBLIC_SUPABASE_URL: https://%s" % api, 1), ("EXPO_PUBLIC_ADMIN_URL: https://%s" % admin, 1),
-             ("image: %s-admin:latest" % site, 1), ("image: %s-workspace:latest" % site, 1),
+             ("image: %s-admin:latest" % site, 1), ("image: %s-workspace:latest" % site, 2),
              ("- %s/mail-ui.htpasswd:/run/secrets/mail-ui.htpasswd:ro" % secrets, 1), ("- %s:/out" % web, 1),
              ("awrad.public-url: https://%s" % mail, 1), ("name: deploy_default", 1)):
     need(f, n)
+# Ruling FIN-5: the import service is a one-shot on the project network only, in the tools profile, and its output
+# carries counts only whatever arguments the ops round passes.
+m = re.search(r"(?ms)^  import:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|^[a-z])", text)
+block = m.group(1) if m else ""
+for f in ("profiles: [tools]", "networks: [default]", "--counts-only", "PGHOST: %s-db" % site):
+    if f not in block:
+        problems.append("import service: %r missing" % f)
+if "aliases" in block or "web" in block.split("networks:", 1)[-1].split("\n", 1)[0]:
+    problems.append("import service joins deploy_default or has aliases")
 https = set(re.findall(r"https://([A-Za-z0-9.-]+)", text))
 if https != {admin, app, api, mail}:
     problems.append("public URLs %s (expected the four hosts)" % sorted(https))
@@ -202,6 +215,41 @@ tc=$(grep '^[[:space:]]*#' "$TMPL" | grep -c '__[A-Z_]*__' || true)
 if [ "$tn" = "$SITE_TOKENS" ] && [ "$tc" = 0 ]; then ok "awrad.caddy.tmpl: __SITE__ ×$tn, none in a comment"
 else ko "awrad.caddy.tmpl: __SITE__ ×$tn (expected $SITE_TOKENS), placeholders in comments: $tc"; fi
 
+# Final review ops I1 / Ruling FIN-3: GoTrue keys its per-client limits (OTP, verify) on the header compose names, and
+# the API block sets it from {client_ip} (header_up replaces any value a client sent). Ops M2: framing, sniffing and
+# referrer headers on the admin and app blocks (defaults with ?, so the dashboard's own headers win); none on the API
+# or the mailbox, which serve JSON and Mailpit's own UI.
+if msg=$(python3 -I - "$TMPL" "$COMPOSE" <<'PY'
+import re, sys
+tmpl = open(sys.argv[1], encoding="utf-8").read()
+compose = open(sys.argv[2], encoding="utf-8").read()
+problems = []
+header = re.search(r"GOTRUE_RATE_LIMIT_HEADER:\s*(\S+)", compose)
+if not header:
+    problems.append("compose sets no GOTRUE_RATE_LIMIT_HEADER")
+else:
+    want = "reverse_proxy __SITE__-auth:9999 {\n\t\t\theader_up %s {client_ip}\n\t\t}" % header.group(1)
+    if want not in tmpl:
+        problems.append("the API block does not send %s {client_ip} to __SITE__-auth" % header.group(1))
+blocks = dict(re.findall(r"(?ms)^(__[A-Z]+__) \{\n(.*?)^\}", tmpl))
+security = ['?X-Frame-Options "DENY"', '?X-Content-Type-Options "nosniff"', '?Referrer-Policy "strict-origin-when-cross-origin"']
+for name in ("__ADMIN__", "__APP__"):
+    for line in security:
+        if line not in blocks.get(name, ""):
+            problems.append("%s lacks %s" % (name, line))
+if "frame-ancestors 'none'" not in blocks.get("__ADMIN__", ""):
+    problems.append("__ADMIN__ lacks frame-ancestors 'none'")
+for name in ("__API__", "__MAIL__"):
+    if "X-Frame-Options" in blocks.get(name, "") or "Content-Security-Policy" in blocks.get(name, ""):
+        problems.append("%s must not set framing headers" % name)
+if sorted(blocks) != ["__ADMIN__", "__API__", "__APP__", "__MAIL__"]:
+    problems.append("blocks %s (expected the four)" % sorted(blocks))
+print("; ".join(problems))
+sys.exit(1 if problems else 0)
+PY
+); then ok "awrad.caddy.tmpl: client IP to GoTrue's rate limit, security headers on admin/app"
+else ko "awrad.caddy.tmpl: $msg"; fi
+
 assert_env "staging (SITE=awrad, *.emdatra.org)" "$T/staging.env" \
   awrad awrad.emdatra.org awrad-app.emdatra.org awrad-api.emdatra.org awrad-mail.emdatra.org \
   /opt/sites/awrad/secrets /srv/sites/www/awrad-app
@@ -212,10 +260,24 @@ assert_env "explicit AWRAD_SECRETS and WEB_ROOT win over the defaults" "$T/prod-
   awrad-prod awrad.example.org app.awrad.example.org api.awrad.example.org mail.awrad.example.org \
   /srv/custom/secrets /srv/custom/web
 
-for v in ADMIN_HOST APP_HOST API_HOST MAIL_HOST; do
+# Ruling FIN-4: production mail comes from .env (an SMTP provider); without these keys staging keeps Mailpit.
+{ cat "$T/prod.env"; printf 'SMTP_HOST=smtp.example.org\nSMTP_PORT=587\nSMTP_USER=apikey\nSMTP_PASS=smtp-dummy\nSMTP_SENDER=no-reply@example.org\nRATE_LIMIT_EMAIL_SENT=400\n'; } > "$T/smtp.env"
+if render "$COMPOSE" "$T/smtp.env" > "$T/smtp.yml" 2> "$T/err.txt"; then
+  miss=""
+  for line in 'GOTRUE_SMTP_HOST: smtp.example.org' 'GOTRUE_SMTP_PORT: "587"' 'GOTRUE_SMTP_USER: "apikey"' \
+              'GOTRUE_SMTP_PASS: "smtp-dummy"' 'GOTRUE_SMTP_ADMIN_EMAIL: no-reply@example.org' \
+              'GOTRUE_RATE_LIMIT_EMAIL_SENT: "400"'; do
+    grep -qxF "      $line" "$T/smtp.yml" || miss="$miss «$line»"
+  done
+  if [ -z "$miss" ] && ! grep -q 'GOTRUE_SMTP_HOST: awrad-prod-mail' "$T/smtp.yml"; then
+    ok "SMTP_* and RATE_LIMIT_EMAIL_SENT from .env replace the Mailpit defaults"
+  else ko "SMTP from .env:$miss"; fi
+else ko "the SMTP sample does not render ($(cat "$T/err.txt"))"; fi
+
+for v in SITE ADMIN_HOST APP_HOST API_HOST MAIL_HOST; do
   grep -v "^$v=" "$T/prod.env" > "$T/missing.env"
   if render "$COMPOSE" "$T/missing.env" > /dev/null 2> "$T/err.txt"; then
-    ko "without $v the file still renders (a host has no default)"
+    ko "without $v the file still renders (it has no default)"
   elif grep -q "$v" "$T/err.txt"; then
     ok "without $v: fails and names it ($(head -1 "$T/err.txt"))"
   else

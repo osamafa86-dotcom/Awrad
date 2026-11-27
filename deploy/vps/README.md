@@ -18,7 +18,7 @@
 
 | الملف | |
 |---|---|
-| `docker-compose.yml` | مشروع `$SITE` (من `-p` وحده؛ لا `name:` في الملف): `db`، `migrate` (مرّة)، `auth`، `rest`، `functions`، `mail`، `admin`، `web-build` (مرّة). **لا منفذ منشور**. اسم الخدمة لا يقبل متغيّرًا، فالخدمات التي تنضمّ إلى `deploy_default` المشتركة تحمل اسمًا مجرّدًا ويصلها Caddy باسمها الصريح `${SITE}-auth`، `${SITE}-rest`، `${SITE}-functions`، `${SITE}-mail`، `${SITE}-admin` (و`${SITE}-db` على شبكة المشروع) — RUNBOOK §2؛ لا يُنادى الاسم المجرّد أبدًا |
+| `docker-compose.yml` | مشروع `$SITE` (من `-p` وحده؛ لا `name:` في الملف): `db`، `migrate` (مرّة)، `auth`، `rest`، `functions`، `mail`، `admin`، `web-build` (مرّة)، `import` (مرّة، ملف التعريف `tools`: استيراد الجداول القديمة). **لا منفذ منشور**. اسم الخدمة لا يقبل متغيّرًا، فالخدمات التي تنضمّ إلى `deploy_default` المشتركة تحمل اسمًا مجرّدًا ويصلها Caddy باسمها الصريح `${SITE}-auth`، `${SITE}-rest`، `${SITE}-functions`، `${SITE}-mail`، `${SITE}-admin` (و`${SITE}-db` على شبكة المشروع) — RUNBOOK §2؛ لا يُنادى الاسم المجرّد أبدًا |
 | `env.example` | متغيّرات `/opt/sites/$SITE/.env` موثّقةً، بلا قيمة سرّية |
 | `check-env.sh` | فحصٌ بلا Docker (يشغّله CI): يملأ compose بملفّي بيئة (التجريبية ونموذج إنتاج) ويقيس الأسماء البديلة والمسارات والروابط، ويفشل باسم المتغيّر إن غاب اسم نطاق. `--render <compose> <env>` يطبع الملف مملوءًا |
 | `Dockerfile.admin` | ثلاث مراحل: `workspace` (المستودع وتبعيّاته — فيه يجري تصدير Expo)، `build` (`next build` بـ `output: 'standalone'`)، `admin` (الخادم وحده، مستخدم `node`) |
@@ -29,12 +29,16 @@
 | `auth-templates/magic-link.html` | بريد رمز الدخول بالعربية (`{{ .Token }}`)؛ يُنسخ إلى `/srv/sites/www/$SITE-api/auth-templates/` (يُطلب من `https://$API_HOST/auth-templates/`) |
 | `awrad.caddy.tmpl` | الكتل الأربع؛ تملؤها المهمّة بحسب وضع Cloudflare، و`__SITE__` (7 مرّات) بالبيئة: الخوادم الخلفية `$SITE-admin` … والجذران `/srv/www/$SITE-app/current` و`/srv/www/$SITE-api` — Caddy الرئيس يركّب `/srv/sites/www` على `/srv/www`، فـ `WEB_ROOT` يبقى تحت `/srv/sites/www` |
 | `seed-demo.sh` | الحسابات التجريبية (`admin@$ADMIN_HOST` …) وسجلّاتها (عبر `save_log` وحده) ومجلسٌ بحضور — مرّة |
+| `backup.sh` | نسخة القاعدة (`pg_dump -Fc` داخل الحاوية إلى ملف ثمّ نسخه والتحقّق منه بـ sha256) مع أعداد صفوف كل جدول وأسطر `alter database … set app.*`، في `/opt/sites/$SITE/backups` (700/600)، وحذف ما تجاوز `RETENTION_DAYS` (14). أعداد فقط في المخرجات |
+| `restore-rehearsal.sh` | تمرين استعادة: آخر نسخة في قاعدة مؤقّتة داخل حاوية القاعدة، ثمّ مقارنة أعداد الصفوف بما سُجّل وقت النسخ، ثمّ حذف المؤقّتة. الخروج 0 = كل جدول كما سُجّل |
 
 ## الأسرار — أين هي
 
 على الخادم وحده، تولّدها المهمّة مرّة ولا تطبعها (لكل بيئة مجلّدها `/opt/sites/$SITE`؛ القيم أدناه للتجريبية):
 
-- `/opt/sites/awrad/.env` (600): `POSTGRES_PASSWORD`، `JWT_SECRET`، `ANON_KEY`، `SERVICE_ROLE_KEY`، `MAIL_USER`، `MAIL_PASSWORD`، و`CRON_SECRET` (التذكيرات؛ انظر أدناه).
+- `/opt/sites/awrad/.env` (600): `POSTGRES_PASSWORD`، `JWT_SECRET`، `ANON_KEY`، `SERVICE_ROLE_KEY`، `MAIL_USER`، `MAIL_PASSWORD`، و`CRON_SECRET` (التذكيرات؛ انظر أدناه)، و`SMTP_PASS` في الإنتاج (انظر «البريد في الإنتاج»).
+- `/opt/sites/$SITE/backups/` (700): النسخ وملفات `*.settings.sql` (فيها `app.cron_secret` وإعدادات JWT؛ 600).
+- `/opt/sites/$SITE/import/` (700): ملفات الاستيراد (أسماء طلاب؛ 600) — خارج المستودعين.
 - `/opt/sites/awrad/secrets/mail-basicauth.txt` (600): مستخدم صندوق البريد وكلمة مروره — `sudo cat` عبر SSH.
 - `/opt/sites/awrad/secrets/mail-ui.htpasswd` (644، بصمة bcrypt وحدها): Mailpit نفسه يطلب الكلمة (`MP_UI_AUTH_FILE`)، فلا تقرأ حاويةٌ أخرى على `deploy_default` الرموز.
 
@@ -66,7 +70,7 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
 
 | المتغيّر | التجريبية (اليوم) | الإنتاج (مثال؛ النطاق يسمّيه المالك) | إن غاب |
 |---|---|---|---|
-| `SITE` | `awrad` | `awrad-prod` | `awrad` — **فاكتبه دائمًا**: إنتاجٌ بلا `SITE` يأخذ أسماء التجريبية البديلة |
+| `SITE` | `awrad` | `awrad-prod` | يفشل `docker compose config` باسمه (لا قيمة افتراضية: إنتاجٌ بلا `SITE` كان سيأخذ أسماء التجريبية البديلة) |
 | `ADMIN_HOST` | `awrad.emdatra.org` | `awrad.example.org` | يفشل `docker compose config` باسمه |
 | `APP_HOST` | `awrad-app.emdatra.org` | `app.awrad.example.org` | يفشل باسمه |
 | `API_HOST` | `awrad-api.emdatra.org` | `api.awrad.example.org` | يفشل باسمه |
@@ -89,75 +93,61 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
 **قبل الدفع:** `bash deploy/vps/check-env.sh` (يشغّله CI أيضًا)، ولملفّ بيئةٍ بعينه
 `bash deploy/vps/check-env.sh --render deploy/vps/docker-compose.yml <ملف>`.
 
-### ما يغيّره المتحكّم في `task.sh` (mahfazapay، جولة منفصلة)
+### ما يغيّره المتحكّم في `task.sh` لبيئة ثانية
 
-الملفات هنا تُبقي التجريبية كما هي بقيمها اليوم؛ و`task.sh` الحاليّ لا يعمل عليها حتى تُطبَّق البنود (أوّل `dc` فيه —
-`dc --profile build build` — يفشل عند الاستيفاء لأن `.env` القائم بلا أسماء نطاق، والمُصيِّر الحاليّ يرفض `__SITE__`؛ لا
-يُمسّ ما يعمل). البنود تتقارب، فتُعاد المهمّة بلا ضرر. الترقيم هو ترقيم المراجعة (`task-5.1a-review.md`)، وأرقام الأسطر
-تقريبية من `task.sh` الحاليّ:
+بنود الجولة الأربعة عشر (هوية كل بيئة أعلى الملف، ومفاتيح `.env` غير السرّية، وتأكيد `SITE` وشكله، وعدّ المفاتيح، و`mask()`
+بالاسم، وأسماء الخدمات المجرّدة، والعناوين `$SITE-*`، وفحص التصادم، والصور والأحجام، والمُصيِّر بـ `__SITE__`، ووضع كلاودفلير،
+والبذرة) **طُبِّقت في mahfazapay `a33b200`**، وأثبتها تشغيل 13:01 UTC على التجريبية (`__SITE__` ×7 → `awrad`، والأسماء البديلة
+العشرة كما هي، والأحجام لم تتغيّر). ما بقي لبيئة الإنتاج وحدها، في رأس `task.sh`:
 
-- [ ] **1. الهوية أعلى الملف لكل بيئة** (~45–61): `SITE` و`ZONE` و`ADMIN_HOST`/`APP_HOST`/`API_HOST`/`MAIL_HOST` (للإنتاج
-  قيمه)، و`WWW_APP=/srv/sites/www/$SITE-app` و`WWW_API=/srv/sites/www/$SITE-api` بدل `awrad-app`/`awrad-api` الحرفيّين.
-  الحرفيّ الوحيد المقصود: طلبا `curl` لـ `wallt.emdatra.org` و`fin.emdatra.org` (~104–105، مقارنةٌ قبل/بعد لموقعين آخرين).
-  أمّا استعلام كلاودفلير في §٥ عن `wallt.$ZONE` فليس حرفيًّا — انظر البند 11.
-- [ ] **2. مفاتيح `.env` غير السرّية:** في §٣، كل تشغيل وقبل أوّل `dc`، اكتب (إضافةً أو استبدالًا، ذرّيًا كـ `CRON_SECRET`)
-  `SITE` و`ADMIN_HOST` و`APP_HOST` و`API_HOST` و`MAIL_HOST` و`AWRAD_SECRETS=$SECRETS_DIR` و`WEB_ROOT=$WWW_APP`. وصدِّرها
-  أيضًا في `dc()` (~70؛ `SITE=… ADMIN_HOST=… docker compose …`، البيئة تغلب `--env-file`)، و`export WEB_ROOT=$WWW_APP` بجوار
-  `export AWRAD_SECRETS` (~250). ثم قبل البناء (~266): `dc --profile tools --profile build config -q || fail` (يفشل بلا تغيير
-  إن غاب اسم، أو إن كان compose أقدم من الاستيفاء المتداخل `${A:-/x/${B:-y}}`)، و`dc config --format json` يُقرأ منه أنّ كل
-  اسمٍ بديل يبدأ بـ `$SITE-` — بوّابةٌ تقيس الأثر لا سلامة ما حوله.
-- [ ] **3. تأكيد `SITE` وشكله:** بعد كتابة المفاتيح وقبل أوّل `dc`، تفشل المهمّة إن غاب `SITE` من `.env` أو خالف مشروع `-p`
-  أو خرج عن الشكل `^[a-z0-9][a-z0-9-]*$` (يدخل اسمَ خادمٍ خلفيّ ومسارًا في Caddy):
-  `s=$(envval SITE); [[ "$s" =~ ^[a-z0-9][a-z0-9-]*$ ]] && [ "$s" = "$SITE" ] || fail ".env: SITE=«$s» لا يطابق المشروع $SITE — لم يُغيَّر شيء"`.
-  (`SITE` الغائب يأخذ في compose القيمة `awrad`، فبيئةُ إنتاجٍ بلا `SITE` كانت ستحمل أسماء التجريبية البديلة.)
-- [ ] **4. عدّ مفاتيح `.env`** (~212–214): بوّابة «n/7» تعدّ مفاتيح §٣ السبعة وحدها (الأسرار و`MAIL_USER`)؛ أضف عدًّا ثانيًا للمفاتيح السبعة غير السرّية
-  (`SITE ADMIN_HOST APP_HOST API_HOST MAIL_HOST AWRAD_SECRETS WEB_ROOT`) — «مفاتيح §٣ 7/7 · الهوية 7/7» — أو قارن كلًّا بقيمته
-  المتوقّعة في رأس الملف.
-- [ ] **5. `mask()` يحجب الأسرار وحدها، لا الأسماء ولا المسارات** (~78–90): اليوم يحجب كل قيمة في `.env` طولها ≥ 8،
-  فستصير الأسماء الأربعة و`AWRAD_SECRETS` و`WEB_ROOT` `***` في السجلّ. اجعله قائمةً بالاسم: `POSTGRES_PASSWORD`
-  و`JWT_SECRET` و`ANON_KEY` و`SERVICE_ROLE_KEY` و`MAIL_PASSWORD` و`CRON_SECRET` (و`MAIL_USER` ليس سرًّا).
-- [ ] **6. أسماء الخدمات:** `awrad-auth awrad-rest awrad-functions awrad-mail awrad-admin` ← `auth rest functions mail admin`
-  في `pull -q` (~271) و`up -d --remove-orphans` (~365) وحلقة السجلّات `for s in …; dc ps -q "$s"` (~376) و`dc ps -q awrad-auth`
-  (~727، §٩ب). **`--remove-orphans` لازم في أوّل نشرٍ بعد هذا التغيير، وخمس حاويات تُعاد إنشاؤها:** `awrad-awrad-auth-1`
-  و`-rest-1` و`-functions-1` و`-mail-1` و`-admin-1` تصير يتيمةً وتحمل الأسماء البديلة نفسها (`awrad-auth` …)، فإن بقيت
-  تناوبت مع الجديدة (`awrad-auth-1` …) على DNS. يُتوقّع ثوانٍ من 502 على الأسماء الأربعة، وتضيع رسائل Mailpit (في الذاكرة)؛
-  القاعدة (`awrad-db-1`) وحجمها لا يُمسّان. (`dc up -d db` لا يتغيّر.)
-- [ ] **7. العناوين على شبكة Caddy:** `cw http://awrad-{auth,rest,admin,functions,mail}:…` (~368، 374) وتسمياتها في `echo`
-  (~373–374) ← `http://$SITE-…`، و`FN_URL=http://awrad-functions:9000` (~322، وتعليقه ~319) ← `http://$SITE-functions:9000`
-  (قيمة التجريبية لا تتغيّر، فلا يُعاد الضبط).
-- [ ] **8. فحص التصادم §١** (~108–122): `ours` ← `{"$SITE-auth", "$SITE-rest", "$SITE-functions", "$SITE-mail", "$SITE-admin", "$SITE-db"}`،
-  واستثناء المشروع `== "awrad"` ← `$SITE` (مرّرهما argv). وأضف: لا كتلة Caddy تنادي اسمًا مجرّدًا
-  (`grep -E 'reverse_proxy +(auth|rest|functions|mail|admin)(:|$)' /srv/sites/caddy/*.caddy /etc/caddy/Caddyfile` ← لا شيء)،
-  لأن البيئتين تسجّلان `auth` … على `deploy_default`.
-- [ ] **9. الصور والمرشّحات والحجم:** `awrad-admin:latest awrad-workspace:latest` (~265، 270، 412، 416: `old_imgs`، سطر «بُنيت
-  الصورتان»، حلقة الحذف، `grep -E '^awrad-(admin|workspace):'`) ← `$SITE-admin:latest $SITE-workspace:latest`؛
-  و`label=com.docker.compose.project=awrad` (~415، 417) ← `$SITE`؛ و`awrad_pgdata` (~164، 166) ← `${SITE}_pgdata`.
-- [ ] **10. المُصيِّر وبوّابة Caddy (§٧):** `awrad.caddy.tmpl` يحمل `__SITE__` **7 مرّات** (5 خوادم خلفية `__SITE__-admin:3000`
-  و`-auth:9999` و`-rest:3000` و`-functions:9000` و`-mail:8025`، وجذران `/srv/www/__SITE__-app/current` و`/srv/www/__SITE__-api`)،
-  فأضف إلى `values` (~497–523) السطر `"__SITE__": (SITE, 7),` ومرّر `SITE="$SITE"` في بيئة python (كـ `PFX`/`TLS`)، مع `one_line`
-  وفحص الشكل `re.fullmatch(r"[a-z0-9][a-z0-9-]*", SITE)`. المُصيِّر الحاليّ يرفض `__SITE__` («unfilled placeholders»)، ولذلك لا
-  تُعاد المهمّة قبل هذا البند (`check-env.sh` يقيس العدد 7). الجذران: Caddy الرئيس يركّب `/srv/sites/www` على `/srv/www`
-  (`:ro`)، فـ `WEB_ROOT=/srv/sites/www/$SITE-app` يُخدَم من `/srv/www/$SITE-app` و`WWW_API=/srv/sites/www/$SITE-api` من
-  `/srv/www/$SITE-api` — أبقِ `WWW_APP`/`WWW_API` تحت `/srv/sites/www` بهذين الاسمين. وللإنتاج تُحذف أسطر
-  `X-Robots-Tag "noindex` (القالب يقول: «remove at cutover»)، **فبوّابة الملفّ الحيّ** (~578) تتوقّع `noindex` = 4 على التجريبية
-  و0 على الإنتاج (قيمةٌ لكل بيئة أعلى الملف)، وسطر «أُضيف awrad.caddy وحده» (~580) ← `$SITE.caddy`.
-- [ ] **11. وضع كلاودفلير من سجلّات البيئة نفسها (§٥، ~436–440):** اليوم يُشتقّ `PROXIED`/`SSLMODE` — ومنهما `PFX`/`TLS` لكتل
-  Caddy — من `dns_records?name=wallt.$ZONE`. منطقة الإنتاج بلا سجلّ `wallt`، فيخرج `PROXIED` فارغًا: لا `tls internal`
-  (برتقالي + Full ← Let's Encrypt يفشل خلف الوكيل ← 525)، ولا بادئة `http://` (Flexible ← حلقة تحويل). اشتقّه من سجلّ البيئة
-  نفسها (`$ADMIN_HOST` إن وُجد، وإلا سياسة المنطقة)، أو بمتغيّرٍ صريح أعلى الملف يغلب القياس — مثل
-  `TLS_MODE=auto|internal|letsencrypt|flexible` (`auto` = القياس الحاليّ على `$ADMIN_HOST`) — ويُطبع المصدر في السجلّ. وتعليق سجلّ
-  DNS `"Awrad staging"` (~479) يصير لكل بيئة (البند 13).
-- [ ] **12. البذرة والحسابات:** `SITE="$SITE" AWRAD_ENV_FILE="$ENV_FILE" bash "$VPS_DIR/seed-demo.sh"` (~673)؛ وعدّ
-  `like '%@awrad.emdatra.org'` (~682) ← `'%@$ADMIN_HOST'`؛ وكل `admin@awrad.emdatra.org` (~690–717: بحث Mailpit وحذفه، جسم OTP،
-  JSON التحقّق) وسطرا الملخّص (~741–742) ← `admin@$ADMIN_HOST` …. (هل تُبذر حساباتٌ تجريبية في الإنتاج أصلًا؟ قرارٌ للمالك.)
-- [ ] **13. ما بقي حرفيًّا للتجريبية:** تعليق رأس الملف والتراجع (~4–36، `/opt/sites/awrad` …)؛ «التجريبية» في سطر البداية
-  (~93)؛ `MAIL_USER=awrad` عند توليد الأسرار (~183)؛ نصّ ملف صندوق البريد «صندوق بريد أوراد التجريبي» (~232–234)؛ تعليق سجلّ DNS
-  `"Awrad staging"` (~479)؛ وأسماء `/tmp/awrad-*` (غير ضارّة: `ops.yml` يسلسل التشغيلات بـ `concurrency: server-ops`، لكنّ
-  `/tmp/$SITE-*` أوضح). والذاكرة: بيئةٌ ثانية تضيف نحو 3 GiB من السقوف (db 1g · functions 768m · admin 512m ·
-  auth/rest/mail 256m) — حدود «المتاح» (~103، 262–263، 389) تُراجَع لخادمٍ يحمل الاثنتين.
-- [ ] **14. ترتيب العمل:** (أ) يُدفع فرع Awrad `build/mvp` أوّلًا — دفعه لا ينشر شيئًا بنفسه: الخادم لا يسحب الفرع إلا حين
-  تعمل مهمّة mahfazapay. (ب) ثمّ جولة `task.sh` واحدة بالبنود 1–13 كلّها، ودفعها إلى mahfazapay `main` هو الذي ينشر (يسحب
-  `build/mvp` ويبني). لا تُعَد المهمّة الحاليّة بين (أ) و(ب): ستفشل قبل أي `up` (لا يُمسّ ما يعمل)، لكنّها جولةٌ ضائعة.
+- `SITE` و`ZONE` والأسماء الأربعة بقيم الإنتاج، و`TLS_MODE` (أو القياس على `$ADMIN_HOST`).
+- `NOINDEX=0`: تُحذف أسطر `X-Robots-Tag "noindex` من الكتل الأربع (بوّابة الملفّ الحيّ تتوقّع 0 لا 4).
+- البذرة التجريبية في الإنتاج: قرار المالك (الافتراضي: لا).
+- مفاتيح البريد `SMTP_*` في `.env`، و`SMTP_PASS` في قائمة `mask()` (انظر «البريد في الإنتاج»).
+
+## حدود المحاولات على الدخول (GoTrue)
+
+رمز الدخول ستّ خانات صالح عشر دقائق؛ GoTrue v2.198 لا يطبّق حدوده لكل عميل على `/otp` و`/verify` إلا إن سُمّي له رأسٌ
+يحمل عنوان العميل (`performRateLimitingWithHeader`)، وبدونها يمكن تجربة الرموز كلّها. القرار FIN-3:
+
+- `docker-compose.yml`: `GOTRUE_RATE_LIMIT_HEADER: X-Real-Client-IP`.
+- `awrad.caddy.tmpl`: كتلة الواجهة ترسل إلى `$SITE-auth` الرأس `header_up X-Real-Client-IP {client_ip}` — `header_up`
+  يستبدل أي قيمة أرسلها العميل، فلا تُزوَّر. حدود GoTrue الافتراضية (OTP والتحقّق وتجديد الرموز) تسري حينئذٍ لكل عنوان.
+- `check-env.sh` يقيس الاثنين معًا (الاسم نفسه في الملفين).
+
+**جولة mahfazapay لاحقة (بعد هذه الدفعة):** `{client_ip}` اليوم عنوان حافّة Cloudflare لا الزائر، فالحدّ يقع على عناوين
+Cloudflare (أخشن، لكنه خيرٌ من لا شيء). الجولة تضيف في الـ Caddyfile الرئيس
+`servers { trusted_proxies static <نطاقات Cloudflare> ; client_ip_headers CF-Connecting-IP }`، وتقيس قبل وبعد: 31 طلب
+`/verify` خاطئًا من عنوان واحد ← 429، وعنوان آخر في الوقت نفسه ← يمرّ. انتبه: طلبات اللوحة من الخادم (تجديد جلسات الطاقم)
+تخرج عبر Cloudflare وتعود، فتقع كلّها على عنوان الخادم.
+
+## البريد في الإنتاج (SMTP)
+
+GoTrue يرسل رموز الدخول ورسائل الدعوة. التجريبية ترسل إلى صندوق Mailpit (`$SITE-mail:1025`، بلا مصادقة)؛ الإنتاج يحتاج مزوّد
+SMTP حقيقيًّا «من اليوم الأول» (المواصفة §16). القرار FIN-4: المفاتيح تُقرأ من `.env`، وبدونها يبقى Mailpit:
+
+| المفتاح | الافتراضي | |
+|---|---|---|
+| `SMTP_HOST` | `$SITE-mail` | خادم المزوّد |
+| `SMTP_PORT` | `1025` | عادةً 587 |
+| `SMTP_USER` / `SMTP_PASS` | فارغان (بلا مصادقة) | `SMTP_PASS` سرّ: في `.env` (600) وفي قائمة `mask()` |
+| `SMTP_SENDER` | `noreply@$ADMIN_HOST` | عنوان المرسِل؛ نطاقه يحتاج SPF وDKIM عند المزوّد |
+| `RATE_LIMIT_EMAIL_SENT` | `60` | رسائل GoTrue في الساعة للنسخة كلّها؛ ارفعه لدعوة الطلاب دفعةً (D12: حتى 300، مثلًا 400) |
+
+اختيار المزوّد وأسراره وسجلّات DNS بند مالك في 5.1b. بعد الضبط: `dc up -d auth`، ثمّ رمز دخول حقيقي إلى بريد خارجي.
+
+## استيراد الجداول القديمة على الخادم
+
+لا SSH للفريق ولا منفذ للقاعدة، والمفتاح لا يغادر الخادم (القرار FIN-5): خدمة `import` في ملف التعريف `tools` تشغّل
+`scripts/import-legacy` داخل شبكة المشروع (`$SITE-db`)، والملفات في `/opt/sites/$SITE/import/` (CSV و`mapping.json`
+و`report.json`)، والمخرجات أعداد فقط (`--counts-only` جزء من نقطة الدخول). الخطوات الحرفية لجولة `task.sh` (معاينة ثمّ تنفيذ)
+في [`docs/runbook.md`](../../docs/runbook.md) §«استيراد الجداول القديمة».
+
+## النسخ الاحتياطي
+
+`backup.sh` و`restore-rehearsal.sh` (القرار FIN-6) جاهزان ومجرَّبان محليًّا على PostgreSQL 16؛ **تثبيت المؤقّت الليلي وأوّل
+تمرين استعادة على الخادم جولة mahfazapay** — بوّابة قبل أن يحمل الإنتاج بيانات حقيقية. الأوامر وخطّة الاستعادة الكاملة في
+[`docs/runbook.md`](../../docs/runbook.md) §3.
 
 ## التذكيرات كل ساعة (Task 4.1) — مُفعَّلة
 

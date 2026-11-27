@@ -6,8 +6,9 @@
 **المرجع الملزِم** لما يعمل وأين: [`deploy/vps/README.md`](../deploy/vps/README.md). هذا الدليل لا يكرّره،
 بل يرتّب حوله الإجراءات.
 
-> **ما ليس موجودًا بعد:** بيئة إنتاج منفصلة (الموجود نسخة تجريبية)، وإرسال بريد حقيقي عبر SMTP (الرموز تُجمع في
-> Mailpit)، ونسخ احتياطي ليلي، وبناءات المتاجر (لا ملف `apps/awrad.yml` في مستودع `appstore-release` بعد).
+> **ما ليس موجودًا بعد:** بيئة إنتاج منفصلة (الموجود نسخة تجريبية)، ومزوّد بريد حقيقي (المفاتيح `SMTP_*` جاهزة في
+> compose؛ بدونها تُجمع الرموز في Mailpit)، والمؤقّت الليلي للنسخ الاحتياطي وأوّل تمرين استعادة على الخادم (السكربتان
+> جاهزان، §3)، وبناءات المتاجر (لا ملف `apps/awrad.yml` في مستودع `appstore-release` بعد).
 >
 > المواصفة (§15) تصف بديلًا سحابيًا: Supabase Cloud للخلفية وVercel للوحة وEAS للبناءات. لم يُعتمد للتشغيل؛
 > الترحيلات تبقى صالحة عليه إن اختير لاحقًا.
@@ -29,6 +30,7 @@
 | `mail` (يصلها Caddy بـ `awrad-mail`) | `axllent/mailpit:v1.34.0` | يستقبل كل البريد (رموز الدخول). في الذاكرة: يُمحى عند إعادة التشغيل | `awrad-mail.emdatra.org` (بكلمة مرور) |
 | `admin` (يصلها Caddy بـ `awrad-admin`) | `awrad-admin:latest` (يُبنى محليًا) | لوحة الشيخ (Next.js) | `awrad.emdatra.org` |
 | `web-build` (مرّة) | `awrad-workspace:latest` | يصدّر ويب الطالب إلى `/srv/sites/www/awrad-app/current` | `awrad-app.emdatra.org` (Caddy يخدمه ساكنًا) |
+| `import` (مرّة، `tools`) | `awrad-workspace:latest` | استيراد الجداول القديمة (§9) | — |
 
 | المسار على الخادم | ما فيه |
 |---|---|
@@ -67,60 +69,74 @@ dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/do
 
 ## 3. النسخ الاحتياطي والاستعادة
 
-> **غير مُعدّ بعد.** لا نسخ احتياطي آلي اليوم. حذف الحجم `pgdata` (مثل `down -v`) يمحو كل البيانات.
-> **التوصية:** نسخة ليلية بـ `pg_dump` إلى مجلّد على الخادم، مع الاحتفاظ بآخر 14 نسخة، ونسخة خارج الخادم.
-> الأوامر أدناه توثيق لجولة `task.sh`؛ لم تُنفَّذ ولم تُجرَّب استعادتها بعد. جرّب الاستعادة على نسخة قبل أن تحتاجها.
+> **السكربتان جاهزان، والتشغيل على الخادم لم يبدأ.** `deploy/vps/backup.sh` و`deploy/vps/restore-rehearsal.sh`
+> (القرار FIN-6) مجرَّبان محليًّا على PostgreSQL 16 بلا Docker (نسخة، ثمّ استعادة في قاعدة مؤقّتة وأعداد مطابقة، والتدوير،
+> ومسار الفشل). **تثبيت المؤقّت الليلي وأوّل تمرين على الخادم جولة mahfazapay**، وهي بوّابة قبل أن يحمل الإنتاج بيانات
+> حقيقية. حتى ذلك الحين: حذف الحجم `pgdata` (مثل `down -v`) يمحو كل البيانات.
 
-### أخذ نسخة (جولة `task.sh`)
-
-القاعدة اسمها `postgres`. النسخة بصيغة pg_dump المخصّصة (`-Fc`)، كـ `supabase_admin` ليشمل مخطّط `auth`:
+### أخذ نسخة (جولة `task.sh`، ثمّ ليليًّا)
 
 ```sh
-set -euo pipefail
-cd /opt/sites/awrad/repo
-dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
-B=/opt/sites/awrad/backups
-# مملوك لمستخدم الوكيل (لا root)، فتعمل الكتابة وchmod والحذف بعده بلا sudo.
-sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" "$B"
-F="$B/awrad-$(date -u +%Y%m%dT%H%MZ).dump"
-dc exec -T db pg_dump -U supabase_admin -d postgres -Fc \
-  --exclude-schema=cron --exclude-schema=net > "$F"
-chmod 600 "$F"
-ls -l "$F"                                     # الحجم، لا المحتوى
-dc exec -T db pg_restore -l < "$F" | grep -c 'TABLE DATA'   # عدد الجداول في النسخة
-find "$B" -name 'awrad-*.dump' -mtime +14 -delete
+SITE=awrad AWRAD_ENV_FILE=/opt/sites/awrad/.env bash /opt/sites/awrad/repo/deploy/vps/backup.sh
+# اختياري: BACKUP_DIR=/opt/sites/awrad/backups (الافتراضي)، RETENTION_DAYS=14 (الافتراضي)
 ```
 
-مخطّطا `cron` و`net` مستثنيان: مهمّة التذكيرات تُعاد بـ `ensure_reminder_schedule()` (§7).
+ما يفعله، وكل ما يطبعه أحجام وأعداد:
 
-للنسخة الليلية لاحقًا: `systemd timer` على الخادم يشغّل السطور نفسها، كمؤقّتات المواقع الأخرى في `mahfazapay`.
+1. يعدّ صفوف كل جدول في `public` و`auth` و`ops` (`<SITE>-<الختم>.counts.tsv`).
+2. `pg_dump -Fc` كـ `supabase_admin` **داخل حاوية القاعدة إلى ملف** (أرشيف بمواضع بيانات، لا تدفّق عبر stdout)، دون
+   مخطّطَي `cron` و`net` (مهمّة التذكيرات تُعاد بـ `ensure_reminder_schedule()`، §7)، ثمّ ينسخه إلى `backups/` ويقارن
+   sha256 داخل الحاوية وخارجها.
+3. يكتب أسطر `alter database postgres set app.*` (`app.functions_url` و`app.cron_secret` وإعدادات JWT) في
+   `<…>.settings.sql`: نسخة المخطّطات لا تحمل إعدادات القاعدة. **فيها أسرار** — 600 ولا تُطبع.
+4. يحذف مجموعات هذه البيئة الأقدم من `RETENTION_DAYS` (لا يحذف الأحدث أبدًا، ولا يمسّ بيئة أخرى).
 
-### الاستعادة (جولة `task.sh`)
+المجلّد 700 والملفات 600 (`umask 077`). **نسخة خارج الخادم** بند مالك: انسخ `backups/` إلى تخزين آخر بعد كل تشغيل (مثل
+rclone مشفّرًا)، وتمرّن على الاستعادة منها مرّة.
 
-> **غير مُجرَّبة.** تمرَّن عليها على نسخة تجريبية منفصلة قبل أي استعادة حقيقية.
+للمؤقّت الليلي (جولة mahfazapay): `systemd timer` بجوار مؤقّتات المواقع الأخرى يشغّل السطر أعلاه، ويُكتب ملخّصه في سجلّ.
 
-الاستعادة تكتب فوق البيانات الحالية. خذ نسخة من الحالي أولًا (الخطوة السابقة)، ثم:
+### تمرين الاستعادة (جولة `task.sh`)
+
+```sh
+SITE=awrad AWRAD_ENV_FILE=/opt/sites/awrad/.env bash /opt/sites/awrad/repo/deploy/vps/backup.sh
+SITE=awrad AWRAD_ENV_FILE=/opt/sites/awrad/.env bash /opt/sites/awrad/repo/deploy/vps/restore-rehearsal.sh
+```
+
+يستعيد آخر نسخة (أو الملف المعطى) في قاعدة مؤقّتة `<site>_restore_rehearsal` **داخل حاوية القاعدة نفسها**، ويقارن عدد صفوف
+كل جدول بما سُجّل وقت النسخ، ويتحقّق من أسماء الإعدادين في `settings.sql`، ثمّ يحذف القاعدة المؤقّتة. القاعدة الحيّة لا
+تُمسّ. أخطاء `pg_restore` تُعدّ وتُذكر بأسماء الكائنات (امتدادٌ لا يعيش إلا في قاعدة `postgres` متوقَّع). الخروج 0 = كل جدول
+كما سُجّل؛ 1 = جدول ناقص أو مختلف (يُذكر). شغّل النسخ والتمرين في الجولة نفسها، فلا تكتب القاعدة بينهما.
+
+### الاستعادة الحقيقية (جولة `task.sh`)
+
+> تمرّن عليها كاملةً أوّلًا في مشروع compose مؤقّت (`-p awrad-restore`، حجمه وحده، بلا Caddy): الخطوات أدناه نفسها،
+> ثمّ دخول برمز لحساب مستعاد، وفحص RLS (طالب يرى صفوفه وحده)، وتسجيل RTO وRPO. جولة mahfazapay.
+
+الاستعادة تكتب فوق البيانات الحالية. خذ نسخة من الحالي أولًا، ثمّ:
 
 ```sh
 set -euo pipefail
 cd /opt/sites/awrad/repo
 dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
-F=/opt/sites/awrad/backups/<الملف>.dump
-dc stop admin auth rest functions      # لا كتابة أثناء الاستعادة
-# كـ supabase_admin وبلا --no-owner ولا --role: تبقى ملكية كل جدول كما في النسخة
-# (جداول auth لـ supabase_auth_admin الذي يتّصل به GoTrue، وجداول public وops لـ postgres).
+F=/opt/sites/awrad/backups/<الملف>.dump                     # ومعه <…>.settings.sql
+dc stop admin auth rest functions                          # لا كتابة أثناء الاستعادة
+dc exec -T db sh -c 'cat > /tmp/restore.dump' < "$F"       # ملفٌّ داخل الحاوية: pg_restore يحتاج أرشيفًا قابلًا للقفز
+# كـ supabase_admin وبلا --no-owner: تبقى ملكية كل جدول كما في النسخة (جداول auth لـ supabase_auth_admin الذي يتّصل
+# به GoTrue، وجداول public وops لـ postgres).
 dc exec -T db pg_restore -U supabase_admin -d postgres --clean --if-exists \
-  --schema=public --schema=auth --schema=ops < "$F"
+  --schema=public --schema=auth --schema=ops /tmp/restore.dump
+dc exec -T db rm -f /tmp/restore.dump
+dc exec -T db psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < "${F%.dump}.settings.sql"
 dc up -d auth rest functions admin
-dc exec -T db psql -U postgres -d postgres -tAc \
-  "select (select count(*) from profiles), (select count(*) from logs), (select count(*) from sessions);"
 dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
+dc exec -T db psql -U postgres -d postgres -tAc "select ensure_reminder_schedule();"   # في جلسة جديدة ← t
 ```
 
-ثم أعد جدولة التذكيرات (§7) إن كانت القاعدة جديدة. قارن الأعداد بما كان قبل العطل.
-
-**إن ضاع الحجم كله:** `dc up -d db` يهيّئ حجمًا جديدًا ويشغّل `db-init/*.sql` (كلمات المرور، JWT، الامتدادات)،
-ثم `dc --profile tools run --rm migrate` يبني المخطّط، ثم الاستعادة أعلاه للبيانات.
+قارن الأعداد بملف `<…>.counts.tsv` للنسخة. **إن ضاع الحجم كله:** `dc up -d db` يهيّئ حجمًا جديدًا ويشغّل `db-init/*.sql`
+(كلمات المرور، JWT، الامتدادات)، ثمّ `dc --profile tools run --rm migrate` يبني المخطّط، ثمّ الاستعادة أعلاه للبيانات.
+نقطتا فشلٍ محتملتان يكشفهما التمرين الكامل: `--clean` قد يتعثّر بكائنات خارج المخطّطات الثلاثة تعتمد على `auth.users`،
+وأخطاء `pg_restore` المتجاهَلة توقف السكربت تحت `set -e` — راجع عددها ونوعها في التمرين قبل الحاجة.
 
 ## 4. تدوير الأسرار
 
@@ -135,7 +151,7 @@ dc exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"
 | `CRON_SECRET` | يُحدَّث في مكانين معًا: `.env` ثم `dc up -d functions`، و`alter database postgres set app.cron_secret = :'secret'` كـ `supabase_admin` (README النشر، خطوة التذكيرات 3)، ثم `select ensure_reminder_schedule();` في جلسة جديدة | لا شيء؛ إن اختلف السرّان تردّ الدالة 401 ولا تصل التذكيرات |
 | `POSTGRES_PASSWORD` | كلمة مرور كل أدوار القاعدة التي تدخل بكلمة: `postgres` و`supabase_admin` (يضبطهما الصورة عند التهيئة؛ `migrate.sh` وسكربت البذرة يتّصلان بـ `postgres`)، وأدوار `db-init/roles.sql`: `authenticator` (PostgREST) و`supabase_auth_admin` (GoTrue) و`pgbouncer` و`supabase_functions_admin` و`supabase_storage_admin` و`supabase_replication_admin` و`supabase_read_only_user`. الترتيب: (1) `alter role … with password` لكلٍّ منها بالكلمة الجديدة، كـ `supabase_admin` عبر المقبس المحلي داخل الحاوية (`dc exec -T db psql -U supabase_admin -d postgres`، كما في خطوة التذكيرات 2 في README النشر)، والكلمة متغيّر psql بـ `-v`؛ (2) الكلمة الجديدة في `.env`؛ (3) `dc up -d db auth rest` (تُعاد بيئتها)؛ (4) القياس: `dc --profile tools run --rm migrate` يمرّ (لا جديد)، و`awrad-auth` و`awrad-rest` يعملان | انقطاع قصير |
 | كلمة مرور Mailpit (`MAIL_USER`، `MAIL_PASSWORD`) | تُحدَّث في أربعة أماكن: `.env`، و`secrets/mail-basicauth.txt`، و`secrets/mail-ui.htpasswd` (bcrypt)، وكتلة `basic_auth` في `/srv/sites/caddy/awrad.caddy`. ثم `dc up -d mail` و`docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` | من يقرأ الرموز يحتاج الكلمة الجديدة |
-| SMTP (لاحقًا) | غير موجود اليوم: GoTrue يرسل إلى `awrad-mail:1025`. حين يُضاف مزوّد بريد تُضبط `GOTRUE_SMTP_*` في compose بأسرار من `.env`، وتدويرها `dc up -d auth` | — |
+| SMTP (`SMTP_PASS`) | حين يُضبط مزوّد البريد (README النشر، «البريد في الإنتاج»): الكلمة الجديدة عند المزوّد، ثمّ في `.env`، ثمّ `dc up -d auth`، ثمّ رمز دخول إلى بريد خارجي. بلا `SMTP_*` يرسل GoTrue إلى Mailpit | لا شيء إن تمّ بالترتيب |
 
 تحقّق بعد كل تدوير: دخول برمز إلى اللوحة، وفي ساعة التذكير التالية §7.
 
@@ -241,11 +257,55 @@ select platform, count(*) from push_tokens group by 1;
 
 1. افتح `https://awrad-mail.emdatra.org` بكلمة المرور من `secrets/mail-basicauth.txt`. الرسالة هناك؟ فالإرسال سليم.
 2. Mailpit في الذاكرة: إعادة تشغيله تمحو الرسائل، والحدّ 500 رسالة.
-3. ليست هناك؟ `dc logs --since 30m auth` (حدود المعدّل: رسالة لكل مستخدم في الثانية، و60 رسالة في الساعة)،
-   و`dc ps mail`.
+3. ليست هناك؟ `dc logs --since 30m auth` (حدود المعدّل: رسالة لكل مستخدم في الثانية، و`RATE_LIMIT_EMAIL_SENT` رسالة في
+   الساعة، 60 افتراضيًا؛ و`/otp` و`/verify` محدودان لكل عنوان عميل — 429 = حدّ)، و`dc ps mail`.
 4. «هذا البريد غير مسجَّل لدينا» عند الدخول: لا حساب بهذا البريد (يُدعى أولًا).
 
 ## 8. التراجع
 
 التراجع الكامل (حذف المشروع والقاعدة وإعداد Caddy والمجلّدات) في README النشر، «التراجع الكامل». يحذف كل
 البيانات: خذ نسخة (§3) قبله. لإيقاف التذكيرات وحدها: `select cron.unschedule('send-reminders');`.
+
+## 9. استيراد الجداول القديمة
+
+خدمة `import` (ملف التعريف `tools`، القرار FIN-5) تشغّل `scripts/import-legacy` داخل شبكة المشروع: القاعدة `awrad-db` بلا
+منفذ منشور، والمفاتيح من `.env` بيئةً (لا رابط ولا وسيط)، والملفات من `/opt/sites/awrad/import/` على الخادم، والمخرجات
+أعداد فقط (`--counts-only` في نقطة الدخول؛ سجلّ المهمّة يُدفع إلى git). ما يُستورد وما لا يُستورد في
+[`scripts/import-legacy/README.md`](../scripts/import-legacy/README.md) ودليل المدير §9.
+
+**ما يفعله المالك عبر SSH (مرّة):** ينسخ ملفات CSV الثلاثة إلى الخادم، لا إلى أي مستودع:
+
+```sh
+sudo install -d -m 700 /opt/sites/awrad/import
+sudo install -m 600 daily.csv weekly.csv attendance.csv /opt/sites/awrad/import/
+```
+
+**الجولة الأولى (`task.sh`): مسودة الربط ثمّ المعاينة.** بلا `mapping.json` يكتب السكربت مسودة ولا يستورد شيئًا:
+
+```sh
+cd /opt/sites/awrad/repo
+dc() { docker compose -p awrad --env-file /opt/sites/awrad/.env -f deploy/vps/docker-compose.yml "$@"; }
+I=/import                                                     # = /opt/sites/awrad/import داخل الحاوية
+ARGS="--daily $I/daily.csv --weekly $I/weekly.csv --attendance $I/attendance.csv --mapping $I/mapping.json --report $I/report.json"
+dc --profile tools build import                               # الصورة نفسها التي يبنيها web-build (workspace)
+dc --profile tools run --rm import $ARGS                      # مسودة mapping.json (أو معاينة إن وُجد الملف)
+sudo ls -l /opt/sites/awrad/import                             # الأحجام والصلاحيات، لا المحتوى
+```
+
+المالك يراجع `mapping.json` عبر SSH مع الشيخ (الأسماء، والأعمدة، وأعمدة النصوص، والطلاب الذين غادروا)، ويعيده إلى المكان نفسه
+(`sudo install -m 600`). ثمّ جولة **معاينة** بالسطر نفسه: «لم يُكتب شيء في قاعدة البيانات»، ومعها الأعداد — السجلّات
+والنصوص، والأسماء غير المطابقة، والتواريخ غير الصالحة، والصفوف المرفوضة، والسجلّات الموجودة التي ستُترك. التفاصيل بالأسماء في
+`report.json` (600) يقرؤها المالك.
+
+**جولة التنفيذ** بعد موافقة الشيخ على المعاينة، بعد نسخة احتياطية (§3):
+
+```sh
+SITE=awrad AWRAD_ENV_FILE=/opt/sites/awrad/.env bash deploy/vps/backup.sh
+dc --profile tools run --rm import $ARGS --execute            # [--admin <بريد المدير> إن تعدّد المديرون]
+echo "exit=$?"                                                 # 1 = صفٌّ رُفض (العدد في الملخّص، التفاصيل في report.json)
+```
+
+القياس بعده (أعداد فقط): `dc exec -T db psql -U postgres -d postgres -tAc "select count(*) from logs"` قبل التنفيذ وبعده،
+والفرق يساوي «حُفظ: N سجلًّا». إعادة الجولة آمنة: السجلّات الموجودة تُترك ولا يُكتب شيء ثانيةً (القرار FIN-9).
+بعد الاستيراد: احذف الملفات من الخادم إن لم تعد لازمة (`sudo rm -r /opt/sites/awrad/import`).
+

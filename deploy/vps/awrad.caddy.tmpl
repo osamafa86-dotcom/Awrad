@@ -7,6 +7,10 @@
 # from /srv/www/<SITE>-app (a WEB_ROOT outside /srv/sites/www is invisible to Caddy). Placeholder tokens
 # appear only on the lines they replace — never in a comment, which the renderer would rewrite too.
 # noindex on all four: staging (remove at cutover, by line).
+# Security headers (final review ops M2) on the dashboard and the student web only: no framing (clickjacking of the
+# dashboard's one-click actions), no MIME sniffing, no full-URL referrers. The ? prefix sets a header only when the
+# upstream did not (Next sends the same ones; no duplicates). The API (JSON) and the mailbox (Mailpit's own UI) get
+# none of these.
 
 # Sheikh's dashboard (Next.js standalone)
 __ADMIN__ {
@@ -14,6 +18,10 @@ __ADMIN__ {
 	header {
 		X-Robots-Tag "noindex, nofollow"
 		-Server
+		?Content-Security-Policy "frame-ancestors 'none'"
+		?X-Frame-Options "DENY"
+		?X-Content-Type-Options "nosniff"
+		?Referrer-Policy "strict-origin-when-cross-origin"
 	}
 	encode zstd gzip
 	reverse_proxy __SITE__-admin:3000
@@ -25,6 +33,9 @@ __APP__ {
 	header {
 		X-Robots-Tag "noindex, nofollow"
 		-Server
+		?X-Frame-Options "DENY"
+		?X-Content-Type-Options "nosniff"
+		?Referrer-Policy "strict-origin-when-cross-origin"
 	}
 	encode zstd gzip
 	root * /srv/www/__SITE__-app/current
@@ -40,8 +51,12 @@ __API__ {
 		-Server
 	}
 	encode zstd gzip
+	# GoTrue's per-client limits key on this header (GOTRUE_RATE_LIMIT_HEADER in docker-compose.yml); header_up
+	# replaces whatever a client sent, so it cannot be forged.
 	handle_path /auth/v1/* {
-		reverse_proxy __SITE__-auth:9999
+		reverse_proxy __SITE__-auth:9999 {
+			header_up X-Real-Client-IP {client_ip}
+		}
 	}
 	handle_path /rest/v1/* {
 		reverse_proxy __SITE__-rest:3000
