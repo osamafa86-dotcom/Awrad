@@ -40,6 +40,8 @@ export const RPC_ERROR_CODES = [
   'INVALID_ITEM',
   'INACTIVE_USER',
   'MISSING_ENTRY',
+  // A habit or checklist item that a log refers to cannot be deleted (0009, archive it instead).
+  'HABIT_HAS_LOGS',
 ] as const;
 
 export type RpcErrorCode = (typeof RPC_ERROR_CODES)[number];

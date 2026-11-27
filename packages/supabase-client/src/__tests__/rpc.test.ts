@@ -96,6 +96,7 @@ describe('parseRpcError', () => {
     expect(parseRpcError({ message: 'error: "MISSING_ENTRY" raised' })).toBe('MISSING_ENTRY');
     expect(parseRpcError({ message: 'x', details: 'FORBIDDEN' })).toBe('FORBIDDEN');
     expect(parseRpcError({ message: 'x', hint: 'FUTURE_DATE' })).toBe('FUTURE_DATE');
+    expect(parseRpcError({ message: 'HABIT_HAS_LOGS' })).toBe('HABIT_HAS_LOGS');
     expect(parseRpcError({ message: 'NOT_FORBIDDEN_AT_ALL_X' })).toBe('UNKNOWN');
   });
   it('accepts an Error instance', () => {

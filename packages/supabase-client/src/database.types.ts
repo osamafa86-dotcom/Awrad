@@ -691,6 +691,10 @@ export type Database = {
         };
       };
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined };
+      archive_and_replace_habit: {
+        Args: { p_new: Json; p_old_habit_id: string; p_switch_date: string };
+        Returns: string;
+      };
       can_view_user: { Args: { p_user: string }; Returns: boolean };
       current_user_role: {
         Args: Record<PropertyKey, never>;

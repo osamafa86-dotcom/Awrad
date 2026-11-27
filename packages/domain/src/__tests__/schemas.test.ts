@@ -45,8 +45,9 @@ describe('saveLogSchema', () => {
 });
 
 describe('RPC_ERROR_CODES', () => {
-  test('lists the nine codes', () => {
-    expect(RPC_ERROR_CODES).toHaveLength(9);
+  test('lists the ten codes', () => {
+    expect(RPC_ERROR_CODES).toHaveLength(10);
     expect(RPC_ERROR_CODES).toContain('MISSING_ENTRY');
+    expect(RPC_ERROR_CODES).toContain('HABIT_HAS_LOGS');
   });
 });

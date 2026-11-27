@@ -303,6 +303,8 @@ export const ar = {
     INVALID_ITEM: 'تغيّرت بنود إحدى القوائم. حدّث الصفحة وحاول مرة أخرى.',
     INACTIVE_USER: 'حسابك غير مفعَّل، تواصل مع المشرف.',
     MISSING_ENTRY: 'بقي ورد بلا حالة. حدّد حالة كل ورد ثم احفظ.',
+    // Raised only when the admin deletes a habit (dashboard); listed so every code has a message.
+    HABIT_HAS_LOGS: 'تعذّر الحفظ، أعد المحاولة.',
     UNKNOWN: 'تعذّر الحفظ، تحقّق من الاتصال وأعد المحاولة.',
   },
 } as const;
