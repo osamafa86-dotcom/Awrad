@@ -1,0 +1,4 @@
+/* Colour variables are generated from @awrad/design-tokens in tailwind.config.js (no literals here). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
