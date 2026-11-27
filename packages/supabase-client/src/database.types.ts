@@ -690,6 +690,7 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      admin_delete_user: { Args: { p_user_id: string }; Returns: undefined };
       can_view_user: { Args: { p_user: string }; Returns: boolean };
       current_user_role: {
         Args: Record<PropertyKey, never>;
