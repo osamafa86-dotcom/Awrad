@@ -36,7 +36,7 @@ export interface OverviewRow {
   /** From get_student_summary; null when it could not be read. */
   currentStreak: number | null;
   completionPct: number | null;
-  /** «منقطع ≥3 أيام»: the three days before today are all unlogged (⚠ on the row). */
+  /** «منقطع ≥3 أيام» (isInactive): ⚠ on the row. */
   inactive: boolean;
 }
 
@@ -59,10 +59,15 @@ export function periodDates(today: string, days: number): string[] {
   return Array.from({ length: days }, (_, i) => addDays(today, i - days + 1));
 }
 
-/** The three most recent completed days (today excluded) are all unlogged. */
-export function isInactive(cells: DayCell[], today: string): boolean {
+/**
+ * «منقطع ≥3 أيام» (Ruling INACTIVE-1): the three completed days before today are all unlogged and today
+ * is still unlogged. Days before `joinedAt` are not silence: with fewer than three completed days since
+ * joining, nobody is inactive. Without a known `joinedAt` the person is taken as joined long ago.
+ */
+export function isInactive(cells: DayCell[], today: string, joinedAt?: string | null): boolean {
+  if (joinedAt && joinedAt > addDays(today, -3)) return false;
   const state = new Map(cells.map((cell) => [cell.date, cell.state]));
-  return [1, 2, 3].every((back) => (state.get(addDays(today, -back)) ?? 'missing') === 'missing');
+  return [0, 1, 2, 3].every((back) => (state.get(addDays(today, -back)) ?? 'missing') === 'missing');
 }
 
 /** At least one logged day (any state but `missing`) from `from` on. */
@@ -76,9 +81,13 @@ function byGroupThenName(a: AssembledRow, b: AssembledRow): number {
 
 /**
  * One row per person, each with exactly `days` cells on their group's own dates (a day the RPC did not
- * return is `missing`), sorted by group name, then by name.
+ * return is `missing`), sorted by group name, then by name. `joinedAt` maps user ids to profiles.joined_at.
  */
-export function assembleRows(groups: GroupDays[], days: number): AssembledRow[] {
+export function assembleRows(
+  groups: GroupDays[],
+  days: number,
+  joinedAt: ReadonlyMap<string, string> = new Map(),
+): AssembledRow[] {
   const rows: AssembledRow[] = [];
   for (const { group, today, entries } of groups) {
     const dates = periodDates(today, days);
@@ -96,7 +105,7 @@ export function assembleRows(groups: GroupDays[], days: number): AssembledRow[] 
         fullName: person.fullName,
         groupName: group.name,
         cells,
-        inactive: isInactive(cells, today),
+        inactive: isInactive(cells, today, joinedAt.get(userId)),
         weekStart,
       });
     }

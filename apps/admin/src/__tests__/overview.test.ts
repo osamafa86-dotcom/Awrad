@@ -44,12 +44,16 @@ describe('periodDates', () => {
   });
 });
 
-describe('isInactive (منقطعون ≥3 أيام)', () => {
-  it('is true when the three days before today are all unlogged', () => {
+describe('isInactive (منقطعون ≥3 أيام, Ruling INACTIVE-1)', () => {
+  it('is true when the three days before today and today are all unlogged', () => {
     expect(isInactive(cellsFrom({ '2026-11-22': 'achieved' }), TODAY)).toBe(true);
   });
 
-  it('ignores today: an unlogged today with a logged yesterday is not inactive', () => {
+  it('logging today after three silent days clears it', () => {
+    expect(isInactive(cellsFrom({ '2026-11-22': 'achieved', [TODAY]: 'failed' }), TODAY)).toBe(false);
+  });
+
+  it('an unlogged today with a logged yesterday is not inactive', () => {
     expect(isInactive(cellsFrom({ '2026-11-25': 'failed' }), TODAY)).toBe(false);
   });
 
@@ -60,6 +64,18 @@ describe('isInactive (منقطعون ≥3 أيام)', () => {
 
   it('two unlogged days are not enough', () => {
     expect(isInactive(cellsFrom({ '2026-11-23': 'achieved' }), TODAY)).toBe(false);
+  });
+
+  it('days before joining are not silence: joined 2 days ago with no logs is not inactive', () => {
+    expect(isInactive(cellsFrom({}), TODAY, '2026-11-24')).toBe(false);
+  });
+
+  it('joined exactly three completed days ago with nothing logged is inactive', () => {
+    expect(isInactive(cellsFrom({}), TODAY, '2026-11-23')).toBe(true);
+  });
+
+  it('joined 10 days ago, the last three completed days and today unlogged: inactive', () => {
+    expect(isInactive(cellsFrom({ '2026-11-20': 'achieved' }), TODAY, '2026-11-16')).toBe(true);
   });
 });
 
@@ -100,6 +116,23 @@ describe('assembleRows', () => {
     expect(rows.map((r) => r.fullName)).toEqual(['إبراهيم', 'يوسف', 'بلال', 'خالد']);
     expect(rows[0]!.cells.at(-1)!.date).toBe(later);
     expect(rows[2]!.cells.at(-1)!.date).toBe(TODAY);
+  });
+});
+
+describe('assembleRows with joined dates', () => {
+  it('uses each person\'s joined_at for the inactive flag', () => {
+    const rows = assembleRows(
+      [{ group: group('g', 'س'), today: TODAY, entries: entries([{ id: 'new', name: 'جديد' }, { id: 'old', name: 'قديم' }]) }],
+      14,
+      new Map([
+        ['new', '2026-11-25'],
+        ['old', '2026-10-01'],
+      ]),
+    );
+    expect(rows.map((r) => [r.userId, r.inactive])).toEqual([
+      ['new', false],
+      ['old', true],
+    ]);
   });
 });
 

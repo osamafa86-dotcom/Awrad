@@ -43,6 +43,18 @@ async function viewerGroups(client: TypedClient, viewer: { id: string; role: Rol
   return groups.filter((group) => supervised.has(group.id));
 }
 
+/** profiles.joined_at for the shown people (the inactivity window starts there: Ruling INACTIVE-1). */
+async function joinedDates(client: TypedClient, userIds: string[]): Promise<Map<string, string>> {
+  const pages = await Promise.all(
+    chunk(userIds, IDS_PER_QUERY).map(async (ids) => {
+      const { data, error } = await client.from('profiles').select('id, joined_at').in('id', ids);
+      if (error) throw error;
+      return data;
+    }),
+  );
+  return new Map(pages.flat().map((p) => [p.id, p.joined_at]));
+}
+
 /** «طلبات دعم مفتوحة»: logs with an open support request from the shown people. */
 async function openSupportCount(client: TypedClient, userIds: string[]): Promise<number> {
   const counts = await Promise.all(
@@ -80,7 +92,8 @@ export async function getOverview(
       return { group, today, entries };
     }),
   );
-  const assembled = assembleRows(perGroup, opts.days);
+  const userIds = [...new Set(perGroup.flatMap(({ entries }) => entries.map((entry) => entry.userId)))];
+  const assembled = assembleRows(perGroup, opts.days, await joinedDates(client, userIds));
 
   const [summaries, support] = await Promise.all([
     mapWithConcurrency(assembled, SUMMARY_CONCURRENCY, async (row) => {

@@ -96,7 +96,7 @@ export const ar = {
     /** One line under each KPI value. */
     kpiCaptions: {
       loggedThisWeek: (shown: number) => `المعروضون: ${isolate(String(shown))}`,
-      inactive: 'لم يسجّلوا في الأيام الثلاثة الماضية',
+      inactive: 'لم يسجّلوا اليوم ولا في الأيام الثلاثة قبله',
       openSupport: 'تنتظر المعالجة',
     },
     /** The ⚠ on an alert KPI card. */
