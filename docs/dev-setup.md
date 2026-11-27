@@ -97,7 +97,20 @@ pnpm --filter admin e2e
 لأن التدفق هو ما يختبره. بلا حزمة Supabase يُتخطّى المشروع ولا يحفظ شيئًا.
 `e2e/helpers.ts` يجمع `signIn()` و`oneTimeCode()` و`authFile()` لكل الملفات؛ `e2e/students.spec.ts` يدعو حسابًا ببريد فريد
 (`new-<وقت>-<مشروع>@test.example`) ويحذفه بمفتاح الخدمة في النهاية فتبقى البذرة كما هي، و`e2e/attendance.spec.ts`
-ينشئ مجالس عناوينها تبدأ بـ `e2e-مجلس` ويحذفها بمفتاح الخدمة قبل الملف وبعده.
+ينشئ مجالس عناوينها تبدأ بـ `e2e-مجلس` ويحذفها بمفتاح الخدمة قبل الملف وبعده، و`e2e/habits.spec.ts` ينشئ عادات
+أسبوعية أسماؤها تبدأ بـ `e2e-عادة` (لا يمسّ عادات البذرة، ولا يضيف يومية فتتغيّر أيام النظرة العامة) ويحذفها كذلك.
+
+### العادات (F-63, BR-07) — ترحيل 0009
+`supabase/migrations/0009_habit_admin.sql`: RPC `archive_and_replace_habit(p_old_habit_id, p_new jsonb, p_switch_date)`
+للمدير وحده (القديمة `active_to = p_switch_date - 1`، والجديدة بنفس التكرار والترتيب من `p_switch_date`، وصفّ تدقيق
+`habit.replace`)، ومُشغِّلا `before delete` على `habits` و`habit_items` يرفضان حذف ما يشير إليه سجلّ برمز `HABIT_HAS_LOGS`
+(الأرشفة بدل الحذف)، وفهرسان على `log_entries(habit_id)` و`log_entry_items(habit_item_id)`. بعد إضافته: `pnpm db:reset`
+ثم `pnpm db:types`. اختباراته (تعمل على عادات بادئة `test_hab_` يحذفها الملف، فتبقى البذرة كما هي):
+```bash
+pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0009_habit_admin.test.ts
+```
+الصفحة `/habits` (للمدير؛ `?tab=weekly` يفتح الأسبوعية): التعديل في المكان والترتيب والأرشفة عبر Server Actions في
+`src/actions/habits.ts` تحت RLS، والاستبدال عبر الـ RPC. الترتيب بالسحب يكتب `sort_order` صفًّا صفًّا (انظر `docs/backlog.md`).
 
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)

@@ -30,6 +30,14 @@ const dayState = {
   future: 'لم يأتِ بعد',
 } as const;
 
+/** «بند واحد · بندان · 3 بنود · 13 بندًا» (Arabic number agreement). */
+function itemCount(n: number): string {
+  if (n === 1) return 'بند واحد';
+  if (n === 2) return 'بندان';
+  if (n >= 3 && n <= 10) return `${n} بنود`;
+  return `${n} بندًا`;
+}
+
 export const ar = {
   app: {
     name: 'أوراد',
@@ -299,6 +307,139 @@ export const ar = {
       CREATE_FAILED: 'تعذّر إنشاء المجلس. حاول مرة أخرى.',
       SAVE_FAILED: 'تعذّر حفظ الحضور. تحقّق من الاتصال وحاول مرة أخرى.',
       DELETE_FAILED: 'تعذّر حذف المجلس. حاول مرة أخرى.',
+    },
+  },
+  habits: {
+    title: 'العادات',
+    subtitle: 'يقرأ التطبيق العادات من هنا. تغيير الاسم أو الاستبدال لا يمسّ سجلّات الطلاب القديمة.',
+    newHabit: 'عادة جديدة',
+    tabs: { daily: 'اليومية', weekly: 'الأسبوعية' },
+    /** Accessible name of each table. */
+    tableLabel: { daily: 'العادات اليومية', weekly: 'العادات الأسبوعية' },
+    columns: { reorder: 'الترتيب', name: 'الاسم', target: 'الهدف', kind: 'النوع', period: 'نشطة منذ', actions: 'الإجراءات' },
+    archivedColumns: { name: 'الاسم', target: 'الهدف', kind: 'النوع', period: 'الفترة', actions: 'الإجراءات' },
+    kind: { tristate: 'ثلاثية', checklist: 'قائمة' },
+    /** «قائمة · 13 بندًا» */
+    checklistCount: (n: number) => `قائمة · ${itemCount(n)}`,
+    /** «تبدأ 1 ديسمبر 2026» for a replacement that has not started yet. */
+    startsOn: (date: string) => `تبدأ ${date}`,
+    /** The archived period: «1 مارس 2026 – 30 نوفمبر 2026». */
+    period: (from: string, to: string) => `${from} – ${to}`,
+    noTarget: '—',
+    empty: { title: 'لا عادات بعد', body: 'أضف عادة لتظهر للطلاب في هذا الجدول.' },
+    archived: (n: number) => `المؤرشفة (${n})`,
+    deleteNote: 'الحذف متاحٌ لعادةٍ بلا سجلّات فقط؛ ما له سجلّات يُؤرشف ويُستبدل.',
+    loadFailed: 'تعذّر تحميل العادات. تحقّق من الاتصال وأعد تحميل الصفحة.',
+    /** The inline editors: the name and target are buttons that turn into a field (Enter saves, Esc cancels). */
+    inline: {
+      name: 'اسم العادة',
+      target: 'هدف العادة',
+      itemName: 'اسم البند',
+      editHint: 'اضغط للتعديل، ثم Enter للحفظ أو Esc للإلغاء.',
+      saving: 'جارٍ الحفظ…',
+    },
+    actions: {
+      edit: 'تعديل',
+      replace: 'أرشفة واستبدال',
+      more: (name: string) => `إجراءات أخرى لـ«${name}»`,
+      archive: 'أرشفة',
+      delete: 'حذف',
+    },
+    /** Drag-to-reorder (dnd-kit), announced in Arabic. */
+    reorder: {
+      handle: (name: string) => `إعادة ترتيب «${name}»`,
+      roleDescription: 'عنصر قابل للترتيب',
+      instructions:
+        'لإعادة الترتيب اضغط المسافة أو Enter لالتقاط العنصر، ثم الأسهم لتحريكه، ثم المسافة أو Enter لإفلاته، أو Esc للإلغاء.',
+      picked: (name: string, position: number, total: number) => `التُقط «${name}»، الموضع ${position} من ${total}.`,
+      moved: (name: string, position: number, total: number) => `«${name}» الآن في الموضع ${position} من ${total}.`,
+      dropped: (name: string, position: number, total: number) => `أُفلت «${name}» في الموضع ${position} من ${total}.`,
+      cancelled: (name: string) => `أُلغي نقل «${name}».`,
+      saved: 'حُفظ الترتيب.',
+    },
+    items: {
+      title: 'بنود القائمة — تُسحب لإعادة الترتيب',
+      add: 'إضافة بند',
+      addLabel: 'اسم البند الجديد',
+      addSubmit: 'أضف',
+      cancel: 'إلغاء',
+      archived: (n: number) => `البنود المؤرشفة (${n})`,
+      until: (date: string) => `حتى ${date}`,
+      label: (name: string) => `بند «${name}»`,
+    },
+    form: {
+      title: 'عادة جديدة',
+      subtitle: 'تظهر للطلاب من تاريخ البدء، في جدول تكرارها.',
+      editTitle: 'تعديل العادة',
+      editSubtitle: 'تصحيح الاسم أو الهدف يظهر على السجلّات القديمة أيضًا. لتغيير المحتوى استعمل «أرشفة واستبدال».',
+      name: 'اسم العادة',
+      description: 'الوصف (اختياري)',
+      target: 'الهدف (اختياري)',
+      targetPlaceholder: 'مثال: ست صفحات يوميًا',
+      frequency: 'التكرار',
+      frequencies: { daily: 'يومية', weekly: 'أسبوعية' },
+      kind: 'النوع',
+      kinds: { tristate: 'ثلاثية (تم · لم يتم · غير مطلوب)', checklist: 'قائمة بنود' },
+      activeFrom: 'تاريخ البدء',
+      items: 'البنود (بند في كل سطر)',
+      cancel: 'إلغاء',
+      submit: 'إضافة العادة',
+      save: 'حفظ',
+      submitting: 'جارٍ الحفظ…',
+    },
+    archive: {
+      title: (name: string) => `أرشفة «${name}»؟`,
+      body: 'لا تظهر للطلاب بعد آخر يوم تختاره، وتبقى سجلّاتها كما هي.',
+      itemTitle: (name: string) => `أرشفة البند «${name}»؟`,
+      date: 'آخر يوم نشاط',
+      confirm: 'أرشفة',
+      submitting: 'جارٍ الأرشفة…',
+      cancel: 'إلغاء',
+    },
+    remove: {
+      title: (name: string) => `حذف «${name}» نهائيًا؟`,
+      body: 'لا سجلّات لها، فتُحذف مع بنودها ولا يمكن التراجع.',
+      itemBody: 'لم يعلّمه أحد بعد، فيُحذف ولا يمكن التراجع.',
+      confirm: 'احذف',
+      submitting: 'جارٍ الحذف…',
+      cancel: 'إلغاء',
+    },
+    replace: {
+      title: (name: string) => `أرشفة «${name}» واستبدالها`,
+      body: 'تنتهي العادة الحالية في اليوم السابق لتاريخ البدء وتبقى سجلّاتها كما هي، وتظهر الجديدة للطلاب من تاريخ البدء.',
+      name: 'اسم العادة الجديدة',
+      namePlaceholder: 'مثال: الكتاب التالي في المقرّر',
+      target: 'الهدف',
+      description: 'الوصف (اختياري)',
+      startDate: 'تاريخ البدء',
+      items: 'بنود القائمة الجديدة (بند في كل سطر)',
+      /** «تبدأ الجديدة 1 ديسمبر 2026 — 21 جمادى الآخرة 1448هـ» under the start date (a07). */
+      startsOn: (gregorian: string, hijri: string) => `تبدأ الجديدة ${gregorian} — ${hijri}`,
+      /** «تنتهي «X» في 30 نوفمبر 2026.» under the start date. */
+      endsOn: (name: string, date: string) => `تنتهي «${name}» في ${date}.`,
+      cancel: 'إلغاء',
+      submit: 'أرشفة واستبدال',
+      submitting: 'جارٍ الاستبدال…',
+    },
+    fieldErrors: {
+      name: 'اكتب الاسم.',
+      description: 'الوصف طويل؛ اختصره.',
+      target_text: 'الهدف طويل؛ اختصره.',
+      frequency: 'اختر التكرار.',
+      kind: 'اختر النوع.',
+      active_from: 'اختر تاريخًا من اليوم فصاعدًا.',
+      items: 'اكتب بندًا واحدًا على الأقل.',
+      date: 'اختر تاريخًا صحيحًا.',
+    },
+    /** Display text for each code a habits Server Action returns. */
+    errors: {
+      FORBIDDEN: 'إدارة العادات للمدير وحده.',
+      INVALID_INPUT: 'راجع الحقول المعلَّمة.',
+      HABIT_HAS_LOGS: 'لهذه العادة أو البند سجلّات، فلا يُحذف. أرشِفه بدلًا من ذلك.',
+      DATE_OUT_OF_WINDOW: 'تاريخ البدء يجب أن يأتي بعد بداية العادة الحالية وبعد آخر يوم سُجّلت فيه.',
+      INACTIVE_HABIT: 'هذه العادة مؤرشفة بالفعل. أعد تحميل الصفحة.',
+      INVALID_ITEM: 'بيانات العادة الجديدة غير صالحة: تحقّق من الاسم والبنود.',
+      SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
     },
   },
   unauthorized: {
