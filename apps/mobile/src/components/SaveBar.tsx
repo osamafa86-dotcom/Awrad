@@ -13,6 +13,8 @@ export interface SaveBarProps {
   reason: string;
   /** Extra bottom padding when no tab bar sits below (the tab bar already covers the safe area). */
   bottomInset?: number;
+  /** The primary button's label; defaults to «حفظ اليوم». */
+  saveLabel?: string;
 }
 
 /**
@@ -26,6 +28,7 @@ export function SaveBar({
   onMarkAllDone,
   reason,
   bottomInset = 0,
+  saveLabel = ar.today.save,
 }: SaveBarProps) {
   const { colors, space, type } = useTheme();
   return (
@@ -58,7 +61,7 @@ export function SaveBar({
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            label={ar.today.save}
+            label={saveLabel}
             size="lg"
             onPress={onSave}
             disabled={!canSave}

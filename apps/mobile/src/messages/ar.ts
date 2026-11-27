@@ -131,6 +131,34 @@ export const ar = {
       readOnlyBody: 'انتهت مهلة التعديل لهذا اليوم.',
     },
   },
+  weekly: {
+    loading: 'جارٍ تحميل أوراد الأسبوع…',
+    loadFailed: 'تعذّر تحميل أوراد الأسبوع.',
+    retry: 'إعادة المحاولة',
+    empty: 'لا أوراد أسبوعية لهذا الأسبوع.',
+    /** «الأسبوع من 22 نوفمبر إلى 28 نوفمبر» */
+    title: (from: string, to: string) => `الأسبوع من ${from} إلى ${to}`,
+    /** «جمادى الأولى – جمادى الآخرة 1448» (one month when both ends share it). */
+    hijriRange: (from: string, to: string) => (from === to ? from : `${from} – ${to}`),
+    prevWeek: 'الأسبوع السابق',
+    nextWeek: 'الأسبوع التالي',
+    reviewLabel: 'مراجعة عامة للأسبوع',
+    supportLabel: 'ما تحتاج فيه دعمًا من الشيخ',
+    supportHelper: 'يصل إلى الشيخ والمشرف',
+    save: 'حفظ الأسبوع',
+    missingStatus: (habitName: string) => `بقي ${habitName} بلا حالة`,
+    allSpecified: 'كل الأوراد محدَّدة.',
+    lastWeek: {
+      title: 'لم تسجّل الأسبوع الماضي',
+      body: 'ما زال بإمكانك تسجيله خلال مهلة السماح.',
+      action: 'سجّله الآن',
+    },
+    banner: {
+      achieved: 'حُفظ ✓ — أسبوع مُنجَز',
+      failed: (remaining: number) => `حُفظ ✓ — ${remainingText(remaining)}`,
+      neutral: 'أسبوع بلا تكليف',
+    },
+  },
   errors: {
     missingEnv:
       'إعدادات الاتصال ناقصة: عيّن EXPO_PUBLIC_SUPABASE_URL وEXPO_PUBLIC_SUPABASE_ANON_KEY في ملف ‎.env',

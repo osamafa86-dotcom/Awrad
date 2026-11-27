@@ -9,6 +9,8 @@ export interface AppSettings {
   backfillDays: number;
   thresholdPct: number;
   hijriAdjustment: number;
+  /** Days after a week ends in which it can still be logged (BR-06). */
+  weeklyGraceDays: number;
   weekStartsOn: WeekStart;
   /** The student's zone (BR-08): profile, then group, then Asia/Riyadh. */
   timezone: string;
@@ -24,6 +26,7 @@ const DEFAULTS: Omit<AppSettings, 'timezone'> = {
   backfillDays: 2,
   thresholdPct: 100,
   hijriAdjustment: 0,
+  weeklyGraceDays: 3,
   weekStartsOn: 0,
 };
 
@@ -49,7 +52,7 @@ async function load(groupId: string | null): Promise<Loaded> {
   const settingsReq = supabase
     .from('app_settings')
     .select('key, value')
-    .in('key', ['backfill_days', 'streak_threshold_pct', 'hijri_adjustment_days']);
+    .in('key', ['backfill_days', 'streak_threshold_pct', 'hijri_adjustment_days', 'weekly_grace_days']);
   const groupReq = groupId
     ? supabase.from('groups').select('timezone, week_starts_on').eq('id', groupId).maybeSingle()
     : Promise.resolve({ data: null, error: null });
@@ -60,6 +63,7 @@ async function load(groupId: string | null): Promise<Loaded> {
       backfillDays: num(byKey.get('backfill_days'), DEFAULTS.backfillDays),
       thresholdPct: num(byKey.get('streak_threshold_pct'), DEFAULTS.thresholdPct),
       hijriAdjustment: num(byKey.get('hijri_adjustment_days'), DEFAULTS.hijriAdjustment),
+      weeklyGraceDays: num(byKey.get('weekly_grace_days'), DEFAULTS.weeklyGraceDays),
     },
     group: group.data
       ? {

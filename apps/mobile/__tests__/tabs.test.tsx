@@ -40,7 +40,7 @@ const routes = {
 
 describe('tab bar', () => {
   it('shows the five Arabic tabs in order: today, weekly, summary, history, settings', async () => {
-    await renderRouter(routes, { initialUrl: '/weekly' });
+    await renderRouter(routes, { initialUrl: '/summary' });
 
     // The tab bar's buttons are the only buttons on a placeholder screen.
     const tabs = await screen.findAllByRole('button');

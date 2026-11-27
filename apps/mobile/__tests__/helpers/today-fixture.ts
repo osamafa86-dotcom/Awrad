@@ -90,6 +90,8 @@ export interface FakeLogRow {
   period: 'daily' | 'weekly';
   period_start: string;
   note: string | null;
+  review_text?: string | null;
+  support_request_text?: string | null;
   log_entries: Array<{
     id: string;
     habit_id: string;
@@ -111,6 +113,7 @@ export function resetFakeDb(): void {
     { key: 'backfill_days', value: 2 },
     { key: 'streak_threshold_pct', value: 100 },
     { key: 'hijri_adjustment_days', value: 0 },
+    { key: 'weekly_grace_days', value: 3 },
   ];
   fakeDb.group = { timezone: 'Asia/Riyadh', week_starts_on: 0 };
   fakeDb.logs = {};
@@ -172,3 +175,34 @@ export const fakeProfile = {
   is_active: true,
   is_tracked: true,
 };
+
+const weeklyBase = { frequency: 'weekly' as const, activeFrom: '2020-01-01', activeTo: null };
+const weeklyTristate = (suffix: string, slug: string, name: string, sortOrder: number): HabitDef => ({
+  ...weeklyBase,
+  id: id(suffix),
+  slug,
+  name,
+  targetText: null,
+  kind: 'tristate',
+  sortOrder,
+  items: [],
+});
+export const memorization = weeklyTristate('a6', 'quran_memorization', 'حفظ أو مراجعة حفظ القرآن', 1);
+export const fiqh = weeklyTristate('a7', 'fiqh_lesson', 'درس الفقه', 2);
+export const tazkiyah = weeklyTristate('a8', 'tazkiyah_hikam', 'الاستماع لدروس التزكية (الحكم العطائية)', 3);
+export const lessonPrep: HabitDef = {
+  ...weeklyBase,
+  id: id('a9'),
+  slug: 'lesson_prep',
+  name: 'تحضير الدرس الأسبوعي',
+  targetText: 'بندان: قراءة المتن المعيّن، سماع الشرح المعيّن',
+  kind: 'checklist',
+  sortOrder: 4,
+  items: [
+    { id: id('201'), name: 'قراءة المتن المعيّن', sortOrder: 1, activeFrom: '2020-01-01', activeTo: null },
+    { id: id('202'), name: 'سماع الشرح المعيّن', sortOrder: 2, activeFrom: '2020-01-01', activeTo: null },
+  ],
+};
+/** The four seeded weekly habits, in sort order. */
+export const weeklyHabits: HabitDef[] = [memorization, fiqh, tazkiyah, lessonPrep];
+export const weeklyTristateHabits: HabitDef[] = [memorization, fiqh, tazkiyah];

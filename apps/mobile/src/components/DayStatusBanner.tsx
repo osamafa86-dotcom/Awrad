@@ -21,6 +21,8 @@ export interface DayStatusBannerProps {
   /** `error`: no connection — shows the offline icon. */
   offline?: boolean;
   onRetry?(): void;
+  /** Weekly review wording for the saved states; defaults to the daily one. */
+  period?: 'daily' | 'weekly';
 }
 
 /** DESIGN.md §6 DayStatusBanner: achieved · remaining items · save failed · read only — one sentence each. */
@@ -30,6 +32,7 @@ export function DayStatusBanner({
   message,
   offline,
   onRetry,
+  period = 'daily',
 }: DayStatusBannerProps) {
   const { colors, radius, space, type } = useTheme();
 
@@ -40,14 +43,17 @@ export function DayStatusBanner({
           bg: colors.goldTint,
           fg: colors.goldText,
           icon: CircleCheck,
-          title: ar.today.banner.achieved,
+          title: period === 'weekly' ? ar.weekly.banner.achieved : ar.today.banner.achieved,
         };
       case 'failed':
         return {
           bg: colors.actionPrimaryTint,
           fg: colors.textLink,
           icon: CircleCheck,
-          title: ar.today.banner.failed(remaining),
+          title:
+            period === 'weekly'
+              ? ar.weekly.banner.failed(remaining)
+              : ar.today.banner.failed(remaining),
           body: ar.today.banner.failedBody,
         };
       case 'neutral':
@@ -55,7 +61,7 @@ export function DayStatusBanner({
           bg: colors.statusNeutralTint,
           fg: colors.statusNeutral,
           icon: CircleCheck,
-          title: ar.today.banner.neutral,
+          title: period === 'weekly' ? ar.weekly.banner.neutral : ar.today.banner.neutral,
         };
       case 'error':
         return {

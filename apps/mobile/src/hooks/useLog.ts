@@ -9,6 +9,8 @@ export interface LogRow {
   period: Frequency;
   period_start: string;
   note: string | null;
+  review_text: string | null;
+  support_request_text: string | null;
 }
 
 interface NestedLog extends LogRow {
@@ -65,6 +67,8 @@ export function useLog(period: Frequency, periodStart: string | null): UseLog {
         period: row.period,
         period_start: row.period_start,
         note: row.note,
+        review_text: row.review_text ?? null,
+        support_request_text: row.support_request_text ?? null,
       };
       return { key, log, entries, error: null };
     } catch (error) {
