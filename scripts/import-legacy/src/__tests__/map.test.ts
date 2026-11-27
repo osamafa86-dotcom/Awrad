@@ -473,3 +473,108 @@ describe('planImport row errors (what the dry-run reports instead of failing lat
     ]);
   });
 });
+
+describe('planImport checks weekly activity on the week start, as save_log does', () => {
+  // 2025-03-02 is a Sunday (the G1 week start); 2025-03-04 a Tuesday, 2025-03-06 a Thursday.
+  const newHabit: HabitInfo = {
+    id: id(0xab),
+    slug: 'new_book',
+    name: 'كتاب جديد',
+    kind: 'tristate',
+    frequency: 'weekly',
+    activeFrom: '2025-03-04',
+    activeTo: null,
+    items: [],
+  };
+  const oldHabit: HabitInfo = {
+    id: id(0xac),
+    slug: 'old_weekly_book',
+    name: 'كتاب أسبوعي قديم',
+    kind: 'tristate',
+    frequency: 'weekly',
+    activeFrom: '2020-01-01',
+    activeTo: '2025-03-03',
+    items: [],
+  };
+  const prep = habits.find((h) => h.slug === 'lesson_prep')!;
+  const prepMidWeek: HabitInfo = {
+    ...prep,
+    items: [
+      { id: id(0x201), name: 'قراءة المتن المعيّن', ...always },
+      { id: id(0x203), name: 'بند يبدأ وسط الأسبوع', activeFrom: '2025-03-04', activeTo: null },
+    ],
+  };
+  const catalog = [
+    ...habits.filter((h) => h.frequency === 'daily' || h.slug === 'fiqh_lesson'),
+    prepMidWeek,
+    newHabit,
+    oldHabit,
+  ];
+  const rows: LegacyData = {
+    weekly: parseWeeklyCsv(
+      'الطابع الزمني,اسمك,الأسبوع,درس الفقه,كتاب جديد,كتاب أسبوعي قديم,تحضير الدرس الأسبوعي\n' +
+        '06/03/2025 9:00:00,أحمد التجريبي,06/03/2025,تم,تم,,قراءة المتن المعيّن\n' +
+        '06/03/2025 9:00:00,خالد المثالي,06/03/2025,تم,,تم,بند يبدأ وسط الأسبوع\n',
+    ),
+  };
+  const p = planImport(
+    rows,
+    buildMapping(rows, catalog, profiles, {
+      file: {
+        weekly: {
+          'درس الفقه': 'fiqh_lesson',
+          'كتاب جديد': 'new_book',
+          'كتاب أسبوعي قديم': 'old_weekly_book',
+          'تحضير الدرس الأسبوعي': 'lesson_prep',
+        },
+        students: { 'أحمد التجريبي': AHMAD, 'خالد المثالي': KHALID },
+      },
+      groups,
+    }),
+  );
+
+  it('flags an answer for a habit that starts mid-week (inactive on the week start)', () => {
+    expect(p.rowErrors).toContainEqual({
+      source: 'weekly',
+      row: 2,
+      name: 'أحمد التجريبي',
+      date: '2025-03-02',
+      code: 'INACTIVE_HABIT',
+      column: 'كتاب جديد',
+      value: 'تم',
+    });
+  });
+
+  it('expects an entry for a habit archived mid-week (still active on the week start)', () => {
+    expect(p.toImport).toHaveLength(0);
+    const fresh = planImport(
+      {
+        weekly: [
+          { ...rows.weekly![0]!, answers: { ...rows.weekly![0]!.answers, 'كتاب جديد': '' } },
+        ],
+      },
+      buildMapping(rows, catalog, profiles, {
+        file: {
+          weekly: { 'كتاب أسبوعي قديم': 'old_weekly_book' },
+          students: { 'أحمد التجريبي': AHMAD },
+        },
+        groups,
+      }),
+    );
+    expect(fresh.toImport[0]?.periodStart).toBe('2025-03-02');
+    expect(fresh.toImport[0]?.entries.map((e) => e.habit_id)).toContain(id(0xac));
+    expect(fresh.toImport[0]?.entries.map((e) => e.habit_id)).not.toContain(id(0xab));
+  });
+
+  it('checks checklist items on the week start too', () => {
+    expect(p.rowErrors).toContainEqual({
+      source: 'weekly',
+      row: 3,
+      name: 'خالد المثالي',
+      date: '2025-03-02',
+      code: 'INVALID_ITEM',
+      column: 'تحضير الدرس الأسبوعي',
+      value: 'بند يبدأ وسط الأسبوع',
+    });
+  });
+});

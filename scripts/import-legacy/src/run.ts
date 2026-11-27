@@ -168,7 +168,13 @@ async function ensureLegacyAccount(
       where u.email ~ $1 and p.full_name = $2 order by p.created_at limit 1`,
     [`^legacy-[0-9]+@${LEGACY_EMAIL_DOMAIN.replace(/\./g, '\\.')}$`, account.name],
   );
-  if (existing.rows[0]) return { id: existing.rows[0].id, email: null };
+  if (existing.rows[0]) {
+    // A run interrupted between creating and switching off leaves the account active: fix it here.
+    await db.query('update profiles set is_active = false where id = $1 and is_active', [
+      existing.rows[0].id,
+    ]);
+    return { id: existing.rows[0].id, email: null };
+  }
 
   const next = await db.query<{ n: number }>(
     `select coalesce(max(substring(email from $1)::int), 0)::int + 1 as n from auth.users`,

@@ -356,6 +356,20 @@ describe('executeImport against the local database', () => {
     expect(await snapshot()).toEqual(before);
   });
 
+  it('switches a reused placeholder account back off if an interrupted run left it active', async () => {
+    await db.query(
+      `update profiles set is_active = true
+        where id = (select id from auth.users where email = 'legacy-1@legacy.awrad.local')`,
+    );
+    const again = await run();
+    expect(again.accountsReused).toEqual(['يوسف النموذجي']);
+    const active = await db.query<{ is_active: boolean }>(
+      `select p.is_active from profiles p join auth.users u on u.id = p.id
+        where u.email = 'legacy-1@legacy.awrad.local'`,
+    );
+    expect(active.rows).toEqual([{ is_active: false }]);
+  });
+
   it('creates accounts through GoTrue when configured: invitation, auth user, then inactive', async () => {
     // Stands in for GoTrue: inserting the auth user is what fires handle_new_user.
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {

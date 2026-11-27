@@ -7,3 +7,7 @@ coverage
 .expo
 .next
 .superpowers/
+# legacy import outputs: students' names (public repository)
+scripts/import-legacy/out/
+scripts/import-legacy/report.json
+scripts/import-legacy/mapping.json

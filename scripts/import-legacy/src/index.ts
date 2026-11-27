@@ -1,7 +1,9 @@
 // CLI: pnpm import-legacy --daily daily.csv [--weekly weekly.csv] [--attendance attendance.csv]
-//      --mapping mapping.json [--execute] [--admin <email>] [--report report.json]
+//      [--mapping mapping.json] [--execute] [--admin <email>] [--report report.json]
 // Dry-run unless --execute. A missing mapping file is generated as a draft to review, nothing else.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+// mapping.json and report.json hold students' names: by default they live in the git-ignored
+// scripts/import-legacy/out/ (the repository is public).
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -19,15 +21,23 @@ import { executeImport, loadCatalog, resolveAdmin, type AuthConfig } from './run
 
 const USAGE = `الاستعمال:
   pnpm import-legacy --daily daily.csv [--weekly weekly.csv] [--attendance attendance.csv] \\
-    --mapping mapping.json [--execute] [--admin <بريد المدير>] [--report report.json]
+    [--mapping mapping.json] [--execute] [--admin <بريد المدير>] [--report report.json]
 
 بلا --execute يعمل معاينةً: لا يكتب شيئًا ويطبع ملخّصًا ويكتب report.json.
 إن لم يوجد ملف الربط يُولَّد مسودةً لتراجعها ثم تعيد التشغيل.
+ملف الربط والتقرير فيهما أسماء الطلاب: مكانهما الافتراضي scripts/import-legacy/out/
+(مستثنى من git)؛ لا تضعهما في مكان آخر داخل المستودع.
 البيئة: SUPABASE_DB_URL (افتراضيًا العنقود المحلي)، ولإنشاء الحسابات SUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY
 (أو IMPORT_AUTH_MODE=direct على العنقود المحلي فقط).`;
 
 const LOCAL_DB_URL = 'postgresql://postgres:postgres@127.0.0.1:54329/awrad';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const OUT_DIR = resolve(ROOT, 'scripts', 'import-legacy', 'out');
+
+function writeOutput(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
 
 function authConfig(env: NodeJS.ProcessEnv, dbUrl: string): AuthConfig | undefined {
   if (env.IMPORT_AUTH_MODE === 'direct') {
@@ -53,13 +63,13 @@ async function main(argv: string[]): Promise<number> {
       weekly: { type: 'string' },
       attendance: { type: 'string' },
       mapping: { type: 'string' },
-      report: { type: 'string', default: 'report.json' },
+      report: { type: 'string' },
       admin: { type: 'string' },
       execute: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
   });
-  if (values.help || !values.mapping || !(values.daily || values.weekly || values.attendance)) {
+  if (values.help || !(values.daily || values.weekly || values.attendance)) {
     console.log(USAGE);
     return values.help ? 0 : 1;
   }
@@ -88,12 +98,14 @@ async function main(argv: string[]): Promise<number> {
   await db.connect();
   try {
     const catalog = await loadCatalog(db);
-    const mappingPath = resolve(cwd, values.mapping);
+    const mappingPath = values.mapping
+      ? resolve(cwd, values.mapping)
+      : resolve(OUT_DIR, 'mapping.json');
     if (!existsSync(mappingPath)) {
       const draft = buildMapping(rows, catalog.habits, catalog.profiles, {
         groups: catalog.groups,
       });
-      writeFileSync(mappingPath, `${JSON.stringify(toMappingFile(draft), null, 2)}\n`);
+      writeOutput(mappingPath, toMappingFile(draft));
       console.log(`كُتبت مسودة ملف الربط في ${mappingPath}`);
       console.log(
         'راجعها: الأسماء ذات القيمة null لن تُستورد حتى تضع معرّف ملف أو { "createMissingAsInactive": true }.',
@@ -125,8 +137,10 @@ async function main(argv: string[]): Promise<number> {
       ),
     );
     const report = buildReport(plan, result, { files });
-    const reportPath = resolve(cwd, values.report);
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    const reportPath = values.report
+      ? resolve(cwd, values.report)
+      : resolve(OUT_DIR, 'report.json');
+    writeOutput(reportPath, report);
     console.log(formatSummary(report, reportPath));
     return result.failures.length > 0 ? 1 : 0;
   } finally {

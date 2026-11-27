@@ -122,6 +122,7 @@ export interface RowError {
   source: Source;
   row: number;
   name: string;
+  /** The date save_log checks: the day, or the week start for weekly rows. */
   date: string;
   code: RowErrorCode;
   column: string;
@@ -484,24 +485,33 @@ export function planImport(rows: LegacyData, mapping: Mapping): ImportPlan {
         });
         continue;
       }
+      // save_log checks habits and items on p_period_start: the week start for weekly logs.
+      const periodStart = period === 'weekly' ? weekStart(date, target.weekStartsOn) : date;
       const errors: RowError[] = [];
       const entries: PlannedEntry[] = [];
       const fail = (column: string, code: RowErrorCode, value: string) =>
-        errors.push({ source: period, row: row.row, name: row.name, date, code, column, value });
+        errors.push({
+          source: period,
+          row: row.row,
+          name: row.name,
+          date: periodStart,
+          code,
+          column,
+          value,
+        });
       for (const habit of mapping.habits) {
-        if (habit.frequency !== period || !isActiveOn(habit, date)) continue;
+        if (habit.frequency !== period || !isActiveOn(habit, periodStart)) continue;
         const column = columns.find((c) => c.habit.id === habit.id);
         const cell = column ? (row.answers[column.header] ?? '') : '';
-        const result = cellEntry(habit, column, cell, date, mapping.blankPolicy);
+        const result = cellEntry(habit, column, cell, periodStart, mapping.blankPolicy);
         if ('error' in result) fail(column!.header, result.error.code, result.error.value);
         else entries.push(result.entry);
       }
       for (const column of columns) {
         const cell = row.answers[column.header] ?? '';
-        if (!isActiveOn(column.habit, date) && cell !== '')
+        if (!isActiveOn(column.habit, periodStart) && cell !== '')
           fail(column.header, 'INACTIVE_HABIT', cell);
       }
-      const periodStart = period === 'weekly' ? weekStart(date, target.weekStartsOn) : date;
       const candidate: Candidate = {
         log: { source: period, row: row.row, name: row.name, target, period, periodStart, entries },
         stamp: parseTimestamp(row.timestamp, mapping.dateOrder) ?? '',

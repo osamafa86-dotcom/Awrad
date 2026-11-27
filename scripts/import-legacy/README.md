@@ -3,26 +3,28 @@
 سكربت يشغّله الفريق مرة واحدة على ملفات الشيخ المصدَّرة من Google Forms/Sheets (المواصفة §14)،
 فتظهر سجلّات الطلاب القديمة وسلاسلهم في ملخّصاتهم. لا واجهة له في اللوحة (F-67، مؤجَّل إلى V2).
 
-> الملفات فيها بيانات طلاب حقيقية: احفظها خارج المستودع (مثلًا `~/awrad-import/`) ومرّر مساراتها
-> كاملة، وكذلك `mapping.json` و`report.json`. لا تُرفع إلى git.
+> الملفات فيها بيانات طلاب حقيقية والمستودع عام. ملفات CSV المصدَّرة تبقى خارج المستودع (مثلًا
+> `~/awrad-import/`). أما ما يكتبه السكربت — مسودة `mapping.json` و`report.json` — فمكانه الافتراضي
+> `scripts/import-legacy/out/` (يُنشأ عند الحاجة، ومستثنى في `.gitignore` مع `report.json` و`mapping.json`
+> في جذر الحزمة). لا تمرّر `--mapping`/`--report` إلى مكان آخر داخل المستودع.
 
 ## التشغيل
 
 ```bash
-# 1) أول مرة: بلا ملف ربط يولَّد مسودةً لتراجعها (لا استيراد)
+# 1) أول مرة: بلا ملف ربط تُكتب مسودة scripts/import-legacy/out/mapping.json لتراجعها (لا استيراد)
 pnpm import-legacy --daily ~/awrad-import/daily.csv --weekly ~/awrad-import/weekly.csv \
-  --attendance ~/awrad-import/attendance.csv --mapping ~/awrad-import/mapping.json
+  --attendance ~/awrad-import/attendance.csv
 
-# 2) معاينة (الافتراضي): لا يكتب شيئًا، يطبع ملخّصًا عربيًا ويكتب report.json
-pnpm import-legacy --daily … --weekly … --attendance … --mapping ~/awrad-import/mapping.json \
-  --report ~/awrad-import/report.json
+# 2) معاينة (الافتراضي): لا يكتب شيئًا في القاعدة، يطبع ملخّصًا عربيًا ويكتب out/report.json
+pnpm import-legacy --daily … --weekly … --attendance …
 
 # 3) التنفيذ
-pnpm import-legacy … --mapping ~/awrad-import/mapping.json --execute [--admin sheikh@example.com]
+pnpm import-legacy --daily … --weekly … --attendance … --execute [--admin sheikh@example.com]
 ```
 
 - المسارات النسبية تُحسب من جذر المستودع (حيث يُشغَّل pnpm).
-- أيّ ملف من الثلاثة اختياري، و`--mapping` إلزامي.
+- أيّ ملف من الثلاثة اختياري (واحد على الأقل). `--mapping` افتراضيًا `scripts/import-legacy/out/mapping.json`
+  و`--report` افتراضيًا `scripts/import-legacy/out/report.json`.
 - `--admin`: المدير المنفّذ (يُسجَّل في `audit_log`)؛ يُستغنى عنه إن كان في القاعدة مدير فعّال واحد.
 - رمز الخروج 1 إن فشل أي صفّ أثناء التنفيذ (التفاصيل في الملخّص و`report.json`).
 
@@ -72,6 +74,8 @@ pnpm import-legacy … --mapping ~/awrad-import/mapping.json --execute [--admin 
 }
 ```
 
+- النشاط يُحسب كما يحسبه `save_log`: في يوم السجلّ للملف اليومي، وفي **بداية الأسبوع** للأسبوعي (عادة
+  أو بند يبدأ وسط الأسبوع لا يُقبل لذلك الأسبوع، وعادة تنتهي وسطه تبقى مطلوبة).
 - العادات النشطة في تاريخ السجلّ ولا عمود لها تُملأ بـ `blankPolicy` (السجلّ يحتاج مدخلًا لكل عادة، BR-14).
 - خيارات القائمة غير المذكورة في `items` تُطابَق باسم البند نفسه.
 - الأسماء غير المذكورة في `students` لا تُستورد، ويقترح التقرير لكلٍّ منها ملفات قريبة (تطابق تقريبي
@@ -82,7 +86,7 @@ pnpm import-legacy … --mapping ~/awrad-import/mapping.json --execute [--admin 
 
 ## ما يحدث عند التنفيذ
 
-1. الحسابات المطلوبة (يُعاد استعمال حساب نائب سابق بالاسم نفسه).
+1. الحسابات المطلوبة (يُعاد استعمال حساب نائب سابق بالاسم نفسه، ويُعطَّل إن بقي فعّالًا من تشغيل انقطع).
 2. لكل طالب معاملة واحدة: `save_log(..., p_user_id)` بجلسة المدير (`role authenticated` ومطالبات JWT)
    فيتجاوز نافذة التعديل؛ الصفّ الذي ترفضه الدالة يُسجَّل في الإخفاقات (نقطة حفظ) ويُكمَل الباقي.
    الحساب المعطَّل يُفعَّل داخل المعاملة نفسها ثم يُعطَّل قبل إنهائها.
