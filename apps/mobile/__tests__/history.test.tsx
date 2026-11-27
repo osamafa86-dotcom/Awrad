@@ -20,14 +20,20 @@ const mockGetCalendar = jest.fn();
 jest.mock('@awrad/supabase-client', () => ({
   getCalendar: (...a: unknown[]) => mockGetCalendar(...a),
 }));
+let mockToday = '2026-11-26';
 jest.mock('@awrad/domain', () => ({
   ...jest.requireActual('@awrad/domain'),
-  todayIn: () => '2026-11-26',
+  todayIn: () => mockToday,
 }));
 const mockPush = jest.fn();
+// The latest focus callback the screen registered; tests call it to simulate coming back to the tab.
+let mockFocusCb: (() => void) | null = null;
 jest.mock('expo-router', () => ({
   ...jest.requireActual('expo-router'),
   router: { push: (...a: unknown[]) => mockPush(...a), navigate: jest.fn() },
+  useFocusEffect: (cb: () => void) => {
+    mockFocusCb = cb;
+  },
 }));
 
 const DAY_MS = 86_400_000;
@@ -69,6 +75,8 @@ const row = (date: string) => screen.getByTestId(`history-row-${date}`);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockToday = '2026-11-26';
+  mockFocusCb = null;
   resetFakeDb();
   resetSettingsCache();
   for (const d of ['2026-11-26', '2026-11-25', '2026-11-24', '2026-11-23']) addLog('daily', d);
@@ -227,5 +235,69 @@ describe('history list — empty and error', () => {
     await fireEvent.press(screen.getByRole('button', { name: ar.history.retry }));
     expect(await screen.findByTestId('history-row-2026-11-26')).toBeTruthy();
     expect(screen.queryByText(ar.history.loadFailed)).toBeNull();
+  });
+});
+
+describe('history list — focus refresh', () => {
+  test('coming back re-reads page 0 and updates rows without emptying the list', async () => {
+    await renderHistory();
+    expect(within(row('2026-11-25')).getByTestId('status-chip-failed')).toBeTruthy();
+    const before = fakeDb.calls.filter((c) => c.range?.[0] === 0).length;
+    STATES['2026-11-25'] = { state: 'achieved', completionPct: 100 };
+    try {
+      await act(async () => {
+        mockFocusCb?.();
+      });
+      // right after the call the rows are still there (no spinner, no empty state)
+      expect(screen.getByTestId('history-row-2026-11-26')).toBeTruthy();
+      await waitFor(() =>
+        expect(within(row('2026-11-25')).getByTestId('status-chip-achieved')).toBeTruthy(),
+      );
+      expect(fakeDb.calls.filter((c) => c.range?.[0] === 0 && c.range[1] === 19).length).toBe(before + 1);
+      expect(screen.queryByText(ar.history.loading)).toBeNull();
+    } finally {
+      STATES['2026-11-25'] = { state: 'failed', completionPct: 60 };
+    }
+  });
+});
+
+describe('history list — weekly grace boundary', () => {
+  beforeEach(() => addLog('weekly', '2026-11-15'));
+  const open = async () => {
+    await render(<HistoryScreen />);
+    await screen.findByTestId('history-row-2026-11-26');
+    await fireEvent.press(screen.getByRole('tab', { name: ar.history.tabs.weekly }));
+    await screen.findByTestId('history-row-2026-11-15');
+  };
+  test('weekEnd + 3 days is still editable', async () => {
+    mockToday = '2026-11-24';
+    await open();
+    expect(within(row('2026-11-15')).queryByTestId('history-lock-2026-11-15')).toBeNull();
+  });
+  test('weekEnd + 4 days is locked', async () => {
+    mockToday = '2026-11-25';
+    await open();
+    expect(within(row('2026-11-15')).getByTestId('history-lock-2026-11-15')).toBeTruthy();
+  });
+});
+
+describe('history list — loadMore failure', () => {
+  test('a failed page 1 shows a footer retry; retry re-requests range(20, 39); page 0 stays', async () => {
+    fakeDb.logs = {};
+    for (let i = 0; i < 30; i++) addLog('daily', dayAt(i));
+    await renderHistory();
+    fakeDb.failLogList = 20;
+    await fireEvent(screen.getByTestId('history-list'), 'endReached');
+    expect(await screen.findByText(ar.history.loadFailed)).toBeTruthy();
+    expect(screen.getByTestId('history-row-2026-11-26')).toBeTruthy();
+    const calendarCalls = mockGetCalendar.mock.calls.length;
+    fakeDb.failLogList = false;
+    const before = fakeDb.calls.filter((c) => c.range?.[0] === 20).length;
+    await fireEvent.press(screen.getByRole('button', { name: ar.history.retry }));
+    await waitFor(() => expect(fakeDb.calls.filter((c) => c.range?.[0] === 20).length).toBe(before + 1));
+    await waitFor(() => expect(screen.queryByText(ar.history.loadFailed)).toBeNull());
+    expect(screen.getByTestId('history-row-2026-11-26')).toBeTruthy();
+    // page 0's calendar chunk is not requested again (only page 1's)
+    expect(mockGetCalendar.mock.calls.length).toBe(calendarCalls + 1);
   });
 });

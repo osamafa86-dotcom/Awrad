@@ -23,15 +23,17 @@ jest.mock('@awrad/supabase-client', () => ({
   getCalendar: jest.fn().mockResolvedValue([]),
   parseRpcError: () => 'UNKNOWN',
 }));
+let mockToday = '2026-11-26';
 jest.mock('@awrad/domain', () => ({
   ...jest.requireActual('@awrad/domain'),
-  todayIn: () => '2026-11-26',
+  todayIn: () => mockToday,
 }));
 
 const routes = { 'log/[period]/[date]': LogDetail };
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockToday = '2026-11-26';
   resetFakeDb();
   resetSettingsCache();
   await AsyncStorage.clear();
@@ -69,7 +71,32 @@ describe('log detail — daily', () => {
   });
 });
 
+describe('log detail — deep-link validation', () => {
+  test.each([
+    ['/log/daily/2026-11-27', 'a future day'],
+    ['/log/weekly/2026-11-16', 'a date that is not a week start'],
+    ['/log/weekly/2026-11-29', 'a future week'],
+  ])('%s (%s) shows the invalid message', async (url) => {
+    await renderRouter(routes, { initialUrl: url });
+    expect(await screen.findByText(ar.history.invalidLog)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ar.today.save })).toBeNull();
+    expect(screen.queryByRole('button', { name: ar.weekly.save })).toBeNull();
+  });
+});
+
 describe('log detail — weekly', () => {
+  test('grace boundary: weekEnd + 3 editable, weekEnd + 4 read-only', async () => {
+    mockToday = '2026-11-24';
+    await open('/log/weekly/2026-11-15', memorization.name);
+    expect(save(ar.weekly.save)).toBeTruthy();
+  });
+  test('grace boundary: the day after the grace is read-only', async () => {
+    mockToday = '2026-11-25';
+    await open('/log/weekly/2026-11-15', memorization.name);
+    expect(save(ar.weekly.save)).toBeNull();
+    expect(screen.getByText(ar.today.banner.readOnly)).toBeTruthy();
+  });
+
   test('a week past its grace is read-only, without save or week arrows', async () => {
     await open('/log/weekly/2026-11-15', memorization.name);
     expect(screen.getByText(ar.today.banner.readOnly)).toBeTruthy();

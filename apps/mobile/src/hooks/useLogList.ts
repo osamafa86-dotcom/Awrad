@@ -1,4 +1,4 @@
-import { addDays, isWithinBackfill, toHijri, todayIn, type DayState } from '@awrad/domain';
+import { addDays, isWithinBackfill, isWithinWeeklyGrace, toHijri, todayIn, type DayState } from '@awrad/domain';
 import { getCalendar } from '@awrad/supabase-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -46,11 +46,18 @@ export interface UseLogList<P extends 'daily' | 'weekly'> {
   /** True until the first page is shown (not while a further page loads). */
   loading: boolean;
   loadingMore: boolean;
+  /** The first page could not be read. */
   error: boolean;
+  /** A further page could not be read; the rows already shown stay. */
+  loadMoreError: boolean;
   hasMore: boolean;
   loadMore(): void;
-  /** Back to the first page, fresh from the server. */
+  /** Back to the first page, fresh from the server (clears the list meanwhile). */
   refetch(): Promise<void>;
+  /** Re-reads the failed further page. */
+  retryLoadMore(): Promise<void>;
+  /** Re-reads page 0 keeping the rows (and scroll position) until it arrives; for screen focus. */
+  silentRefetch(): Promise<void>;
 }
 
 interface RawLog {
@@ -98,6 +105,15 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
   const [last, setLast] = useState(page);
   const [scopeOfLast, setScopeOfLast] = useState<string | null>(null);
   const chunkCache = useRef(new Map<string, ReturnType<typeof getCalendar>>());
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
   const [acc, setAcc] = useState<Accumulated | null>(null);
 
   // A different student/period/day starts over.
@@ -111,8 +127,8 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
   }, [scope, scopeOfLast, page]);
 
   const key = scope && scope === scopeOfLast ? `${scope}|${last}` : null;
-  const q = useAsyncData<PageResult>(key, async () => {
-    const from = last * LOG_PAGE_SIZE;
+  const fetchPage = async (pageIndex: number): Promise<PageResult> => {
+    const from = pageIndex * LOG_PAGE_SIZE;
     const { data, error } = await supabase
       .from('logs')
       .select('id, period, period_start, note, updated_at')
@@ -145,7 +161,10 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
       }
     }
     return { raw, states };
-  });
+  };
+  const q = useAsyncData<PageResult>(key, () => fetchPage(last));
+  const fetchPageRef = useRef(fetchPage);
+  fetchPageRef.current = fetchPage;
 
   // Fold each arrived page into the accumulated list (once per page, in order).
   const { data } = q;
@@ -185,7 +204,7 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
         weekEnd,
         label: ar.weekly.title(formatDayMonth(date), formatDayMonth(weekEnd)),
         hijriRange: formatHijriSpan(date, weekEnd, settings.hijriAdjustment),
-        editable: today !== null && today <= addDays(weekEnd, settings.weeklyGraceDays),
+        editable: today !== null && isWithinWeeklyGrace(weekEnd, today, settings.weeklyGraceDays),
       };
     }),
   ) as LogListRows<P>;
@@ -195,11 +214,12 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
   const busy = q.loading || (q.data !== null && !lastFolded);
   const firstLoaded = loadedPages.length > 0;
   const hasMore = current?.hasMore ?? false;
+  const loadMoreError = q.error && firstLoaded;
 
   const loadMore = useCallback(() => {
-    if (!hasMore || busy || q.error) return;
+    if (!hasMore || busy || loadMoreError) return;
     setLast((l) => l + 1);
-  }, [hasMore, busy, q.error]);
+  }, [hasMore, busy, loadMoreError]);
 
   const { refetch: refetchPage } = q;
   const refetch = useCallback(async () => {
@@ -209,13 +229,36 @@ export function useLogList<P extends 'daily' | 'weekly'>(period: P, page = 0): U
     else setLast(page);
   }, [last, page, refetchPage]);
 
+  const retryLoadMore = useCallback(async () => {
+    await refetchPage();
+  }, [refetchPage]);
+
+  // Focus refresh: keep `acc` visible, then swap in the fresh page 0 (never while nothing is loaded yet).
+  const silentRef = useRef<() => Promise<void>>(async () => {});
+  silentRef.current = async () => {
+    if (!scope || !current) return;
+    chunkCache.current.clear(); // states may have changed: never reuse cached chunks
+    try {
+      const fresh = await fetchPageRef.current(page);
+      if (!live.current || scope !== scopeRef.current) return;
+      setAcc({ scope, pages: [fresh], hasMore: fresh.raw.length === LOG_PAGE_SIZE });
+      setLast(page);
+    } catch {
+      // keep what is shown; the next focus or a pull-to-refresh tries again
+    }
+  };
+  const silentRefetch = useCallback(() => silentRef.current(), []);
+
   return {
     rows,
     loading: !firstLoaded && !q.error,
-    loadingMore: firstLoaded && busy,
-    error: q.error,
+    loadingMore: firstLoaded && busy && last > page,
+    error: q.error && !firstLoaded,
+    loadMoreError,
     hasMore,
     loadMore,
     refetch,
+    retryLoadMore,
+    silentRefetch,
   };
 }

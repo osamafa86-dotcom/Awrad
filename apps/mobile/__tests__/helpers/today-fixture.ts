@@ -113,7 +113,8 @@ export const fakeDb: {
     range?: [number, number];
   }>;
   /** Make list reads of `logs` (order/range) fail. */
-  failLogList: boolean;
+  /** `true` fails every list read; a number fails only the page whose range starts there. */
+  failLogList: boolean | number;
 } = { settings: [], group: null, logs: {}, calls: [], failLogList: false };
 
 export function resetFakeDb(): void {
@@ -146,8 +147,9 @@ function builder(table: string) {
         return { data: fakeDb.group, error: null };
       case 'logs':
         if (call.range) {
-          if (fakeDb.failLogList) return { data: null, error: { message: 'boom' } };
           const [from, to] = call.range;
+          if (fakeDb.failLogList === true || fakeDb.failLogList === from)
+            return { data: null, error: { message: 'boom' } };
           const rows = Object.values(fakeDb.logs)
             .filter((l) => l.period === call.filters.period)
             .sort((a, b) => b.period_start.localeCompare(a.period_start))

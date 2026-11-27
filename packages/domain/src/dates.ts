@@ -41,6 +41,11 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** BR-06: a week stays editable until `graceDays` after its last day (`today <= weekEnd + graceDays`). */
+export function isWithinWeeklyGrace(weekEnd: string, today: string, graceDays: number): boolean {
+  return today <= addDays(weekEnd, graceDays);
+}
+
 /** BR-05: `today - backfillDays <= date <= today`. */
 export function isWithinBackfill(date: string, today: string, backfillDays: number): boolean {
   return date <= today && date >= addDays(today, -backfillDays);

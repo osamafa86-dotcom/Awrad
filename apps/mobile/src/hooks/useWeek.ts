@@ -1,4 +1,4 @@
-import { addDays, todayIn, weekStartFor } from '@awrad/domain';
+import { addDays, isWithinWeeklyGrace, todayIn, weekStartFor } from '@awrad/domain';
 
 import { useSettings } from './useSettings';
 
@@ -25,7 +25,7 @@ export function useWeek(offset: 0 | -1): UseWeek {
   return {
     weekStart,
     weekEnd,
-    canEdit: today <= addDays(weekEnd, settings.weeklyGraceDays),
+    canEdit: isWithinWeeklyGrace(weekEnd, today, settings.weeklyGraceDays),
     isCurrent: offset === 0,
     today: settings.loading ? null : today,
     loading: settings.loading,

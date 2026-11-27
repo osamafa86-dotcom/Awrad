@@ -1,4 +1,4 @@
-import { addDays, isWithinBackfill, toHijri, todayIn } from '@awrad/domain';
+import { addDays, isWithinBackfill, isWithinWeeklyGrace, toHijri, todayIn, weekStartFor } from '@awrad/domain';
 import { Stack } from 'expo-router';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,8 +27,13 @@ export function LogDetailView({ period, date }: { period: string; date: string }
   const settings = useSettings();
   const { colors, space, type } = useTheme();
 
-  const valid = (period === 'daily' || period === 'weekly') && isRealDate(date);
+  const shapeValid = (period === 'daily' || period === 'weekly') && isRealDate(date);
   const today = settings.loading ? null : todayIn(settings.timezone);
+  // Deep links: no future dates, and a weekly log is addressed by its week start.
+  const valid =
+    shapeValid &&
+    (today === null ||
+      (date <= today && (period === 'daily' || date === weekStartFor(date, settings.weekStartsOn))));
 
   const title = !valid
     ? ar.history.detailTitle
@@ -73,7 +78,7 @@ export function LogDetailView({ period, date }: { period: string; date: string }
       </>
     );
   }
-  const editable = today <= addDays(date, 6 + settings.weeklyGraceDays);
+  const editable = isWithinWeeklyGrace(addDays(date, 6), today, settings.weeklyGraceDays);
   return (
     <>
       {header}

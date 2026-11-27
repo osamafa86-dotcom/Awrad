@@ -29,6 +29,7 @@ export function StatusChip({ state }: { state: ChipState }) {
 
   const look = {
     achieved: { bg: colors.statusDoneFill, fg: colors.textOnPrimary, border: colors.statusDoneFill, style: 'solid' },
+    // The failed chip's border mirrors the calendar's partial-state hatch colour (CalendarCell).
     failed: { bg: 'transparent', fg: colors.textPrimary, border: colors.statusDoneHatch, style: 'solid' },
     neutral: { bg: 'transparent', fg: colors.textSecondary, border: colors.statusNeutral, style: 'solid' },
     missing: { bg: 'transparent', fg: colors.textSecondary, border: colors.statusMissing, style: 'dotted' },

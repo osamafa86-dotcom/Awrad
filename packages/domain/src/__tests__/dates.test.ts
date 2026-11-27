@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, isWithinBackfill, todayIn, weekStartFor } from '../dates';
+import { addDays, isWithinBackfill, isWithinWeeklyGrace, todayIn, weekStartFor } from '../dates';
 
 describe('weekStartFor', () => {
   test.each([
@@ -38,5 +38,15 @@ describe('addDays', () => {
     expect(addDays('2026-02-28', 1)).toBe('2026-03-01');
     expect(addDays('2026-01-01', -1)).toBe('2025-12-31');
     expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+});
+
+describe('isWithinWeeklyGrace', () => {
+  test('editable through weekEnd + grace', () => {
+    expect(isWithinWeeklyGrace('2026-11-21', '2026-11-21', 3)).toBe(true);
+    expect(isWithinWeeklyGrace('2026-11-21', '2026-11-24', 3)).toBe(true);
+  });
+  test('locked the day after the grace', () => {
+    expect(isWithinWeeklyGrace('2026-11-21', '2026-11-25', 3)).toBe(false);
   });
 });

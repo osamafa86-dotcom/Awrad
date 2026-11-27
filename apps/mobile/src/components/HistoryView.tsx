@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import History from 'lucide-react-native/icons/history';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -31,6 +31,14 @@ export function HistoryView() {
   const list = useLogList(period);
   const { colors, radius, space, type } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Coming back to the tab (after editing a day, or logging today) shows fresh states, rows kept meanwhile.
+  const { silentRefetch } = list;
+  useFocusEffect(
+    useCallback(() => {
+      void silentRefetch();
+    }, [silentRefetch]),
+  );
 
   const refresh = async () => {
     setRefreshing(true);
@@ -111,7 +119,23 @@ export function HistoryView() {
           ) : undefined
         }
         ListFooterComponent={
-          list.loadingMore ? (
+          list.loadMoreError ? (
+            <View
+              accessibilityRole="alert"
+              style={{ alignItems: 'center', gap: space.s12, paddingVertical: space.s16 }}
+            >
+              <Text style={[type.bodyMd, { color: colors.statusNotdone, textAlign: 'center' }]}>
+                {ar.history.loadFailed}
+              </Text>
+              <Button
+                label={ar.history.retry}
+                variant="secondary"
+                size="md"
+                fullWidth={false}
+                onPress={() => void list.retryLoadMore()}
+              />
+            </View>
+          ) : list.loadingMore ? (
             <View style={{ alignItems: 'center', paddingVertical: space.s16 }}>
               <ActivityIndicator color={colors.actionPrimary} />
             </View>
