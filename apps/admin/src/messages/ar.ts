@@ -46,9 +46,6 @@ export const ar = {
     /** Browser tab title. */
     title: 'أوراد — لوحة الإشراف',
   },
-  common: {
-    comingSoon: 'قريبًا',
-  },
   nav: {
     /** Accessible name of the sidebar navigation. */
     label: 'أقسام اللوحة',
@@ -558,6 +555,111 @@ export const ar = {
       attendance: { present: 'حاضر', absent: 'غائب', excused: 'معذور' },
       /** A second habit column with the same name: «الفجر (2)». */
       duplicate: (name: string, n: number) => `${name} (${n})`,
+    },
+  },
+  settings: {
+    title: 'الإعدادات',
+    subtitle: 'ما يُضبط هنا يغيّر سلوك التطبيق واللوحة لكل الطلاب والمشرفين.',
+    app: {
+      title: 'إعدادات النظام',
+      fields: {
+        streak_threshold_pct: {
+          label: 'عتبة اليوم المُنجَز (%)',
+          hint: 'نسبة الإنجاز التي يُعدّ بها اليوم مُنجَزًا ويدخل في السلسلة، من 50 إلى 100.',
+        },
+        backfill_days: {
+          label: 'نافذة التعديل (أيام)',
+          hint: 'كم يومًا سابقًا يستطيع الطالب أن يسجّله أو يعدّله، من 0 إلى 14.',
+        },
+        weekly_grace_days: {
+          label: 'مهلة المراجعة الأسبوعية (أيام)',
+          hint: 'أيام بعد نهاية الأسبوع يُقبل فيها حفظ مراجعته، من 0 إلى 7.',
+        },
+        hijri_adjustment_days: {
+          label: 'تعديل التاريخ الهجري (أيام)',
+          hint: 'يُضاف إلى تقويم أم القرى في التطبيق واللوحة إن خالف رؤية الهلال، من −2 إلى 2.',
+        },
+        excused_counts_as_absent: {
+          label: 'احتساب المعذور غيابًا',
+          hint: 'إن فُعِّل دخل المعذور في نسبة الحضور غائبًا، وإلا استُثني منها.',
+        },
+        default_reminder_time: {
+          label: 'وقت التذكير الافتراضي',
+          hint: 'وقت التذكير اليومي لكل حساب جديد، ويغيّره الطالب من إعداداته.',
+        },
+      },
+      save: 'حفظ',
+      saving: 'جارٍ الحفظ…',
+      saved: 'حُفظت الإعدادات.',
+    },
+    fieldErrors: {
+      streak_threshold_pct: 'أدخل عددًا صحيحًا من 50 إلى 100.',
+      backfill_days: 'أدخل عددًا صحيحًا من 0 إلى 14.',
+      weekly_grace_days: 'أدخل عددًا صحيحًا من 0 إلى 7.',
+      hijri_adjustment_days: 'أدخل عددًا صحيحًا من −2 إلى 2.',
+      excused_counts_as_absent: 'اختر تشغيل الإعداد أو إيقافه.',
+      default_reminder_time: 'اختر وقتًا صحيحًا.',
+    },
+    groups: {
+      title: 'المجموعات',
+      subtitle: 'المنطقة الزمنية تحدّد «اليوم» لطلاب المجموعة، وبداية الأسبوع تحدّد أسبوعهم ومراجعتهم.',
+      newGroup: 'مجموعة جديدة',
+      /** Accessible name of the table. */
+      tableLabel: 'المجموعات',
+      columns: {
+        name: 'الاسم',
+        timezone: 'المنطقة الزمنية',
+        weekStart: 'بداية الأسبوع',
+        supervisors: 'المشرفون',
+        members: 'الأعضاء',
+        actions: 'الإجراءات',
+      },
+      noSupervisors: 'بلا مشرف',
+      /** The row's «تعديل» button, named with its group. */
+      edit: (name: string) => `تعديل «${name}»`,
+      editText: 'تعديل',
+      empty: { title: 'لا مجموعات بعد', body: 'أنشئ مجموعة لتدعو إليها الطلاب وتعيّن مشرفيها.' },
+    },
+    groupForm: {
+      title: 'مجموعة جديدة',
+      editTitle: 'تعديل المجموعة',
+      subtitle: 'تغيير المنطقة أو بداية الأسبوع يغيّر «اليوم» والأسبوع لكل طلاب المجموعة.',
+      name: 'اسم المجموعة',
+      timezone: 'المنطقة الزمنية',
+      timezoneSearch: 'ابحث في المناطق الزمنية',
+      timezoneHint: 'مناطق المنطقة العربية أولًا، ثم البقية أبجديًا.',
+      weekStart: 'بداية الأسبوع',
+      supervisors: 'المشرفون',
+      supervisorsHint: 'يرى المشرف طلاب المجموعة ويسجّل حضورهم.',
+      noCandidates: 'لا مشرفين مفعَّلين بعد.',
+      cancel: 'إلغاء',
+      submit: 'إضافة المجموعة',
+      save: 'حفظ',
+      submitting: 'جارٍ الحفظ…',
+    },
+    groupFieldErrors: {
+      name: 'اكتب اسم المجموعة.',
+      name_taken: 'هذا الاسم لمجموعة أخرى؛ اختر اسمًا غيره.',
+      timezone: 'اختر منطقة زمنية من القائمة.',
+      week_starts_on: 'اختر يوم بداية الأسبوع.',
+      supervisor_ids: 'أحد المشرفين المختارين لم يعد متاحًا. أعد تحميل الصفحة.',
+    },
+    loadFailed: 'تعذّر تحميل الإعدادات. تحقّق من الاتصال وأعد تحميل الصفحة.',
+    /** Display text for each code a settings Server Action returns. */
+    errors: {
+      app: {
+        FORBIDDEN: 'لا تملك صلاحية تعديل الإعدادات.',
+        INVALID_INPUT: 'بعض القيم خارج مداها؛ صحّحها ثم احفظ.',
+        INVALID_ITEM: 'رُفضت إحدى القيم. أعد تحميل الصفحة وحاول مرة أخرى.',
+        SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
+      },
+      group: {
+        FORBIDDEN: 'لا تملك صلاحية تعديل المجموعات.',
+        INVALID_INPUT: 'صحّح الحقول المعلَّمة ثم احفظ.',
+        INVALID_ITEM:
+          'تعذّر حفظ المجموعة: قد يكون الاسم لمجموعة أخرى، أو المنطقة الزمنية غير مدعومة، أو أحد المشرفين غير مفعَّل.',
+        SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
+      },
     },
   },
   unauthorized: {

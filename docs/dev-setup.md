@@ -146,6 +146,26 @@ pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/00
 `page.waitForEvent('download')` ثم يُقرأ من `download.path()`؛ والطلب المباشر بجلسة الدور عبر `page.request.get()`.
 البذرة لا تضع في سجلّاتها عادات الاختبار (`test_hab_`، `e2e-عادة`)، وقبل الحفظ تحذف من بقاياها ما لا يشير إليه سجلّ؛ وما يشير إليه سجلّ (`HABIT_HAS_LOGS`) تتركه وتطبع عدده، ويُنظَّف يدويًا على تلك الحزمة.
 
+### الإعدادات (F-66) — ترحيل 0011
+`supabase/migrations/0011_settings.sql`: دالتان للمدير الفعّال وحده (`FORBIDDEN` لغيره)، كلٌّ في معاملة واحدة مع صفّ تدقيق:
+- `update_app_settings(p_values jsonb)`: بعض المفاتيح الستة أو كلها (أي مفتاح آخر `INVALID_ITEM`)، بقواعدها: `streak_threshold_pct`
+  عدد صحيح 50–100، `backfill_days` 0–14، `weekly_grace_days` 0–7، `hijri_adjustment_days` −2…2، `excused_counts_as_absent` منطقي،
+  `default_reminder_time` نصّ `HH:MM`. يُحدَّث الموجود فقط، وصفّ `settings.update` بـ `diff = {key: {old, new}}` لما تغيّر فعلًا (لا صفّ إن لم يتغيّر شيء).
+- `upsert_group(p_id, p_name, p_timezone, p_week_starts_on, p_supervisor_ids uuid[])`: `p_id` فارغ ينشئ وإلا يعدّل؛ الاسم مقصوص
+  غير فارغ وفريد (بلا اعتبار لحالة الأحرف)، والمنطقة من `pg_timezone_names`، وبداية الأسبوع 0–6، والمشرفون ملفات فعّالة بدور
+  `supervisor` أو `admin` (وإلا `INVALID_ITEM`)؛ تستبدل مجموعة `group_supervisors` تمامًا وتكتب `group.create`/`group.update`
+  بالفرق (الاسم والمنطقة والأسبوع و`supervisors: {added, removed}`). لا حذف للمجموعات بعد (`docs/backlog.md`).
+
+بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. اختباراته (تعيد `app_settings` إلى قيمها بعد كل اختبار):
+```bash
+pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0011_settings.test.ts
+```
+الصفحة `/settings` (للمدير؛ `proxy.ts` يحوّل المشرف إلى `/`): «إعدادات النظام» بالحقول الستة وشرح سطر لكلٍّ منها، و«المجموعات»
+(الاسم، المنطقة، بداية الأسبوع، المشرفون، عدد الأعضاء الفعّالين) مع «مجموعة جديدة» و«تعديل» في نافذة. قائمة المناطق
+`Intl.supportedValuesOf('timeZone')` على الخادم، ومناطق المنطقة العربية أولًا. Server Actions في `src/actions/settings.ts`.
+`e2e/settings.spec.ts` يغيّر `backfill_days` إلى 5 ويعيده إلى 2 بمفتاح الخدمة قبل الملف وبعده، وينشئ مجموعات أسماؤها تبدأ
+بـ `مجموعة الإعدادات` ويحذفها كذلك (بلا أعضاء).
+
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)
 ← `supabase.functions.invoke('invite-user')` بعميل الكوكيز فيصل JWT المدير ← الدالة تتحقّق من `is_admin()` بعميل
