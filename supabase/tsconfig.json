@@ -1,7 +1,9 @@
 {
   "extends": "@awrad/config/tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    // Deno resolves relative imports by their real file name (./messages.ts); tsc only type-checks here.
+    "allowImportingTsExtensions": true
   },
   "include": ["tests", "functions"],
   // Deno-only entries (Deno globals, npm: imports via deno.json) run under the Supabase Edge Runtime;

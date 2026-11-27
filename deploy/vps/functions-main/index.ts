@@ -8,8 +8,11 @@ const FUNCTIONS = '/home/deno/functions';
 const JWT_SECRET = Deno.env.get('JWT_SECRET') ?? '';
 const VERIFY_JWT = Deno.env.get('VERIFY_JWT') !== 'false';
 const SECRET = new TextEncoder().encode(JWT_SECRET);
-// What the functions read (supabase/functions/_shared/auth.ts).
-const WORKER_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+// What the functions read (supabase/functions/_shared/auth.ts; CRON_SECRET: send-reminders).
+const WORKER_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'CRON_SECRET'];
+// Functions that check their own caller instead of a user JWT (verify_jwt = false in supabase/config.jsonc):
+// send-reminders is called by the hourly pg_cron job with `Bearer <CRON_SECRET>` and answers 401 without it.
+const NO_VERIFY_JWT = new Set(['send-reminders']);
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -45,7 +48,7 @@ Deno.serve(async (req: Request) => {
   const servicePath = `${FUNCTIONS}/${name}`;
   if (!(await exists(`${servicePath}/index.ts`))) return json(404, { code: 'NOT_FOUND' });
 
-  if (req.method !== 'OPTIONS' && VERIFY_JWT && !(await validJwt(req))) {
+  if (req.method !== 'OPTIONS' && VERIFY_JWT && !NO_VERIFY_JWT.has(name) && !(await validJwt(req))) {
     return json(401, { code: 'INVALID_JWT' });
   }
 

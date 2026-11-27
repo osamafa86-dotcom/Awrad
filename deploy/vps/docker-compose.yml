@@ -34,6 +34,7 @@ services:
       - ./db-init/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
       - ./db-init/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
       - ./db-init/auth-grants.sql:/docker-entrypoint-initdb.d/init-scripts/99-auth-grants.sql:ro
+      - ./db-init/extensions.sql:/docker-entrypoint-initdb.d/init-scripts/99-extensions.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
       interval: 5s
@@ -142,6 +143,8 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?}
       JWT_SECRET: ${JWT_SECRET:?}
       VERIFY_JWT: "true"
+      # send-reminders answers 401 to anything but `Bearer <CRON_SECRET>` (the hourly pg_cron job); empty = always 401.
+      CRON_SECRET: ${CRON_SECRET:-}
     volumes:
       - ../../supabase/functions:/home/deno/functions:ro
       - ./functions-main/index.ts:/home/deno/main/index.ts:ro

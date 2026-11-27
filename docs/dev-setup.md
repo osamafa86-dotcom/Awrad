@@ -202,5 +202,47 @@ pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # 
 pnpm --filter @awrad/db test     # اختبارات قاعدة البيانات ثم اختبارات الدوال
 ```
 
+### التذكيرات (§12) — ترحيل 0013 ودالة `send-reminders`
+`supabase/migrations/0013_reminders.sql`:
+- `reminder_log(user_id, kind daily|weekly, sent_for, sent_at)` فريد على `(user_id, kind, sent_for)`؛ `sent_for` اليوم المحلي
+  (يومي) أو بداية الأسبوع (أسبوعي). RLS مفعّلة **بلا سياسات**: لا يراها المستخدم المسجَّل ولا يكتبها، و`service_role` وحده
+  (يتجاوز RLS). تُحذف مع المستخدم (`on delete cascade`).
+- `due_reminders(p_now)` لمفتاح الخدمة وحده (`request.jwt.claims.role = service_role`، وإلا `FORBIDDEN`): صفّ لكل تذكير مستحقّ
+  مع `tokens text[]`. يومي: ملف فعّال مُتابَع، `reminder_time` غير فارغ وساعته = ساعة `p_now` بمنطقته (الملف ← المجموعة ←
+  `Asia/Riyadh`، BR-08)، لا سجلّ `daily` لـ `local_today`، لا `reminder_log` لذلك اليوم، وله رمز. أسبوعي: مع `weekly_reminder`،
+  و`local_today` آخر يوم في أسبوع مجموعته (BR-05)، لا سجلّ `weekly` لبداية الأسبوع، ولا `reminder_log` له.
+- `ensure_reminder_schedule()` (المدير الفعّال، مفتاح الخدمة، أو الترحيل نفسه): تنشئ مهمّة `pg_cron` باسم `send-reminders`
+  (`0 * * * *`) تستدعي `net.http_post(app.functions_url || '/send-reminders', Authorization: Bearer app.cron_secret)`،
+  بعد حذف مهمّة بالاسم نفسه إن وُجدت، وترجع `true`. إن غاب `pg_cron` أو `pg_net` أو أحد الإعدادين: `notice` و`false`.
+  الترحيل يستدعيها في آخره؛ **محليًا وفي CI لا يوجد pg_cron ولا pg_net**، فيطبع `db:reset` الـ notice ولا يجدول شيئًا.
+
+بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. الاختبارات:
+```bash
+pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0013_reminders.test.ts
+pnpm --filter @awrad/db exec vitest run --config functions/vitest.config.ts   # send-reminders/handler.test.ts وinvite-user
+```
+
+`supabase/functions/send-reminders/`: `index.ts` مدخل Deno رقيق (يقرأ `CRON_SECRET` ويبني التبعيات بمفتاح الخدمة: RPC
+`due_reminders`، `fetch` إلى Expo، حذف `push_tokens` بالرمز، `upsert` في `reminder_log` بـ `ignoreDuplicates`)؛ `handler.ts`
+المنطق النقي: 401 بلا `Bearer <CRON_SECRET>` صحيح (أو إن لم يُضبط)، رسالة لكل رمز على دفعات 100 إلى
+`https://exp.host/--/api/v2/push/send`، حذف الرموز التي تذكرتها `DeviceNotRegistered`، ثم صفّ `reminder_log` لكل تذكير
+مستحقّ **أيًّا كان ردّ Expo** (فلا يتكرّر في الساعة التالية)، والجواب `{ due, sent, failed, deletedTokens }` (والسجلّ أعداد
+فقط). النصوص العربية في `messages.ts` وحده. الدالة **بلا verify_jwt** (`supabase/config.jsonc` ← `functions.send-reminders`،
+وفي staging قائمة `NO_VERIFY_JWT` في `deploy/vps/functions-main/index.ts`) لأن المستدعي مهمّة cron لا مستخدم.
+
+تمكين الجدولة (Cloud في Task 5.1، وstaging في `deploy/vps/README.md`)، مرّة، بدور يملك قاعدة البيانات (`postgres` على Cloud،
+`supabase_admin` على الخادم):
+```sql
+create extension if not exists pg_cron;   -- على Cloud: Database → Extensions، أو هذا السطر
+create extension if not exists pg_net;
+alter database postgres set app.functions_url = 'https://<api>/functions/v1';   -- Cloud: https://<ref>.supabase.co/functions/v1
+alter database postgres set app.cron_secret = '<secret>';                         -- القيمة نفسها سرّ CRON_SECRET للدالة
+-- ثم في جلسة جديدة (إعدادات قاعدة البيانات تسري على الجلسات الجديدة):
+select ensure_reminder_schedule();   -- true
+select jobname, schedule from cron.job;   -- send-reminders | 0 * * * *
+```
+وسرّ الدالة: `supabase secrets set CRON_SECRET=<secret>` ثم `supabase functions deploy send-reminders`. لا شيء من هذا يُشغَّل
+محليًا. التحقّق بإشعار حقيقي على جهاز في المرحلة 5 (`docs/backlog.md`).
+
 ## قبل النشر (Task 5.1)
 - [ ] استبدل `extra.eas.projectId` في `apps/mobile/app.json` (القيمة المؤقتة `REPLACE_WITH_EAS_PROJECT_ID`) بمعرّف مشروع EAS؛ وإلا يعرض التطبيق «الإشعارات غير متاحة في هذا الإصدار».

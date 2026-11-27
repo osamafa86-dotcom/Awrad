@@ -19,8 +19,8 @@
 | `Dockerfile.admin` | ثلاث مراحل: `workspace` (المستودع وتبعيّاته — فيه يجري تصدير Expo)، `build` (`next build` بـ `output: 'standalone'`)، `admin` (الخادم وحده، مستخدم `node`) |
 | `migrate.sh` | `supabase/migrations/*.sql` بالترتيب ثمّ `supabase/seed.sql` مرّة، كـ `postgres`، مع التتبّع في `ops.schema_migrations`، ثمّ `NOTIFY pgrst` |
 | `web-build.sh` | `expo export -p web` ثمّ نسخٌ إلى `releases/<id>` وتبديل الرابط `current` ذرّيًّا |
-| `functions-main/index.ts` | موجّه Edge Runtime: اسم الدالة من أوّل مقطع، والتحقّق من JWT قبل إنشاء العامل |
-| `db-init/roles.sql`, `db-init/jwt.sql`, `db-init/auth-grants.sql` | تُنفَّذ مرّةً عند تهيئة الحجم: كلمات مرور الأدوار، وإعدادات JWT، وصلاحيات `postgres` على `auth.users` (TRIGGER وREFERENCES وDELETE) التي تحتاجها الترحيلات |
+| `functions-main/index.ts` | موجّه Edge Runtime: اسم الدالة من أوّل مقطع، والتحقّق من JWT قبل إنشاء العامل (إلا `send-reminders` في `NO_VERIFY_JWT`: تتحقّق بنفسها من `CRON_SECRET`)، وقائمة متغيّرات العامل المسموحة |
+| `db-init/roles.sql`, `db-init/jwt.sql`, `db-init/auth-grants.sql`, `db-init/extensions.sql` | تُنفَّذ مرّةً عند تهيئة الحجم: كلمات مرور الأدوار، وإعدادات JWT، وصلاحيات `postgres` على `auth.users` (TRIGGER وREFERENCES وDELETE) التي تحتاجها الترحيلات، و`pg_cron` و`pg_net` لمهمّة التذكيرات |
 | `auth-templates/magic-link.html` | بريد رمز الدخول بالعربية (`{{ .Token }}`)؛ يُنسخ إلى `/srv/sites/www/awrad-api/auth-templates/` |
 | `awrad.caddy.tmpl` | الكتل الأربع؛ تملؤها المهمّة بحسب وضع Cloudflare |
 | `seed-demo.sh` | الحسابات التجريبية وسجلّاتها (عبر `save_log` وحده) ومجلسٌ بحضور — مرّة |
@@ -29,7 +29,7 @@
 
 على الخادم وحده، تولّدها المهمّة مرّة ولا تطبعها:
 
-- `/opt/sites/awrad/.env` (600): `POSTGRES_PASSWORD`، `JWT_SECRET`، `ANON_KEY`، `SERVICE_ROLE_KEY`، `MAIL_USER`، `MAIL_PASSWORD`.
+- `/opt/sites/awrad/.env` (600): `POSTGRES_PASSWORD`، `JWT_SECRET`، `ANON_KEY`، `SERVICE_ROLE_KEY`، `MAIL_USER`، `MAIL_PASSWORD`، و`CRON_SECRET` (التذكيرات؛ انظر أدناه).
 - `/opt/sites/awrad/secrets/mail-basicauth.txt` (600): مستخدم صندوق البريد وكلمة مروره — `sudo cat` عبر SSH.
 - `/opt/sites/awrad/secrets/mail-ui.htpasswd` (644، بصمة bcrypt وحدها): Mailpit نفسه يطلب الكلمة (`MP_UI_AUTH_FILE`)، فلا تقرأ حاويةٌ أخرى على `deploy_default` الرموز.
 
@@ -49,6 +49,34 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
 ```
 
 الأسرار لا تُولَّد ثانية، والحسابات لا تُمسّ (علامة `secrets/demo-seeded.done`).
+
+## التذكيرات كل ساعة (Task 4.1) — ما تضيفه المهمّة في جولتها التالية
+
+الترحيل `0013_reminders.sql` يستدعي `ensure_reminder_schedule()`، وهي لا تجدول شيئًا حتى يوجد `pg_cron` و`pg_net` ويُضبط
+الإعدادان، فيمرّ الترحيل كما هو الآن (notice فقط). على الخادم، مرّةً وبالترتيب:
+
+1. ولّد `CRON_SECRET` (مثل `openssl rand -hex 32`) وأضفه إلى `/opt/sites/awrad/.env` دون طباعته، ثم
+   `dc up -d awrad-functions` (الخدمة تمرّره للعامل؛ بدونه تجيب `send-reminders` بـ 401 دائمًا).
+2. الحجم القائم لا يعيد تشغيل `db-init`، فشغّل محتوى `db-init/extensions.sql` مرّة كـ `supabase_admin`
+   (`docker exec awrad-db-1 psql -U supabase_admin -d postgres -f -` أو السطرين مباشرة):
+   `create extension if not exists pg_cron; create extension if not exists pg_net;`
+   الصورة تحمّل `pg_cron` مسبقًا (`shared_preload_libraries`) و`cron.database_name = 'postgres'`؛ إن اختلف أحدهما في
+   إصدار الصورة فأوقف هنا وأبلغ.
+3. كـ `supabase_admin` أيضًا، والسرّ يُمرَّر من الملف لا من سطر الأوامر:
+   ```sql
+   alter database postgres set app.functions_url = 'https://awrad-api.emdatra.org/functions/v1';
+   alter database postgres set app.cron_secret = '<CRON_SECRET من .env>';
+   ```
+   ثم **في جلسة جديدة**: `select ensure_reminder_schedule();` ← `t`.
+   (بديل لا يمرّ بـ Caddy: `http://awrad-functions:9000` — `db` و`awrad-functions` على شبكة المشروع نفسها، والموجّه
+   يتوقّع `/send-reminders` مباشرة؛ استعمله إن لم يكن للقاعدة خروج إلى الإنترنت.)
+4. القياس (أعداد فقط، لا أسرار ولا رموز):
+   `select count(*) from cron.job where jobname = 'send-reminders';` ← 1، وبعد أوّل ساعة كاملة
+   `select status, count(*) from cron.job_run_details where jobid = (select jobid from cron.job where jobname = 'send-reminders') group by status;`
+   و`select status_code, count(*) from net._http_response group by status_code;` (200 = الدالة أجابت؛ 401 = السرّان مختلفان).
+
+إعادة تشغيل `ensure_reminder_schedule()` آمنة (تحذف المهمّة بالاسم نفسه وتعيد إنشاءها)؛ الإيقاف:
+`select cron.unschedule('send-reminders');`.
 
 ## الدخول
 

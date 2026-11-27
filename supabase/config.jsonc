@@ -465,6 +465,14 @@
     // },
   },
 
+  "functions": {
+    // Called by the hourly pg_cron job with `Bearer <CRON_SECRET>`, not a user JWT; the function checks it
+    // itself (401 otherwise). Deploy: `supabase functions deploy send-reminders` picks this up.
+    "send-reminders": {
+      "verify_jwt": false
+    }
+  },
+
   "analytics": {
     "enabled": true,
     "port": 54327,
