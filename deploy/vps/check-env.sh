@@ -191,6 +191,17 @@ for s in seed-demo.sh web-build.sh migrate.sh; do
   else ko "$s still hard-codes: $(printf '%s' "$hit" | tr '\n' ' ' | cut -c1-200)"; fi
 done
 
+# awrad.caddy.tmpl: the ops task fills __SITE__ (renderer entry "__SITE__": (SITE, 7)); no site name of its own.
+TMPL=$DIR/awrad.caddy.tmpl
+SITE_TOKENS=7
+tleft=$(grep -nv '^[[:space:]]*#' "$TMPL" | grep -i 'awrad' || true)
+if [ -z "$tleft" ]; then ok "awrad.caddy.tmpl names no site outside comments"
+else ko "awrad.caddy.tmpl still hard-codes: $(printf '%s' "$tleft" | tr '\n' ' ' | cut -c1-300)"; fi
+tn=$( (grep -o '__SITE__' "$TMPL" || true) | wc -l | tr -d ' ')
+tc=$(grep '^[[:space:]]*#' "$TMPL" | grep -c '__[A-Z_]*__' || true)
+if [ "$tn" = "$SITE_TOKENS" ] && [ "$tc" = 0 ]; then ok "awrad.caddy.tmpl: __SITE__ ×$tn, none in a comment"
+else ko "awrad.caddy.tmpl: __SITE__ ×$tn (expected $SITE_TOKENS), placeholders in comments: $tc"; fi
+
 assert_env "staging (SITE=awrad, *.emdatra.org)" "$T/staging.env" \
   awrad awrad.emdatra.org awrad-app.emdatra.org awrad-api.emdatra.org awrad-mail.emdatra.org \
   /opt/sites/awrad/secrets /srv/sites/www/awrad-app
