@@ -45,7 +45,14 @@ export function ActivityGrid({ rows, dates, hijriAdjustment }: ActivityGridProps
           ))}
         </ul>
       </div>
-      <div data-overview-scroll className="overflow-x-auto">
+      {/* Focusable so keyboard users can scroll the days sideways (no cell in them takes focus). */}
+      <div
+        data-overview-scroll
+        role="region"
+        aria-labelledby={titleId}
+        tabIndex={0}
+        className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+      >
         <table aria-labelledby={titleId} className="w-full border-collapse t-body-md text-fg-primary">
           <thead className="bg-sunken">
             <tr className="border-b border-line-subtle">
@@ -55,14 +62,14 @@ export function ActivityGrid({ rows, dates, hijriAdjustment }: ActivityGridProps
               {dates.map((date) => {
                 const isToday = date === today;
                 const [, month, day] = date.split('-').map(Number);
+                const full = `${formatHijri(date, hijriAdjustment)} — ${formatGregorian(date)}`;
                 return (
                   <th
                     key={date}
                     scope="col"
                     data-date={date}
                     data-today={isToday ? 'true' : undefined}
-                    abbr={`${formatHijri(date, hijriAdjustment)} — ${formatGregorian(date)}`}
-                    title={`${formatHijri(date, hijriAdjustment)} — ${formatGregorian(date)}`}
+                    title={full}
                     className={cn(
                       // relative: the sr-only «اليوم» is positioned against this cell, so it scrolls (and clips) with the grid.
                       'relative px-2 py-8 text-center align-bottom',
@@ -70,13 +77,14 @@ export function ActivityGrid({ rows, dates, hijriAdjustment }: ActivityGridProps
                     )}
                   >
                     <span className={cn('flex flex-col items-center rounded-md px-2', isToday && 'bg-action-tint')}>
-                      <span data-calendar="hijri" className="t-display-section">
+                      {/* The short visible form; screen readers get the full dates (not `abbr`, which some read instead of the header). */}
+                      <span aria-hidden="true" data-calendar="hijri" className="t-display-section">
                         {toHijri(date, hijriAdjustment).day}
                       </span>
-                      <span data-calendar="gregorian" className="t-number-sm whitespace-nowrap">
+                      <span aria-hidden="true" data-calendar="gregorian" className="t-number-sm whitespace-nowrap">
                         {`${day}/${month}`}
                       </span>
-                      {isToday ? <span className="sr-only">{t.today}</span> : null}
+                      <span className="sr-only">{isToday ? `${full}، ${t.today}` : full}</span>
                     </span>
                   </th>
                 );
