@@ -48,7 +48,7 @@ export function TimezonePicker({ visible, selected, onSelect, onClose }: Timezon
                 key={o.id ?? 'group-default'}
                 kind="value"
                 title={o.label}
-                value={o.id === selected ? ar.settings.on : undefined}
+                value={o.id === selected ? ar.settings.selected : undefined}
                 onPress={() => onSelect(o.id)}
               />
             ))}

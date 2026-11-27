@@ -252,15 +252,16 @@ export const ar = {
     invalidLog: 'هذا السجلّ غير موجود.',
   },
   settings: {
-    loadFailed: 'تعذّر تحميل الإعدادات.',
     saveFailed: 'تعذّر حفظ التغيير، تحقّق من الاتصال وأعد المحاولة.',
     reminders: 'التذكيرات',
     dailyReminder: 'التذكير اليومي',
     reminderTime: 'الوقت',
+    reminderTimeInvalid: 'الوقت غير صحيح',
     reminderTimeHint: 'اكتب الوقت بصيغة ٢٤ ساعة، مثل 21:00',
     weeklyReminder: 'التذكير الأسبوعي',
     notifications: 'الإشعارات',
     pushDenied: 'لم يُسمح بالإشعارات. فعّلها من إعدادات الجهاز لتصلك التذكيرات.',
+    pushUnavailable: 'الإشعارات غير متاحة في هذا الإصدار',
     openSettings: 'فتح الإعدادات',
     webInstallBanner: 'ثبّت التطبيق على هاتفك لتصلك التذكيرات',
     channelName: 'التذكيرات',
@@ -284,8 +285,8 @@ export const ar = {
     deleteCancel: 'إلغاء',
     deleteFailed: 'تعذّر إرسال الطلب، تحقّق من الاتصال وأعد المحاولة.',
     deleteDone: 'استُلم طلبك وسيُنفَّذ خلال 30 يومًا',
-    off: 'غير مفعّل',
-    on: 'مفعّل',
+    selected: 'المختار',
+    done: 'تم',
   },
   errors: {
     missingEnv:

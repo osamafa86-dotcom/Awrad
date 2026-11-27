@@ -7,10 +7,19 @@ const mockSetHandler = jest.fn();
 const mockAddListener = jest.fn();
 const mockCalls: string[] = [];
 let mockInserted: unknown;
+let mockProjectId = 'proj-1';
+let mockLastResponse: unknown = null;
 
 jest.mock('expo-notifications', () => ({
-  getPermissionsAsync: async () => ({ status: 'granted' }),
-  requestPermissionsAsync: async () => ({ status: 'granted' }),
+  getPermissionsAsync: async () => {
+    mockCalls.push('getPermissions');
+    return { status: 'undetermined' };
+  },
+  requestPermissionsAsync: async () => {
+    mockCalls.push('requestPermissions');
+    return { status: 'granted' };
+  },
+  getLastNotificationResponseAsync: async () => mockLastResponse,
   getExpoPushTokenAsync: async (o: unknown) => {
     mockCalls.push('token');
     mockInserted = o;
@@ -25,7 +34,9 @@ jest.mock('expo-notifications', () => ({
 }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { extra: { eas: { projectId: 'proj-1' } } } },
+  get default() {
+    return { expoConfig: { extra: { eas: { projectId: mockProjectId } } } };
+  },
 }));
 jest.mock('../src/lib/supabase', () => ({
   supabase: {
@@ -34,12 +45,23 @@ jest.mock('../src/lib/supabase', () => ({
   },
 }));
 
-import { registerForPush, resetNotificationHandlerForTests, setupNotificationResponseHandler } from '../src/lib/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import {
+  handleColdStartNotification,
+  registerForPush,
+  registerForPushDetailed,
+  resetNotificationHandlerForTests,
+  setupNotificationResponseHandler,
+} from '../src/lib/notifications';
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockCalls.length = 0;
   resetNotificationHandlerForTests();
+  mockProjectId = 'proj-1';
+  mockLastResponse = null;
+  void AsyncStorage.clear();
 });
 
 describe('setupNotificationResponseHandler', () => {
@@ -73,8 +95,50 @@ describe('registerForPush on Android', () => {
   test('creates the channel before asking for the token, with the EAS project id', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     await expect(registerForPush()).resolves.toBe('tok');
-    expect(mockCalls).toEqual(['channel:reminders', 'token']);
+    expect(mockCalls).toEqual(['channel:reminders', 'getPermissions', 'requestPermissions', 'token']);
     expect(mockInserted).toEqual({ projectId: 'proj-1' });
+    jest.restoreAllMocks();
+  });
+});
+
+describe('registerForPushDetailed', () => {
+  test('the unset EAS project id placeholder is unavailable, not denied', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    mockProjectId = 'REPLACE_WITH_EAS_PROJECT_ID';
+    await expect(registerForPushDetailed()).resolves.toEqual({ status: 'unavailable' });
+    jest.restoreAllMocks();
+  });
+
+  test('web is unavailable', async () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    await expect(registerForPushDetailed()).resolves.toEqual({ status: 'unavailable' });
+    jest.restoreAllMocks();
+  });
+});
+
+describe('handleColdStartNotification', () => {
+  const response = { notification: { request: { identifier: 'n-1' } } };
+
+  test('navigates to Today once for a launch-by-tap, and not again for the same response', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    mockLastResponse = response;
+    const router = { navigate: jest.fn() };
+    await handleColdStartNotification(router);
+    await handleColdStartNotification(router); // same process: guarded
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/today');
+
+    resetNotificationHandlerForTests(); // "next launch": the same stale response is ignored
+    await handleColdStartNotification(router);
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+    jest.restoreAllMocks();
+  });
+
+  test('does nothing without a last response', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    const router = { navigate: jest.fn() };
+    await handleColdStartNotification(router);
+    expect(router.navigate).not.toHaveBeenCalled();
     jest.restoreAllMocks();
   });
 });

@@ -13,6 +13,7 @@ const mockDb = {
   pushTokens: [] as Array<Record<string, unknown>>,
   deletionOpen: false,
   failProfileUpdate: false,
+  failPushRead: false,
   profileUpdates: [] as Array<Record<string, unknown>>,
   upserts: [] as Array<{ row: Record<string, unknown>; options: unknown }>,
   deletes: [] as Array<Record<string, unknown>>,
@@ -43,7 +44,10 @@ jest.mock('../src/lib/supabase', () => {
       const chain = {
         select: () => chain,
         eq: () => chain,
-        limit: async () => ({ data: mockDb.pushTokens, error: null }),
+        limit: async () => {
+          if (mockDb.failPushRead) throw new Error('offline');
+          return { data: mockDb.pushTokens, error: null };
+        },
         upsert: async (row: Record<string, unknown>, options: unknown) => {
           mockDb.upserts.push({ row, options });
           return { error: null };
@@ -139,6 +143,7 @@ beforeEach(() => {
   mockDb.pushTokens = [];
   mockDb.deletionOpen = false;
   mockDb.failProfileUpdate = false;
+  mockDb.failPushRead = false;
   mockDb.profileUpdates = [];
   mockDb.upserts = [];
   mockDb.deletes = [];
@@ -169,7 +174,21 @@ describe('settings — reminders', () => {
     await renderSettings();
     await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar.settings.reminderTime) }));
     await fireEvent.press(screen.getByTestId('time-picker'));
+    expect(mockDb.profileUpdates).toEqual([]); // iOS: nothing written while scrolling
+    await fireEvent.press(screen.getByRole('button', { name: ar.settings.done }));
     expect(mockDb.profileUpdates).toEqual([{ reminder_time: '20:30' }]);
+    expect(screen.queryByTestId('time-picker')).toBeNull();
+  });
+
+  test('Android: the dialog result is written once and closes the picker', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    mockDb.profile.reminder_time = '21:00:00';
+    await renderSettings();
+    await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar.settings.reminderTime) }));
+    await fireEvent.press(screen.getByTestId('time-picker'));
+    expect(mockDb.profileUpdates).toEqual([{ reminder_time: '20:30' }]);
+    expect(screen.queryByTestId('time-picker')).toBeNull();
+    jest.restoreAllMocks();
   });
 
   test('weekly toggle sends weekly_reminder', async () => {
@@ -235,6 +254,17 @@ describe('settings — push notifications', () => {
     } finally {
       jest.restoreAllMocks();
     }
+  });
+});
+
+describe('settings — independent initial reads', () => {
+  test('a failing push_tokens read leaves the toggle off but the deletion row still reflects its request', async () => {
+    mockDb.failPushRead = true;
+    mockDb.deletionOpen = true;
+    await renderSettings();
+    expect(sw(ar.settings.notifications).props.value).toBe(false);
+    expect(sw(ar.settings.notifications).props.disabled).toBeFalsy();
+    expect(screen.getByRole('button', { name: new RegExp(ar.settings.deletionPending) })).toBeTruthy();
   });
 });
 

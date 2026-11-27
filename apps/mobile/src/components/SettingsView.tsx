@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSession } from '../hooks/SessionProvider';
 import { useProfileSettings, type ProfileSettingsPatch } from '../hooks/useProfileSettings';
 import { useSettings } from '../hooks/useSettings';
-import { registerForPush, unregisterPush } from '../lib/notifications';
+import { registerForPushDetailed, unregisterPush } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
@@ -58,7 +58,7 @@ function WebTimeField({ value, onCommit }: { value: string; onCommit: (t: string
       <TextField
         label={ar.settings.reminderTime}
         helper={ar.settings.reminderTimeHint}
-        error={invalid ? ar.settings.reminderTimeHint : undefined}
+        error={invalid ? ar.settings.reminderTimeInvalid : undefined}
         value={text}
         ltr
         onChangeText={(t) => {
@@ -82,6 +82,8 @@ export function SettingsView() {
   const [pushOn, setPushOn] = useState<boolean | null>(null);
   const [pushDenied, setPushDenied] = useState(false);
   const [pushError, setPushError] = useState(false);
+  const [pushUnavailable, setPushUnavailable] = useState(false);
+  const [draftTime, setDraftTime] = useState<Date | null>(null);
   const [deletionOpen, setDeletionOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [zonePicker, setZonePicker] = useState(false);
@@ -91,19 +93,18 @@ export function SettingsView() {
   useEffect(() => {
     if (!uid) return;
     let live = true;
-    void (async () => {
-      if (!isWeb) {
-        const { data } = await supabase.from('push_tokens').select('id').eq('user_id', uid).limit(1);
-        if (live) setPushOn((data?.length ?? 0) > 0);
-      }
-      const { data: req } = await supabase
-        .from('deletion_requests')
-        .select('id')
-        .eq('user_id', uid)
-        .is('handled_at', null)
-        .limit(1);
-      if (live) setDeletionOpen((req?.length ?? 0) > 0);
-    })().catch(() => undefined);
+    // Independent reads: one failing must not leave the other control stuck.
+    const tokens = isWeb
+      ? Promise.resolve(null)
+      : Promise.resolve(supabase.from('push_tokens').select('id').eq('user_id', uid).limit(1));
+    const requests = Promise.resolve(
+      supabase.from('deletion_requests').select('id').eq('user_id', uid).is('handled_at', null).limit(1),
+    );
+    void Promise.allSettled([tokens, requests]).then(([t, r]) => {
+      if (!live) return;
+      if (!isWeb) setPushOn(t.status === 'fulfilled' && !t.value?.error && (t.value?.data?.length ?? 0) > 0);
+      setDeletionOpen(r.status === 'fulfilled' && !r.value.error && (r.value.data?.length ?? 0) > 0);
+    });
     return () => {
       live = false;
     };
@@ -115,11 +116,14 @@ export function SettingsView() {
   const togglePush = async (next: boolean) => {
     setPushError(false);
     setPushDenied(false);
+    setPushUnavailable(false);
     try {
       if (next) {
-        const token = await registerForPush();
-        if (token === null) setPushDenied(true);
-        else setPushOn(true);
+        const result = await registerForPushDetailed();
+        if (result.status === 'granted') setPushOn(true);
+        else if (result.status === 'denied') setPushDenied(true);
+        else if (result.status === 'unavailable') setPushUnavailable(true);
+        else setPushError(true);
       } else {
         await unregisterPush();
         setPushOn(false);
@@ -139,6 +143,10 @@ export function SettingsView() {
   const privacyBase = process.env.EXPO_PUBLIC_ADMIN_URL; // read literally so Expo inlines it
   const effectiveZone = app.timezone;
   const [h, m] = (prefs.reminderTime ?? app.defaultReminderTime).split(':').map(Number);
+  const commitTime = (d: Date) => {
+    const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (t !== prefs.reminderTime) save({ reminder_time: t });
+  };
   const pickerDate = new Date(2026, 0, 1, h, m);
 
   const banner = (text: string, tone: 'error' | 'info', action?: ReactNode) => (
@@ -190,16 +198,37 @@ export function SettingsView() {
             )
           ) : null}
           {timePicker && !isWeb ? (
-            <DateTimePicker
-              mode="time"
-              is24Hour
-              locale="ar"
-              value={pickerDate}
-              onChange={(event, date) => {
-                if (Platform.OS === 'android') setTimePicker(false);
-                if (event.type === 'set' && date) save({ reminder_time: `${pad(date.getHours())}:${pad(date.getMinutes())}` });
-              }}
-            />
+            <>
+              <DateTimePicker
+                mode="time"
+                is24Hour
+                locale="ar"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                value={draftTime ?? pickerDate}
+                onChange={(event, date) => {
+                  if (Platform.OS === 'android') {
+                    // The dialog reports once: set or dismissed.
+                    setTimePicker(false);
+                    if (event.type === 'set' && date) commitTime(date);
+                  } else if (date) {
+                    setDraftTime(date); // iOS fires on every scroll tick; write once on «تم»
+                  }
+                }}
+              />
+              {Platform.OS === 'ios' ? (
+                <View style={{ padding: space.s12 }}>
+                  <Button
+                    label={ar.settings.done}
+                    size="md"
+                    onPress={() => {
+                      setTimePicker(false);
+                      if (draftTime) commitTime(draftTime);
+                      setDraftTime(null);
+                    }}
+                  />
+                </View>
+              ) : null}
+            </>
           ) : null}
           <ListRow
             kind="toggle"
@@ -241,6 +270,7 @@ export function SettingsView() {
               />,
             )
           : null}
+        {pushUnavailable ? banner(ar.settings.pushUnavailable, 'info') : null}
         {pushError ? banner(ar.settings.saveFailed, 'error') : null}
 
         <Section title={ar.settings.timezoneSection}>

@@ -8,7 +8,7 @@ import { useEffect, useMemo } from 'react';
 
 import { SessionProvider } from '../src/hooks/SessionProvider';
 import { fontMap } from '../src/lib/fonts';
-import { setupNotificationResponseHandler } from '../src/lib/notifications';
+import { handleColdStartNotification, setupNotificationResponseHandler } from '../src/lib/notifications';
 import { ensureRTL } from '../src/lib/rtl';
 import { toNavigationTheme, useTheme } from '../src/lib/theme';
 import { ar } from '../src/messages/ar';
@@ -37,6 +37,7 @@ export default function RootLayout() {
   // Reminder taps open Today; installs once (the helper ignores repeats and web).
   useEffect(() => {
     setupNotificationResponseHandler(router);
+    void handleColdStartNotification(router);
   }, [router]);
 
   // A font error falls back to the system font rather than blocking the app.
