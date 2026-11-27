@@ -74,15 +74,18 @@ pnpm --filter admin e2e         # Playwright: يبني ثم يشغّل next star
 - **(أ) بلا تسجيل دخول — تعمل في أي مكان.** إن لم تُضبط `NEXT_PUBLIC_*` يبني الاختبار على `http://127.0.0.1:54321`
   بمفتاح وهمي؛ لا شيء يستمع هناك فيُعامَل كل طلب كغير مسجَّل. تتحقّق من التحويل إلى `/login` وRTL وحقل البريد LTR والخطّين والوضع الداكن.
 - **(ب) بتسجيل دخول — تحتاج حزمة Supabase.** تُتخطّى ما لم تُضبط `E2E_SUPABASE_URL` و`E2E_SERVICE_ROLE_KEY`.
-  `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعة اختبار ودعوات وحسابات `admin@`/`sup1@`/`p1@test.example`
+  `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعتَي اختبار ودعوات وحسابات `admin@`/`sup1@`/`p1@`/`p3@test.example`
   (مُشغِّل `handle_new_user` يبني الملفات)، والدخول عبر الواجهة برمز يولّده `auth.admin.generateLink`.
+  ثم يحفظ سجلّات يومية معلومة لـ `p1` و`p3` عبر `save_log` بجلسة المدير (`generateLink` ثم `verifyOtp` بالمفتاح العام
+  `E2E_SUPABASE_ANON_KEY`)، بتواريخ نسبية إلى اليوم بمنطقة `Asia/Riyadh`؛ فحزمة تبقى أيامًا تحتفظ بسجلّات الأيام السابقة أيضًا.
 
 تشغيل الطبقة (ب) محليًا (يحتاج Docker):
 ```bash
 supabase start -x studio,imgproxy,logflare,vector,realtime,storage-api,postgres-meta,supavisor
 eval "$(supabase status -o env)"      # API_URL و ANON_KEY و SERVICE_ROLE_KEY
 NEXT_PUBLIC_SUPABASE_URL=$API_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY \
-E2E_SUPABASE_URL=$API_URL E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY pnpm --filter admin e2e
+E2E_SUPABASE_URL=$API_URL E2E_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY E2E_SUPABASE_ANON_KEY=$ANON_KEY \
+pnpm --filter admin e2e
 ```
 `E2E_SKIP_BUILD=1` يعيد استخدام بناء `.next` الموجود. إن لم يتوفّر متصفح Playwright فاضبط
 `PW_CHROMIUM_EXECUTABLE` على مسار Chromium مثبَّت. في CI تشغّل المهمّة `admin-e2e` الطبقتين معًا.

@@ -21,6 +21,15 @@ const gregorianMonths = [
   'ديسمبر',
 ] as const;
 
+/** The four day states (DESIGN.md §7 rule 2) and a day still to come, shared by every day cell. */
+const dayState = {
+  achieved: 'مُنجَز',
+  failed: 'غير مُنجَز',
+  neutral: 'بلا تكليف',
+  missing: 'غير مسجَّل',
+  future: 'لم يأتِ بعد',
+} as const;
+
 export const ar = {
   app: {
     name: 'أوراد',
@@ -70,6 +79,42 @@ export const ar = {
       INVALID_CODE: 'الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.',
       VERIFY_FAILED: 'تعذّر التحقّق من الرمز. تحقّق من اتصالك وحاول مرة أخرى.',
     },
+  },
+  dayState,
+  overview: {
+    title: 'نظرة عامة',
+    groupFilter: 'المجموعة',
+    allGroups: 'الكل',
+    periodLabel: 'الفترة: آخر 14 يومًا',
+    /** «16 جمادى الأولى – 29 جمادى الأولى 1448 · 13–26 نوفمبر 2026» under the period label. */
+    range: (hijri: string, gregorian: string) => `${hijri} · ${gregorian}`,
+    kpis: {
+      loggedThisWeek: 'سجّلوا هذا الأسبوع',
+      inactive: 'منقطعون ≥3 أيام',
+      openSupport: 'طلبات دعم مفتوحة',
+    },
+    /** One line under each KPI value. */
+    kpiCaptions: {
+      loggedThisWeek: (shown: number) => `المعروضون: ${isolate(String(shown))}`,
+      inactive: 'لم يسجّلوا في الأيام الثلاثة الماضية',
+      openSupport: 'تنتظر المعالجة',
+    },
+    /** The ⚠ on an alert KPI card. */
+    alertMark: 'تنبيه',
+    gridTitle: 'الطلاب في آخر 14 يومًا',
+    columns: { student: 'الطالب', streak: 'السلسلة', completion: 'الإنجاز' },
+    /** The ⚠ beside a row's streak. */
+    inactiveMark: 'منقطع 3 أيام أو أكثر',
+    today: 'اليوم',
+    pct: (n: number) => isolate(`${n}%`),
+    none: '—',
+    empty: {
+      title: 'لا طلاب بعد',
+      body: 'تظهر هنا أيام كل طالب مُتابَع في آخر 14 يومًا.',
+      inviteHint: 'ادعُ طلابك من صفحة الطلاب ليبدؤوا التسجيل.',
+      invite: 'دعوة طالب',
+    },
+    loadFailed: 'تعذّر تحميل النظرة العامة. تحقّق من الاتصال وأعد تحميل الصفحة.',
   },
   dates: {
     gregorianMonths,
@@ -133,13 +178,7 @@ export const ar = {
       summaryFailed: 'تعذّر تحميل الملخّص.',
       calendarTitle: 'هذا الشهر',
       calendarFailed: 'تعذّر تحميل التقويم.',
-      state: {
-        achieved: 'مُنجَز',
-        failed: 'غير مُنجَز',
-        neutral: 'بلا تكليف',
-        missing: 'غير مسجَّل',
-        future: 'لم يأتِ بعد',
-      },
+      state: dayState,
       /** «26 نوفمبر: مُنجَز» */
       cellLabel: (day: string, state: string) => `${day}: ${state}`,
       todaySuffix: (state: string) => `${state}، اليوم`,

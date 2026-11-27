@@ -1,8 +1,8 @@
 import type { DayState } from '@awrad/domain';
 
+import { DayStateCell, type CellState } from '@/components/DayStateCell';
 import { formatDayMonth, formatHijriSpan, formatMonthYear } from '@/lib/format';
 import { monthBounds, monthWeeks } from '@/lib/month';
-import { cn } from '@/lib/utils';
 import { ar } from '@/messages/ar';
 
 const t = ar.students.detail;
@@ -24,10 +24,8 @@ export interface MonthCalendarProps {
 }
 
 /**
- * The student's current month (a02), the same semantics as the mobile MonthCalendar: the four day states
- * differ by shape (DESIGN.md §7 rule 2) — achieved = filled square, failed = hatched outline, neutral =
- * grey outline, missing = number with a dot; future days are dimmed and today has a ring. No gold here:
- * gold is for completion marks only.
+ * The student's current month (a02), the same semantics as the mobile MonthCalendar; each day is a
+ * DayStateCell (the four states by shape, DESIGN.md §7 rule 2) with its number.
  */
 export function MonthCalendar({ month, days, today, weekStartsOn, hijriAdjustment }: MonthCalendarProps) {
   const { from, to } = monthBounds(month);
@@ -68,36 +66,19 @@ export function MonthCalendar({ month, days, today, weekStartsOn, hijriAdjustmen
 }
 
 function Cell({ date, day, today }: { date: string; day: CalendarDay | undefined; today: string }) {
-  const shown: DayState | 'future' = date > today ? 'future' : (day?.state ?? 'missing');
+  const shown: CellState = date > today ? 'future' : (day?.state ?? 'missing');
   const label = t.state[shown];
   const isToday = date === today;
-  const number = Number(date.slice(8, 10));
   const pct = day?.completionPct;
   return (
-    <span
-      role="img"
-      data-state={shown}
-      aria-label={t.cellLabel(formatDayMonth(date), isToday ? t.todaySuffix(label) : label)}
+    <DayStateCell
+      state={shown}
+      date={date}
+      isToday={isToday}
+      label={t.cellLabel(formatDayMonth(date), isToday ? t.todaySuffix(label) : label)}
       title={pct === null || pct === undefined ? label : `${label} · ${pct}%`}
-      className={cn(
-        'mx-auto flex size-40 items-center justify-center rounded-md border-2',
-        isToday ? 'border-line-focus' : 'border-transparent',
-      )}
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex size-32 flex-col items-center justify-center rounded-sm t-label-md',
-          shown === 'achieved' && 'bg-status-done-fill text-on-primary',
-          shown === 'failed' && 'cal-hatch border border-status-done-hatch text-fg-primary',
-          shown === 'neutral' && 'border-2 border-status-neutral text-fg-secondary',
-          shown === 'missing' && 'text-fg-primary',
-          shown === 'future' && 'text-fg-tertiary',
-        )}
-      >
-        {number}
-        {shown === 'missing' ? <span className="size-4 rounded-full bg-status-missing" /> : null}
-      </span>
-    </span>
+      {Number(date.slice(8, 10))}
+    </DayStateCell>
   );
 }
