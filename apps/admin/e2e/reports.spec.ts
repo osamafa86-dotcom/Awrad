@@ -11,7 +11,7 @@ import { OTHER_GROUP_NAME, TEST_TIMEZONE, TEST_USERS } from './users';
 
 const t = ar.reports;
 const h = t.csv.headers;
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 // ───────────── Tier (a): signed out — runs everywhere ─────────────
 
@@ -154,8 +154,12 @@ test.describe('reports, signed in', () => {
         `/api/export?kind=daily&from=${from}&to=${today}&group=${(other.data as { id: string }).id}`,
       );
       expect(res.status()).toBe(200);
-      const lines = records(parseCsv((await res.text()).replace(/^﻿/, '')));
-      expect(lines.some((line) => line[h.student] === TEST_USERS.p2.fullName)).toBe(false);
+      const text = await res.text();
+      expect(text.startsWith(BOM)).toBe(true);
+      const rows = parseCsv(text.slice(1));
+      // The header alone: sup1 may see none of the other group's people, so the group filter leaves nobody.
+      expect(rows[0]?.slice(0, 4)).toEqual([h.student, h.group, h.date, h.hijri]);
+      expect(records(rows)).toHaveLength(0);
     });
   });
 });

@@ -144,7 +144,7 @@ pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/00
 تجربته يدويًا: `curl -b <كوكيز الجلسة> 'http://localhost:3000/api/export?kind=daily&from=2026-11-01&to=2026-11-30' -o r.csv`
 ثم `head -c 3 r.csv | xxd` يُظهر `efbb bf`. في e2e (`e2e/reports.spec.ts`) يُنزَّل الملف بالنقر على الرابط مع
 `page.waitForEvent('download')` ثم يُقرأ من `download.path()`؛ والطلب المباشر بجلسة الدور عبر `page.request.get()`.
-البذرة لا تضع في سجلّاتها عادات الاختبار (`test_hab_`، `e2e-عادة`) وتحذف بقاياها غير المسجَّلة قبل الحفظ.
+البذرة لا تضع في سجلّاتها عادات الاختبار (`test_hab_`، `e2e-عادة`)، وقبل الحفظ تحذف من بقاياها ما لا يشير إليه سجلّ؛ وما يشير إليه سجلّ (`HABIT_HAS_LOGS`) تتركه وتطبع عدده، ويُنظَّف يدويًا على تلك الحزمة.
 
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)

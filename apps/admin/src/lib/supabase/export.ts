@@ -54,13 +54,24 @@ async function loadGroups(client: TypedClient): Promise<ExportGroup[]> {
 
 /** Every habit, active and archived, with all its items (the builders pick what is active on each day). */
 async function loadHabits(client: TypedClient): Promise<HabitDef[]> {
+  // Paged like every other read here: neither table is capped, and max_rows would cut it off silently.
   const [habits, items] = await Promise.all([
-    client.from('habits').select('id, slug, name, target_text, frequency, kind, sort_order, active_from, active_to'),
-    client.from('habit_items').select('id, habit_id, name, sort_order, active_from, active_to').order('sort_order'),
+    fetchAllPages((from, to) =>
+      client
+        .from('habits')
+        .select('id, slug, name, target_text, frequency, kind, sort_order, active_from, active_to')
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      client
+        .from('habit_items')
+        .select('id, habit_id, name, sort_order, active_from, active_to')
+        .order('id')
+        .range(from, to),
+    ),
   ]);
-  if (habits.error) throw habits.error;
-  if (items.error) throw items.error;
-  return habits.data.map((h) => ({
+  return habits.map((h) => ({
     id: h.id,
     slug: h.slug,
     name: h.name,
@@ -70,8 +81,9 @@ async function loadHabits(client: TypedClient): Promise<HabitDef[]> {
     sortOrder: h.sort_order,
     activeFrom: h.active_from,
     activeTo: h.active_to,
-    items: items.data
+    items: items
       .filter((i) => i.habit_id === h.id)
+      .sort((a, b) => a.sort_order - b.sort_order)
       .map((i) => ({ id: i.id, name: i.name, sortOrder: i.sort_order, activeFrom: i.active_from, activeTo: i.active_to })),
   }));
 }

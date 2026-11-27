@@ -22,7 +22,8 @@ export interface AccessInput {
 export const LOGIN_PATH = '/login';
 export const UNAUTHORIZED_PATH = '/unauthorized';
 const AUTH_PATHS = [LOGIN_PATH, '/verify'];
-const API_PREFIX = '/api';
+/** Route handlers that check the caller themselves (401/403 JSON); any other /api path is guarded like a page. */
+const SELF_GUARDED_ROUTES = ['/api/export'];
 /** Sections a supervisor may not manage (spec §5): habits and system settings. */
 const ADMIN_ONLY_SECTIONS = ['/habits', '/settings'];
 
@@ -39,9 +40,9 @@ export function isStaff(profile: AccessProfile | null): profile is AccessProfile
 }
 
 export function resolveAccess({ pathname, search = '', signedIn, profile }: AccessInput): Access {
-  // Route handlers check the caller themselves and answer with a JSON status (EXP-1: 401/403), which a
-  // download or a fetch can read; a redirect to an HTML page would arrive as a file of HTML instead.
-  if (inSection(pathname, API_PREFIX)) return allow;
+  // These route handlers check the caller themselves and answer with a JSON status (EXP-1: 401/403), which
+  // a download or a fetch can read; a redirect to an HTML page would arrive as a file of HTML instead.
+  if (SELF_GUARDED_ROUTES.includes(pathname)) return allow;
 
   const onAuthPage = AUTH_PATHS.some((path) => inSection(pathname, path));
 

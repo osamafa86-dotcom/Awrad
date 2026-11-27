@@ -188,6 +188,30 @@ describe('buildDailyReport', () => {
     });
   });
 
+  it('a checklist with no item active that day leaves its cell empty; computeDayStatus counts it achieved', () => {
+    const empty = buildDailyReport({
+      people: [people[1]!],
+      groups,
+      habits: [
+        habit({ id: 'fajr', name: 'الفجر', sortOrder: 1 }),
+        habit({ id: 'list', name: 'قائمة', kind: 'checklist', sortOrder: 2, items: [item('x', '2026-11-20')] }),
+      ],
+      logs: [
+        log('p', '2026-11-24', {
+          entries: [
+            { habitId: 'fajr', status: 'done' },
+            { habitId: 'list', status: 'done', checkedItemIds: [] },
+          ],
+        }),
+      ],
+      from: '2026-11-24',
+      to: '2026-11-24',
+      settings: SETTINGS,
+      now: NOW,
+    });
+    expect(empty.rows[0]).toMatchObject({ الفجر: 'تم', قائمة: '', 'نسبة اليوم': 100, الحالة: 'مُنجَز' });
+  });
+
   it('a habit name used twice gets a numbered second column instead of overwriting the first', () => {
     const twice = buildDailyReport({
       people: [],

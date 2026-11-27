@@ -20,6 +20,15 @@ import type { CsvValue } from './csv';
 import { DEFAULT_TIMEZONE } from './students';
 
 const t = ar.reports.csv;
+/** One collator for every sort (names and group names in Arabic order). */
+const collator = new Intl.Collator('ar');
+
+/** `YYYY-MM-DD` strings sort as plain text. */
+function compareDates(a: CsvValue, b: CsvValue): number {
+  const x = String(a);
+  const y = String(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
 const h = t.headers;
 
 export interface ExportGroup {
@@ -81,7 +90,7 @@ type DayStatus = ReturnType<typeof computeDayStatus>;
 function habitColumns(habits: HabitDef[], frequency: Frequency, from: string, to: string) {
   const shown = habits
     .filter((habit) => habit.frequency === frequency && habit.activeFrom <= to && (habit.activeTo ?? to) >= from)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ar'));
+    .sort((a, b) => a.sortOrder - b.sortOrder || collator.compare(a.name, b.name));
   const used = new Set<string>(Object.values(h));
   return shown.map((habit) => {
     let column = habit.name;
@@ -97,6 +106,8 @@ function habitCell(habit: HabitDef, entry: EntryInput | undefined, date: string)
   if (!entry || !isActiveOn(habit, date)) return '';
   if (entry.status === 'not_required' || habit.kind !== 'checklist') return t.entry[entry.status];
   const active = habit.items.filter((item) => isActiveOn(item, date));
+  // Nothing to tick that day: no `0/0`; computeDayStatus alone decides what the day counts as.
+  if (active.length === 0) return '';
   const checked = new Set(entry.checkedItemIds ?? []);
   // Plain ASCII digits with no spaces (DESIGN.md §7 rule 4); no bidi marks in a data file.
   return `${active.filter((item) => checked.has(item.id)).length}/${active.length}`;
@@ -108,9 +119,9 @@ function stateLabel(status: DayStatus | null): string {
 
 function byGroupNameDate(dateKey: string) {
   return (a: Row, b: Row) =>
-    String(a[h.group]).localeCompare(String(b[h.group]), 'ar') ||
-    String(a[h.student]).localeCompare(String(b[h.student]), 'ar') ||
-    String(a[dateKey]).localeCompare(String(b[dateKey]));
+    collator.compare(String(a[h.group]), String(b[h.group])) ||
+    collator.compare(String(a[h.student]), String(b[h.student])) ||
+    compareDates(a[dateKey], b[dateKey]);
 }
 
 function groupOf(groups: ExportGroup[], id: string | null): ExportGroup | undefined {
@@ -265,9 +276,9 @@ export function buildAttendanceReport(input: AttendanceReportInput): ExportTable
   // Date first: the sessions are the report's spine.
   rows.sort(
     (a, b) =>
-      String(a[h.sessionDate]).localeCompare(String(b[h.sessionDate])) ||
-      String(a[h.group]).localeCompare(String(b[h.group]), 'ar') ||
-      String(a[h.student]).localeCompare(String(b[h.student]), 'ar'),
+      compareDates(a[h.sessionDate], b[h.sessionDate]) ||
+      collator.compare(String(a[h.group]), String(b[h.group])) ||
+      collator.compare(String(a[h.student]), String(b[h.student])),
   );
   return {
     headers: [h.student, h.group, h.sessionDate, h.hijriShort, h.sessionTitle, h.state, h.recordedBy],

@@ -58,6 +58,8 @@ const rows: Row[] = [
   ['signed out on an API route is left to the route (401)', '/api/export', false, null, allow],
   ['a student on an API route is left to the route (403)', '/api/export', true, student, allow],
   ['a path that only starts with "api" is a page', '/apix', false, null, to('/login?next=%2Fapix')],
+  ['an API route not on the list still sends a signed-out user to login', '/api/other', false, null, to('/login?next=%2Fapi%2Fother')],
+  ['a path under the export route is not the export route', '/api/export/x', false, null, to('/login?next=%2Fapi%2Fexport%2Fx')],
 ];
 
 describe('resolveAccess (GUARD-1)', () => {

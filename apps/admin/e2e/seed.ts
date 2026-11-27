@@ -69,7 +69,8 @@ function isTestHabit(habit: { slug: string; name: string }): boolean {
 /**
  * Removes test habits an interrupted run left behind, before any log is saved: save_log needs an entry
  * for every active habit (MISSING_ENTRY), and a seeded log that refers to one would stop its spec's own
- * cleanup (HABIT_HAS_LOGS). Items go with their habit (on delete cascade).
+ * cleanup (HABIT_HAS_LOGS). Only the ones no log refers to are deleted (the delete guard refuses the
+ * others); those are skipped with a message. Items go with their habit (on delete cascade).
  */
 async function removeLeftoverTestHabits(db: SupabaseClient): Promise<void> {
   const habits = check(await db.from('habits').select('id, slug, name')).data as Array<{
@@ -78,7 +79,18 @@ async function removeLeftoverTestHabits(db: SupabaseClient): Promise<void> {
     name: string;
   }>;
   const leftovers = habits.filter(isTestHabit).map((habit) => habit.id);
-  if (leftovers.length > 0) check(await db.from('habits').delete().in('id', leftovers));
+  if (leftovers.length === 0) return;
+  // One `limit 1` probe per leftover (there are few): a single `.in()` could be cut off at max_rows.
+  const withLogs = new Set<string>();
+  for (const id of leftovers) {
+    const probe = check(await db.from('log_entries').select('habit_id').eq('habit_id', id).limit(1));
+    if ((probe.data ?? []).length > 0) withLogs.add(id);
+  }
+  const unlogged = leftovers.filter((id) => !withLogs.has(id));
+  if (unlogged.length > 0) check(await db.from('habits').delete().in('id', unlogged));
+  if (withLogs.size > 0) {
+    console.warn(`seed: skipped ${withLogs.size} leftover test habit(s) that logs refer to (HABIT_HAS_LOGS)`);
+  }
 }
 
 /**
