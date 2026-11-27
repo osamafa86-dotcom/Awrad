@@ -3,6 +3,8 @@ import { getStudentSummary, type StudentSummary } from '@awrad/supabase-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
+import { isEmptySummary } from '../lib/summary';
+
 import { supabase } from '../lib/supabase';
 import { useAppSession } from './SessionProvider';
 import { useAsyncData } from './useAsyncData';
@@ -21,6 +23,10 @@ export function rangeBounds(range: SummaryRange, today: string): { from?: string
 
 export interface UseSummary {
   data: StudentSummary | null;
+  /** The chosen range has no logs; use with `allTimeEmpty` to tell "never logged" from "nothing in range". */
+  rangeEmpty: boolean;
+  /** true = never logged anything, false = has logs (in some range), null = not applicable / still unknown. */
+  allTimeEmpty: boolean | null;
   loading: boolean;
   error: boolean;
   refetch(): Promise<void>;
@@ -33,10 +39,39 @@ export function useSummary(range: SummaryRange, enabled = true): UseSummary {
   const uid = session?.user.id ?? null;
   const today = settings.loading ? null : todayIn(settings.timezone);
   const key = enabled && uid && today ? `${uid}|${range}|${today}` : null;
-  return useAsyncData(key, () => {
+  const q = useAsyncData(key, () => {
     const { from, to } = rangeBounds(range, today ?? '');
     return getStudentSummary(supabase, { from, to });
   });
+
+  // EMPTY-1: an empty range is "never logged" only if the all-time summary is empty too. Only the
+  // "has logs" answer is cached (it can never become false again); "empty" is re-asked.
+  const rangeEmpty = q.data !== null && isEmptySummary(q.data);
+  const cachedHasLogs = uid !== null && hasLogsCache.has(uid);
+  const askAllTime = rangeEmpty && range !== 'all' && !cachedHasLogs;
+  const allTime = useAsyncData(askAllTime && uid ? `${uid}|all-time|${today}` : null, () =>
+    getStudentSummary(supabase, {}),
+  );
+  const allTimeHasLogs = allTime.data !== null && !isEmptySummary(allTime.data);
+  useEffect(() => {
+    if (uid && allTimeHasLogs) hasLogsCache.add(uid);
+  }, [uid, allTimeHasLogs]);
+
+  let allTimeEmpty: boolean | null = null;
+  if (rangeEmpty) {
+    if (range === 'all') allTimeEmpty = true;
+    else if (cachedHasLogs) allTimeEmpty = false;
+    else if (allTime.error) allTimeEmpty = false; // unknown: the softer note, never "you have not logged"
+    else if (allTime.data) allTimeEmpty = !allTimeHasLogs;
+  }
+  return { ...q, rangeEmpty, allTimeEmpty };
+}
+
+const hasLogsCache = new Set<string>();
+
+/** Test hook: forget what is known about which students have logs. */
+export function resetSummaryCache(): void {
+  hasLogsCache.clear();
 }
 
 function isRange(v: string | null): v is SummaryRange {

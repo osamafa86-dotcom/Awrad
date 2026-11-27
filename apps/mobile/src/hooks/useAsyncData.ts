@@ -5,7 +5,7 @@ export interface AsyncData<T> {
   /** True until the data for the current key has arrived (also while the key is null). */
   loading: boolean;
   error: boolean;
-  /** Re-run the fetch for the current key (keeps the shown data meanwhile). Resolves when settled. */
+  /** Re-run the fetch for the current key (keeps the shown data meanwhile, and after a failure). Resolves when settled. */
   refetch(): Promise<void>;
 }
 
@@ -34,7 +34,7 @@ export function useAsyncData<T>(key: string | null, fetcher: () => Promise<T>): 
       const data = await fetcherRef.current();
       if (live.current && id === request.current) setState({ key: k, data, error: false, pending: false });
     } catch {
-      if (live.current && id === request.current) setState({ key: k, data: null, error: true, pending: false });
+      if (live.current && id === request.current) setState((s) => ({ key: k, data: s.key === k ? s.data : null, error: true, pending: false }));
     }
   }, []);
 

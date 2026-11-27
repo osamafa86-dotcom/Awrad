@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightColors } from '@awrad/design-tokens';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import SummaryScreen from '../app/(tabs)/summary';
 import { HabitBar } from '../src/components/HabitBar';
 import { resetSettingsCache } from '../src/hooks/useSettings';
+import { resetSummaryCache } from '../src/hooks/useSummary';
 import { ar } from '../src/messages/ar';
 import { resetFakeDb } from './helpers/today-fixture';
 
@@ -61,6 +62,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   resetFakeDb();
   resetSettingsCache();
+  resetSummaryCache();
   await AsyncStorage.clear();
   mockGetSummary.mockResolvedValue(summary);
   mockGetCalendar.mockResolvedValue([]);
@@ -210,6 +212,12 @@ describe('summary screen — habit bars and weekly block', () => {
     expect(screen.getByText(`الأسبوعي: ${text} · ${iso('84%')}`)).toBeTruthy();
   });
 
+  test('weekly block shows a dash when its percentage is null', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, weekly: { weeksLogged: 3, completionPct: null } });
+    await renderSummary();
+    expect(screen.getByText(`الأسبوعي: 3 أسابيع · ${ar.common.dash}`)).toBeTruthy();
+  });
+
   test('weekly block hidden when weekly is null', async () => {
     mockGetSummary.mockResolvedValue({ ...summary, weekly: null });
     await renderSummary();
@@ -228,6 +236,7 @@ describe('HabitBar', () => {
     await render(<HabitBar name="ورد" pct={null} />);
     expect(screen.getByText('—')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('habit-bar-fill').props.style).width).toBe('0%');
+    expect(screen.getByRole('progressbar').props.accessibilityValue).toEqual({ text: '—' });
   });
 });
 
@@ -241,6 +250,56 @@ describe('summary screen — empty and error', () => {
     expect(screen.queryByTestId('calendar-title')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: ar.summary.empty.action }));
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/today');
+  });
+
+  const emptyRange = { ...summary, daysLogged: 0, weekly: null, perHabit: [] };
+  const rangeThenAllTime = (range: unknown, all: unknown) => (_c: unknown, opts: { from?: string }) =>
+    Promise.resolve(opts.from ? range : all);
+
+  test('empty range but logs elsewhere → inline note, calendar and tabs stay, no EmptyState', async () => {
+    mockGetSummary.mockImplementation(rangeThenAllTime(emptyRange, summary));
+    await render(<SummaryScreen />);
+    await screen.findByText(ar.summary.emptyRange);
+    expect(screen.queryByText(ar.summary.empty.title)).toBeNull();
+    expect(screen.queryByTestId('stat-days')).toBeNull();
+    expect(screen.getByTestId('calendar-title')).toBeTruthy();
+    expect(screen.getByLabelText(ar.summary.rangeLabel)).toBeTruthy();
+    expect(mockGetSummary).toHaveBeenCalledWith(expect.anything(), {});
+  });
+
+  test('«عرض الكل» switches the range to all', async () => {
+    mockGetSummary.mockImplementation(rangeThenAllTime(emptyRange, summary));
+    await render(<SummaryScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: ar.summary.showAll }));
+    await screen.findByTestId('stat-days');
+    expect(screen.getByRole('tab', { name: ar.summary.range.all }).props.accessibilityState.selected).toBe(true);
+  });
+
+  test('empty range and empty all-time → full EmptyState', async () => {
+    mockGetSummary.mockResolvedValue(emptyRange);
+    await render(<SummaryScreen />);
+    await screen.findByText(ar.summary.empty.title);
+    expect(screen.queryByText(ar.summary.emptyRange)).toBeNull();
+  });
+
+  test('on the all range, zero data keeps the full EmptyState without an extra all-time call', async () => {
+    await AsyncStorage.setItem('pref:summary:range', 'all');
+    mockGetSummary.mockResolvedValue(emptyRange);
+    await render(<SummaryScreen />);
+    await screen.findByText(ar.summary.empty.title);
+    expect(mockGetSummary).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed refresh keeps the stats and shows the banner; the calendar stays', async () => {
+    await renderSummary();
+    mockGetSummary.mockRejectedValue(new Error('offline'));
+    const scroll = screen.getByTestId('summary-scroll');
+    await act(async () => {
+      await scroll.props.refreshControl.props.onRefresh();
+    });
+    await screen.findByText(ar.summary.loadFailed);
+    expect(screen.getByTestId('stat-days')).toBeTruthy();
+    expect(screen.getByTestId('calendar-title')).toBeTruthy();
   });
 
   test('only weekly logs → not empty', async () => {

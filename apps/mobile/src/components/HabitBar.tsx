@@ -13,7 +13,9 @@ export function HabitBar({ name, pct, testID }: { name: string; pct: number | nu
       accessible
       accessibilityRole="progressbar"
       accessibilityLabel={name}
-      accessibilityValue={value === null ? undefined : { min: 0, max: 100, now: value, text: `${value}%` }}
+      accessibilityValue={
+        value === null ? { text: ar.common.dash } : { min: 0, max: 100, now: value, text: `${value}%` }
+      }
       testID={testID}
       style={{ gap: space.s8 }}
     >

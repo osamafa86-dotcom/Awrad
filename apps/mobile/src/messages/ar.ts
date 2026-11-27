@@ -18,6 +18,8 @@ function remainingText(n: number): string {
   return `بقي ${countText(n, 'بند واحد', 'بندان', 'بنود', 'بندًا')}`;
 }
 
+const dash = '—';
+
 /** Keeps a number (and its «%») in order inside RTL text on every platform. */
 function isolate(text: string): string {
   return `\u2066${text}\u2069`;
@@ -65,7 +67,7 @@ export const ar = {
   common: {
     comingSoon: 'قريبًا',
     /** A value that is not available (no data yet). */
-    dash: '—',
+    dash,
     retry: 'إعادة المحاولة',
   },
   auth: {
@@ -200,7 +202,7 @@ export const ar = {
     habitsTitle: 'نسبة كل عادة',
     /** «الأسبوعي: 11 أسبوعًا · 84%» */
     weekly: (weeks: number, pct: number | null) =>
-      `الأسبوعي: ${weeksText(weeks)} · ${pct === null ? '—' : isolate(`${pct}%`)}`,
+      `الأسبوعي: ${weeksText(weeks)} · ${pct === null ? dash : isolate(`${pct}%`)}`,
     prevMonth: 'الشهر السابق',
     nextMonth: 'الشهر التالي',
     /** «نوفمبر 2026» for a `YYYY-MM` month. */
@@ -214,6 +216,8 @@ export const ar = {
     /** «26 نوفمبر: مُنجَز» */
     cellLabel: (dayLabel: string, stateLabel: string) => `${dayLabel}: ${stateLabel}`,
     todaySuffix: (stateLabel: string) => `${stateLabel}، اليوم`,
+    emptyRange: 'لا تسجيلات في هذه الفترة',
+    showAll: 'عرض الكل',
     empty: {
       title: 'لم تسجّل بعد',
       body: 'يظهر ملخّصك بعد أول تسجيل لوردك اليومي',

@@ -24,9 +24,9 @@ const base = {
 };
 
 /** The expected Hijri header, computed from toHijri itself. */
-function expectedHijri(first: string, last: string): string {
-  const a = toHijri(first);
-  const b = toHijri(last);
+function expectedHijri(first: string, last: string, adjustment = 0): string {
+  const a = toHijri(first, adjustment);
+  const b = toHijri(last, adjustment);
   if (a.year === b.year) {
     return a.month === b.month ? `${a.monthName} ${b.year}` : `${a.monthName} – ${b.monthName} ${b.year}`;
   }
@@ -68,6 +68,38 @@ describe('MonthCalendar', () => {
     await render(<MonthCalendar {...base} month="2026-11" days={monthDays('2026-11', 30)} weekStartsOn={6} />);
     expect(screen.getByTestId('grid-row-0').children[1]).toBe(screen.getByTestId('grid-cell-2026-11-01'));
     expect(screen.getByTestId('grid-row-0').children[0]).not.toBe(screen.getByTestId('grid-cell-2026-11-01'));
+  });
+
+  const blanksInFirstRow = () =>
+    screen.getByTestId('grid-row-0').children.filter((c) => !(c as { props: { testID?: string } }).props.testID).length;
+
+  test('February 2026 (28 days, starts on Sunday) fills exactly four rows', async () => {
+    await render(<MonthCalendar {...base} month="2026-02" days={monthDays('2026-02', 28)} weekStartsOn={0} />);
+    expect(blanksInFirstRow()).toBe(0);
+    expect(screen.getByTestId('grid-cell-2026-02-28')).toBeTruthy();
+    expect(screen.queryByTestId('grid-row-4')).toBeNull();
+  });
+
+  test('August 2026 starts on a Saturday: no blanks for weekStartsOn 6, six for 0', async () => {
+    const view = await render(<MonthCalendar {...base} month="2026-08" days={monthDays('2026-08', 31)} weekStartsOn={6} />);
+    expect(blanksInFirstRow()).toBe(0);
+    await view.unmount();
+    await render(<MonthCalendar {...base} month="2026-08" days={monthDays('2026-08', 31)} weekStartsOn={0} />);
+    expect(blanksInFirstRow()).toBe(6);
+  });
+
+  test('hijriAdjustment shifts the Hijri header', async () => {
+    // The header names months only, so look for a month where the shift crosses a Hijri month boundary.
+    const months = Array.from({ length: 48 }, (_, i) => `${2025 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
+    const last = (m: string) => `${m}-${new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5)), 0)).getUTCDate()}`;
+    const month = months.find(
+      (m) => expectedHijri(`${m}-01`, last(m), 1) !== expectedHijri(`${m}-01`, last(m), 0),
+    );
+    expect(month).toBeDefined();
+    await render(<MonthCalendar {...base} month={month!} days={[]} weekStartsOn={0} hijriAdjustment={1} />);
+    expect(screen.getByTestId('calendar-hijri').props.children).toBe(
+      expectedHijri(`${month}-01`, last(month!), 1),
+    );
   });
 
   test('navigation buttons and canNext', async () => {

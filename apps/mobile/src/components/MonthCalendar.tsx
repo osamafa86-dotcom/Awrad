@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import type { CalendarDay } from '../hooks/useCalendar';
 import type { WeekStart } from '../hooks/useSettings';
 import { formatHijriSpan, formatMonthYear } from '../lib/format';
+import { monthBounds } from '../lib/month';
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
 import { CalendarCell } from './CalendarCell';
@@ -24,11 +25,6 @@ export interface MonthCalendarProps {
   loading?: boolean;
 }
 
-function lastDay(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return `${month}-${String(new Date(Date.UTC(y ?? 0, m ?? 1, 0)).getUTCDate()).padStart(2, '0')}`;
-}
-
 /** F-31: the Gregorian month with its Hijri month(s) under the title; columns start at `weekStartsOn`. */
 export function MonthCalendar({
   month,
@@ -42,6 +38,7 @@ export function MonthCalendar({
 }: MonthCalendarProps) {
   const { colors, radius, space, type } = useTheme();
 
+  const { from: first, to: last } = monthBounds(month);
   const [y, m] = month.split('-').map(Number);
   const firstDow = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, 1)).getUTCDay(); // 0 = Sunday
   const lead = (firstDow - weekStartsOn + 7) % 7;
@@ -69,7 +66,7 @@ export function MonthCalendar({
           {formatMonthYear(month)}
         </Text>
         <Text testID="calendar-hijri" style={[type.bodySm, { color: colors.textSecondary, textAlign: 'center' }]}>
-          {formatHijriSpan(`${month}-01`, lastDay(month), hijriAdjustment)}
+          {formatHijriSpan(first, last, hijriAdjustment)}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s16 }}>
           {/* "previous" first (the start side in RTL) and pointing that way (§7 rule 3). */}

@@ -5,9 +5,10 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { shiftMonth, useCalendar } from '../hooks/useCalendar';
+import { useCalendar } from '../hooks/useCalendar';
 import { useSettings } from '../hooks/useSettings';
 import { useSummary, useSummaryRange } from '../hooks/useSummary';
+import { shiftMonth } from '../lib/month';
 import { useTheme } from '../lib/theme';
 import { ar } from '../messages/ar';
 import { Button } from './Button';
@@ -49,32 +50,34 @@ export function SummaryView() {
   }, [refetchSummary, refetchCalendar]);
 
   const data = summary.data;
-  const empty = data !== null && data.daysLogged === 0 && data.weekly === null;
+  // Full empty state only when nothing was ever logged (EMPTY-1); an empty range keeps the calendar.
+  const neverLogged = data !== null && summary.rangeEmpty && summary.allTimeEmpty === true;
+  const rangeOnlyEmpty = data !== null && summary.rangeEmpty && summary.allTimeEmpty === false;
+
+  const errorBanner = summary.error ? (
+    <View
+      accessibilityRole="alert"
+      style={{
+        gap: space.s12,
+        padding: space.s16,
+        borderRadius: radius.lg,
+        backgroundColor: colors.statusNotdoneTint,
+      }}
+    >
+      <Text style={[type.bodyMd, { color: colors.statusNotdone }]}>{ar.summary.loadFailed}</Text>
+      <Button
+        label={ar.common.retry}
+        variant="secondary"
+        size="md"
+        fullWidth={false}
+        onPress={() => void summary.refetch()}
+      />
+    </View>
+  ) : null;
 
   const body = (() => {
-    if (summary.error) {
-      return (
-        <View
-          accessibilityRole="alert"
-          style={{
-            gap: space.s12,
-            padding: space.s16,
-            borderRadius: radius.lg,
-            backgroundColor: colors.statusNotdoneTint,
-          }}
-        >
-          <Text style={[type.bodyMd, { color: colors.statusNotdone }]}>{ar.summary.loadFailed}</Text>
-          <Button
-            label={ar.common.retry}
-            variant="secondary"
-            size="md"
-            fullWidth={false}
-            onPress={() => void summary.refetch()}
-          />
-        </View>
-      );
-    }
     if (!data) {
+      if (summary.error) return null;
       return (
         <View accessibilityLabel={ar.summary.loading} style={{ gap: space.s12 }}>
           <Skeleton height={88} />
@@ -83,7 +86,10 @@ export function SummaryView() {
         </View>
       );
     }
-    if (empty) {
+    if (summary.rangeEmpty && summary.allTimeEmpty === null) {
+      return <Skeleton height={88} />;
+    }
+    if (neverLogged) {
       return (
         <EmptyState
           icon={NotebookPen}
@@ -92,6 +98,30 @@ export function SummaryView() {
           actionLabel={ar.summary.empty.action}
           onAction={() => router.navigate('/(tabs)/today')}
         />
+      );
+    }
+    if (rangeOnlyEmpty) {
+      return (
+        <View
+          style={{
+            gap: space.s12,
+            alignItems: 'center',
+            padding: space.s16,
+            borderRadius: radius.lg,
+            backgroundColor: colors.bgSunken,
+          }}
+        >
+          <Text style={[type.bodyMd, { color: colors.textSecondary, textAlign: 'center' }]}>
+            {ar.summary.emptyRange}
+          </Text>
+          <Button
+            label={ar.summary.showAll}
+            variant="secondary"
+            size="md"
+            fullWidth={false}
+            onPress={() => setRange('all')}
+          />
+        </View>
       );
     }
     return (
@@ -156,12 +186,14 @@ export function SummaryView() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bgCanvas }}>
       <ScrollView
+        testID="summary-scroll"
         contentContainerStyle={{ padding: space.s16, gap: space.s16, paddingBottom: space.s32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
       >
         <RangeTabs value={range} onChange={setRange} />
+        {errorBanner}
         {body}
-        {!empty && !summary.error && month && currentMonth ? (
+        {!neverLogged && month && currentMonth ? (
           <>
             <MonthCalendar
               month={month}
