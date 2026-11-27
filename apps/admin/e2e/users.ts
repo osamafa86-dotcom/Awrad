@@ -17,7 +17,12 @@ export const TEST_USERS = {
   // The other group's supervisor and student (attendance: a supervisor marks only their groups' sections).
   sup2: { email: 'sup2@test.example', fullName: 'مشرف المجموعة الأخرى', role: 'supervisor', group: 'other', isTracked: true },
   p2: { email: 'p2@test.example', fullName: 'طالب المجموعة الأخرى', role: 'student', group: 'other', isTracked: true },
+  // A throwaway student with an open account-deletion request: support.spec.ts deletes the account for good,
+  // and the seed (or that spec's reset) creates it again when it is missing.
+  p4: { email: 'p4@test.example', fullName: 'طالب يطلب الحذف', role: 'student', group: 'test', isTracked: true },
 } as const;
+
+export type TestUserKey = keyof typeof TEST_USERS;
 
 export const TEST_GROUP_NAME = 'مجموعة اختبار اللوحة';
 
@@ -36,3 +41,17 @@ export const SEEDED_LOGS = [
   { user: 'p1', daysAgo: 6, outcome: 'failed' },
   { user: 'p3', daysAgo: 1, outcome: 'achieved' },
 ] as const;
+
+/**
+ * p1's weekly log for the current week (its group's week start, in TEST_TIMEZONE), saved through save_log
+ * with every active weekly habit, so support_status is 'open' (BR-10). The seed and support.spec.ts reopen
+ * it each time (service role), so a run that marked it handled leaves no trace for the next one.
+ */
+export const SEEDED_SUPPORT = {
+  user: 'p1',
+  review: 'مراجعة الأسبوع التجريبية',
+  request: 'أحتاج مساعدة في ورد القيام',
+} as const;
+
+/** The student whose open deletion request support.spec.ts executes. */
+export const DELETION_REQUESTER = 'p4' as const;

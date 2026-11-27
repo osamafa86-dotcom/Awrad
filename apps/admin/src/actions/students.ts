@@ -72,8 +72,12 @@ export async function updateStudent(id: string, values: StudentUpdate): Promise<
   return { ok: true };
 }
 
-/** §13: delete the account for good (admin_delete_user cascades and writes the audit row). */
-export async function deleteStudent(id: string): Promise<StudentResult> {
+/**
+ * §13: delete the account for good (admin_delete_user cascades and writes the audit row). From the student's
+ * page it returns to the list; from the support inbox («حذف نهائي» on a deletion request, whose row goes with
+ * the account) it stays there.
+ */
+export async function deleteStudent(id: string, from: 'student' | 'support' = 'student'): Promise<StudentResult> {
   if (!(await isAdmin())) return fail('FORBIDDEN');
   try {
     const supabase = await createClient();
@@ -83,5 +87,8 @@ export async function deleteStudent(id: string): Promise<StudentResult> {
     return fail('DELETE_FAILED');
   }
   revalidatePath('/students');
-  redirect('/students');
+  if (from !== 'support') redirect('/students');
+  revalidatePath('/support');
+  revalidatePath('/');
+  return { ok: true };
 }

@@ -155,6 +155,15 @@ describe('deleteStudent', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/students');
   });
 
+  it('from the support inbox: stays there, refreshing the inbox, the list and the overview', async () => {
+    rpc.mockResolvedValue({ error: null });
+    expect(await deleteStudent(STUDENT, 'support')).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith('admin_delete_user', { p_user_id: STUDENT });
+    expect(revalidatePath).toHaveBeenCalledWith('/support');
+    expect(revalidatePath).toHaveBeenCalledWith('/students');
+    expect(revalidatePath).toHaveBeenCalledWith('/');
+  });
+
   it('maps the RPC errors', async () => {
     rpc.mockResolvedValue({ error: { code: '42501', message: 'FORBIDDEN' } });
     expect(await deleteStudent(STUDENT)).toEqual({ ok: false, code: 'FORBIDDEN' });

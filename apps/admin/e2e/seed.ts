@@ -1,7 +1,16 @@
-import { addDays, todayIn } from '@awrad/domain';
+import { addDays, todayIn, weekStartFor } from '@awrad/domain';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { OTHER_GROUP_NAME, SEEDED_LOGS, TEST_GROUP_NAME, TEST_TIMEZONE, TEST_USERS } from './users';
+import {
+  DELETION_REQUESTER,
+  OTHER_GROUP_NAME,
+  SEEDED_LOGS,
+  SEEDED_SUPPORT,
+  TEST_GROUP_NAME,
+  TEST_TIMEZONE,
+  TEST_USERS,
+  type TestUserKey,
+} from './users';
 
 /** Service-role client for the signed-in tier, or null when no Supabase stack is configured. */
 export function serviceClient(): SupabaseClient | null {
@@ -52,16 +61,16 @@ async function sessionFor(db: SupabaseClient, email: string): Promise<SupabaseCl
 type Outcome = (typeof SEEDED_LOGS)[number]['outcome'];
 
 /**
- * save_log's p_entries for `date`: every active daily habit done (checklists with every active item
- * checked), or, for `failed`, every tristate habit not_done, so the day is failed under any
+ * save_log's p_entries for a `frequency` log on `date`: every active habit done (checklists with every
+ * active item checked), or, for `failed`, every tristate habit not_done, so the day is failed under any
  * streak_threshold_pct (the checklists alone stay below it). Habits are data (AGENTS.md §3).
  */
-async function dailyEntries(client: SupabaseClient, date: string, outcome: Outcome) {
+async function entriesFor(client: SupabaseClient, frequency: 'daily' | 'weekly', date: string, outcome: Outcome) {
   const habits = check(
     await client
       .from('habits')
       .select('id, kind')
-      .eq('frequency', 'daily')
+      .eq('frequency', frequency)
       .lte('active_from', date)
       .or(`active_to.is.null,active_to.gte.${date}`)
       .order('sort_order'),
@@ -80,13 +89,21 @@ async function dailyEntries(client: SupabaseClient, date: string, outcome: Outco
   const failed = outcome === 'failed';
   if (failed && !habits.some((h) => h.kind === 'tristate')) {
     // Without one the "failed" day would silently be saved as all done.
-    throw new Error(`seed: no active daily tristate habit on ${date} to mark not_done`);
+    throw new Error(`seed: no active ${frequency} tristate habit on ${date} to mark not_done`);
   }
   return habits.map((h) =>
     h.kind === 'checklist'
       ? { habit_id: h.id, status: 'done', checked_item_ids: items.filter((i) => i.habit_id === h.id).map((i) => i.id) }
       : { habit_id: h.id, status: failed ? 'not_done' : 'done' },
   );
+}
+
+/** The start of the current week of the test group (its week_starts_on), in TEST_TIMEZONE. */
+async function currentWeekStart(db: SupabaseClient): Promise<string> {
+  const group = check(
+    await db.from('groups').select('week_starts_on').eq('name', TEST_GROUP_NAME).limit(1).single(),
+  ).data as { week_starts_on: 0 | 1 | 2 | 3 | 4 | 5 | 6 };
+  return weekStartFor(todayIn(TEST_TIMEZONE), group.week_starts_on);
 }
 
 /**
@@ -105,21 +122,134 @@ async function seedLogs(db: SupabaseClient, ids: Map<string, string>): Promise<v
         p_user_id: ids.get(log.user),
         p_period: 'daily',
         p_period_start: date,
-        p_entries: await dailyEntries(admin, date, log.outcome),
+        p_entries: await entriesFor(admin, 'daily', date, log.outcome),
       });
       if (saved.error) throw saved.error;
     }
+
+    // SEEDED_SUPPORT: a weekly log with a review and a support request → support_status 'open'.
+    const week = await currentWeekStart(db);
+    const weekly = await admin.rpc('save_log', {
+      p_user_id: ids.get(SEEDED_SUPPORT.user),
+      p_period: 'weekly',
+      p_period_start: week,
+      p_entries: await entriesFor(admin, 'weekly', week, 'achieved'),
+      p_review_text: SEEDED_SUPPORT.review,
+      p_support_request_text: SEEDED_SUPPORT.request,
+    });
+    if (weekly.error) throw weekly.error;
   } finally {
     // This session only (the signed-in sessions the setup project saves stay valid).
     await admin.auth.signOut({ scope: 'local' });
   }
 }
 
+type GroupIds = Record<'test' | 'other', string>;
+
 /**
- * Playwright global setup: brings the tier (b) accounts to a known state. Every step converges,
- * so a run interrupted half-way is repaired by the next one: the group and invitation are reused, the
- * auth user is created only if missing (the `handle_new_user` trigger builds its profile from the
- * invitation), then the profile and the supervisor link are set explicitly.
+ * Brings one TEST_USERS account to its known state: the auth user is created only if missing (the
+ * `handle_new_user` trigger builds its profile from a pending invitation), then the profile and the
+ * supervisor link are set explicitly. Returns the profile id.
+ */
+async function ensureUser(
+  db: SupabaseClient,
+  key: TestUserKey,
+  groupIds: GroupIds,
+  joinedAt: string,
+  existingId: string | undefined,
+): Promise<string> {
+  const user = TEST_USERS[key];
+  const profile = {
+    full_name: user.fullName,
+    role: user.role,
+    group_id: user.group ? groupIds[user.group] : null,
+    is_tracked: user.isTracked,
+    joined_at: joinedAt,
+  };
+
+  let userId = existingId;
+  if (!userId) {
+    // A deleted account leaves its accepted invitation behind (support.spec.ts deletes p4 each run).
+    check(await db.from('invitations').delete().eq('email', user.email).not('accepted_at', 'is', null));
+    await ensureInvitation(db, { email: user.email, ...profile });
+    const created = await db.auth.admin.createUser({
+      email: user.email,
+      email_confirm: true,
+      user_metadata: { full_name: user.fullName },
+    });
+    if (created.error) throw created.error;
+    userId = created.data.user.id;
+  }
+
+  check(await db.from('profiles').update({ ...profile, is_active: true }).eq('id', userId));
+  if (user.role === 'supervisor' && user.group) {
+    check(
+      await db
+        .from('group_supervisors')
+        .upsert(
+          { group_id: groupIds[user.group], user_id: userId },
+          { onConflict: 'group_id,user_id', ignoreDuplicates: true },
+        ),
+    );
+  }
+  return userId;
+}
+
+async function userIdOf(db: SupabaseClient, email: string): Promise<string | undefined> {
+  const listed = await db.auth.admin.listUsers({ perPage: 1000 });
+  if (listed.error) throw listed.error;
+  return listed.data.users.find((user) => user.email?.toLowerCase() === email)?.id;
+}
+
+/**
+ * What support.spec.ts starts from, restored with the service role (test fixture, not app writes):
+ * p1's seeded weekly request back to 'open' with the handled fields cleared, and DELETION_REQUESTER
+ * present (re-created after a run deleted it) with one open deletion request. Converges when run again,
+ * so the seed and every project's run of the spec start from the same state.
+ */
+export async function resetSupportFixtures(db: SupabaseClient | null = serviceClient()): Promise<void> {
+  if (!db) return;
+  const p1 = await userIdOf(db, TEST_USERS[SEEDED_SUPPORT.user].email);
+  if (!p1) throw new Error('seed: p1 is missing; run the global setup first');
+  check(
+    await db
+      .from('logs')
+      .update({
+        support_request_text: SEEDED_SUPPORT.request,
+        support_status: 'open',
+        handled_by: null,
+        handled_at: null,
+        handled_note: null,
+      })
+      .eq('user_id', p1)
+      .eq('period', 'weekly')
+      .eq('period_start', await currentWeekStart(db)),
+  );
+
+  const groupIds: GroupIds = {
+    test: await ensureGroup(db, TEST_GROUP_NAME),
+    other: await ensureGroup(db, OTHER_GROUP_NAME),
+  };
+  const email = TEST_USERS[DELETION_REQUESTER].email;
+  const requester = await ensureUser(
+    db,
+    DELETION_REQUESTER,
+    groupIds,
+    addDays(todayIn(TEST_TIMEZONE), -30),
+    await userIdOf(db, email),
+  );
+  const open = check(
+    await db.from('deletion_requests').select('id').eq('user_id', requester).is('handled_at', null).maybeSingle(),
+  );
+  // Asked "today" every time, so the spec's 30-day deadline is known.
+  if (open.data) check(await db.from('deletion_requests').update({ requested_at: new Date().toISOString() }).eq('id', open.data.id));
+  else check(await db.from('deletion_requests').insert({ user_id: requester }));
+}
+
+/**
+ * Playwright global setup: brings the tier (b) accounts to a known state (ensureUser), saves the known
+ * logs and restores the support fixtures. Every step converges, so a run interrupted half-way is
+ * repaired by the next one.
  */
 export default async function seed(): Promise<void> {
   const db = serviceClient();
@@ -136,40 +266,10 @@ export default async function seed(): Promise<void> {
   if (listed.error) throw listed.error;
   const existing = new Map(listed.data.users.map((user) => [user.email?.toLowerCase(), user.id]));
 
-  for (const [key, user] of Object.entries(TEST_USERS)) {
-    const profile = {
-      full_name: user.fullName,
-      role: user.role,
-      group_id: user.group ? groupIds[user.group] : null,
-      is_tracked: user.isTracked,
-      joined_at: joinedAt,
-    };
-
-    let userId = existing.get(user.email);
-    if (!userId) {
-      await ensureInvitation(db, { email: user.email, ...profile });
-      const created = await db.auth.admin.createUser({
-        email: user.email,
-        email_confirm: true,
-        user_metadata: { full_name: user.fullName },
-      });
-      if (created.error) throw created.error;
-      userId = created.data.user.id;
-    }
-
-    ids.set(key, userId);
-    check(await db.from('profiles').update({ ...profile, is_active: true }).eq('id', userId));
-    if (user.role === 'supervisor' && user.group) {
-      check(
-        await db
-          .from('group_supervisors')
-          .upsert(
-            { group_id: groupIds[user.group], user_id: userId },
-            { onConflict: 'group_id,user_id', ignoreDuplicates: true },
-          ),
-      );
-    }
+  for (const key of Object.keys(TEST_USERS) as TestUserKey[]) {
+    ids.set(key, await ensureUser(db, key, groupIds, joinedAt, existing.get(TEST_USERS[key].email)));
   }
 
   await seedLogs(db, ids);
+  await resetSupportFixtures(db);
 }

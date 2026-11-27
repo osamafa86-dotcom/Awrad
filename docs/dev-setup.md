@@ -76,10 +76,15 @@ pnpm --filter admin e2e         # Playwright: يبني ثم يشغّل next star
 - **(ب) بتسجيل دخول — تحتاج حزمة Supabase.** تُتخطّى ما لم تُضبط `E2E_SUPABASE_URL` و`E2E_SERVICE_ROLE_KEY`.
   `e2e/seed.ts` (إعداد Playwright العام) يُنشئ مجموعتَي اختبار ودعوات وحسابات (مُشغِّل `handle_new_user` يبني الملفات):
   `admin@` (مدير بلا مجموعة، غير مُتابَع)، و`sup1@`/`p1@`/`p3@test.example` في «مجموعة اختبار اللوحة» و`sup1` مشرفها،
-  و`sup2@`/`p2@test.example` في «مجموعة اختبار أخرى» و`sup2` مشرفها (كل المشرفين والطلاب مُتابَعون)؛
+  و`sup2@`/`p2@test.example` في «مجموعة اختبار أخرى» و`sup2` مشرفها (كل المشرفين والطلاب مُتابَعون)،
+  و`p4@test.example` «طالب يطلب الحذف» في «مجموعة اختبار اللوحة» بطلب حذف حساب مفتوح (يُدرج بمفتاح الخدمة)؛
   والدخول عبر الواجهة برمز يولّده `auth.admin.generateLink`.
   ثم يحفظ سجلّات يومية معلومة لـ `p1` و`p3` عبر `save_log` بجلسة المدير (`generateLink` ثم `verifyOtp` بالمفتاح العام
   `E2E_SUPABASE_ANON_KEY`)، بتواريخ نسبية إلى اليوم بمنطقة `Asia/Riyadh`؛ فحزمة تبقى أيامًا تحتفظ بسجلّات الأيام السابقة أيضًا.
+  ويحفظ لـ `p1` سجلّ الأسبوع الحالي (بداية أسبوع مجموعته) بمراجعة «مراجعة الأسبوع التجريبية» وطلب دعم
+  «أحتاج مساعدة في ورد القيام» فتكون حالته `open` (BR-10). `resetSupportFixtures()` في `e2e/seed.ts` يعيد بمفتاح الخدمة
+  هذا الطلب مفتوحًا (ويُفرغ حقول المعالجة) ويعيد إنشاء `p4` وطلبه إن حُذفا؛ تستدعيه البذرة ويستدعيه `e2e/support.spec.ts`
+  قبل الملف وبعده، لأن مشروعَي `desktop` و`mobile` يعالجان الطلب ويحذفان `p4` كلٌّ في دوره.
 
 تشغيل الطبقة (ب) محليًا (يحتاج Docker):
 ```bash
@@ -111,6 +116,19 @@ pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/00
 ```
 الصفحة `/habits` (للمدير؛ `?tab=weekly` يفتح الأسبوعية): التعديل في المكان والترتيب والأرشفة عبر Server Actions في
 `src/actions/habits.ts` تحت RLS، والاستبدال عبر الـ RPC. الترتيب بالسحب يكتب `sort_order` صفًّا صفًّا (انظر `docs/backlog.md`).
+
+### طلبات الدعم (F-64, BR-10) — ترحيل 0010
+`supabase/migrations/0010_support.sql`: RPC `handle_support_request(p_log_id, p_note)` للمدير أو مشرف مجموعة صاحب السجلّ
+(`FORBIDDEN` لغيرهما، و`INVALID_ITEM` لسجلّ غير موجود أو بلا طلب): تضبط `support_status = 'handled'` و`handled_by/at`
+و`handled_note` (تُقصّ، والفارغة `null`) وتكتب صفّ تدقيق `support.handle`. إعادة الفتح حين يعدّل الطالب النصّ تبقى في
+`save_log` (0006) التي تُفرغ حقول المعالجة. بعد إضافته: `pnpm db:reset` ثم `pnpm db:types`. اختباراته:
+```bash
+pnpm --filter @awrad/db exec vitest run --config tests/vitest.config.ts tests/0010_support.test.ts
+```
+الصفحة `/support` (المدير والمشرف؛ `?tab=open|handled|deletion`): «المفتوحة» و«المعالَجة» (آخر 90 يومًا) بـ RLS، وللمدير
+وحده «طلبات حذف الحساب» (الطلبات المفتوحة، وآخر موعد بعد 30 يومًا، و«متأخّر» بعده): «حذف نهائي» يستدعي `deleteStudent(id, 'support')`
+(`admin_delete_user`؛ صفّ الطلب يُحذف مع الحساب، وصفّ التدقيق هو السجلّ) و«رفض الطلب» يضبط `handled_at/handled_by`
+تحت RLS المدير. بطاقة «طلبات دعم مفتوحة» في النظرة العامة تفتح `/support`.
 
 ### دعوة طالب (F-01) ودالة `invite-user`
 مسار الدعوة: نموذج «دعوة طالب» (`/students/new`) ← Server Action `inviteStudent` (يتحقّق بـ zod، والدور ثابت `student`)

@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ActivityRow } from '@/components/overview/ActivityRow';
-import { KpiCard } from '@/components/overview/KpiCards';
+import { KpiCard, KpiCards } from '@/components/overview/KpiCards';
 import { periodDates, type OverviewRow } from '@/lib/overview';
 import { ar } from '@/messages/ar';
 
@@ -25,6 +25,16 @@ describe('KpiCard', () => {
     expect(card).toHaveAttribute('data-variant', 'alert');
     expect(within(card).getByRole('img', { name: t.alertMark })).toBeInTheDocument();
     expect(within(card).getByText('4')).toBeInTheDocument();
+  });
+});
+
+describe('KpiCards', () => {
+  it('«طلبات دعم مفتوحة» opens the support inbox; the other cards are not links', () => {
+    render(<KpiCards kpis={{ loggedThisWeekPct: 80, inactive3DaysCount: 1, openSupportCount: 2 }} shown={5} />);
+    const link = screen.getByRole('link', { name: new RegExp(t.kpis.openSupport) });
+    expect(link).toHaveAttribute('href', '/support');
+    expect(within(link).getByRole('group', { name: t.kpis.openSupport })).toBeInTheDocument();
+    expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 });
 

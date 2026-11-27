@@ -1,4 +1,5 @@
 import { TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import { useId } from 'react';
 
 import type { OverviewKpis } from '@/lib/overview';
@@ -13,12 +14,14 @@ export interface KpiCardProps {
   caption?: string;
   /** DESIGN.md §6 `KpiCard` تنبيه: something needs the شيخ's attention. */
   alert?: boolean;
+  /** Where the card leads (the whole card is the link), e.g. the support inbox. */
+  href?: string;
 }
 
 /** DESIGN.md §6 `KpiCard` (عادية · تنبيه): a label, a big number and a line under it. Labels wrap. */
-export function KpiCard({ label, value, caption, alert = false }: KpiCardProps) {
+export function KpiCard({ label, value, caption, alert = false, href }: KpiCardProps) {
   const labelId = useId();
-  return (
+  const card = (
     <div
       role="group"
       aria-labelledby={labelId}
@@ -40,9 +43,21 @@ export function KpiCard({ label, value, caption, alert = false }: KpiCardProps) 
       {caption ? <p className="t-caption text-fg-secondary">{caption}</p> : null}
     </div>
   );
+  if (!href) return card;
+  return (
+    <Link
+      href={href}
+      className="flex min-w-0 flex-1 rounded-2xl outline-none hover:[&>div]:bg-action-tint focus-visible:ring-2 focus-visible:ring-line-focus"
+    >
+      {card}
+    </Link>
+  );
 }
 
-/** The three overview KPIs (spec §11.2); the inactive and open-support cards turn to alert above zero. */
+/**
+ * The three overview KPIs (spec §11.2); the inactive and open-support cards turn to alert above zero, and the
+ * open-support card opens the support inbox (admins and supervisors both reach /support).
+ */
 export function KpiCards({ kpis, shown }: { kpis: OverviewKpis; shown: number }) {
   return (
     <div className="flex flex-col gap-16 md:flex-row">
@@ -62,6 +77,7 @@ export function KpiCards({ kpis, shown }: { kpis: OverviewKpis; shown: number })
         value={String(kpis.openSupportCount)}
         caption={t.kpiCaptions.openSupport}
         alert={kpis.openSupportCount > 0}
+        href="/support"
       />
     </div>
   );

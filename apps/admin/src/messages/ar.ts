@@ -442,6 +442,75 @@ export const ar = {
       SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
     },
   },
+  support: {
+    title: 'طلبات الدعم',
+    subtitle: 'ما يطلبه الطلاب في مراجعاتهم الأسبوعية، وطلبات حذف الحساب.',
+    tabsLabel: 'أقسام طلبات الدعم',
+    tabs: { open: 'المفتوحة', handled: 'المعالَجة', deletion: 'طلبات حذف الحساب' },
+    /** The count beside a tab's name, bidi-isolated (DESIGN.md §7 rule 4). */
+    count: (n: number) => isolate(String(n)),
+    /** A request on a daily log (they come from weekly logs; shown if one ever does). */
+    frequency: { daily: 'يومي', weekly: 'أسبوعي' },
+    /** «أسبوع 12 جمادى الآخرة 1448هـ · 22 نوفمبر 2026» (the week's first day). */
+    week: (hijri: string, gregorian: string) => `أسبوع ${hijri} · ${gregorian}`,
+    /** A daily log's day. */
+    day: (hijri: string, gregorian: string) => `${hijri} · ${gregorian}`,
+    noGroup: 'بلا مجموعة',
+    unknownStudent: 'طالب',
+    review: 'المراجعة',
+    noReview: 'لم يكتب مراجعة.',
+    request: 'طلب الدعم',
+    handledNote: 'الملاحظة الداخلية',
+    noNote: 'بلا ملاحظة.',
+    /** «عالجه مشرف المجموعة في 26 نوفمبر 2026» */
+    handledBy: (name: string, date: string) => `عالجه ${name} في ${date}`,
+    /** When the viewer may not read the handler's profile. */
+    handledOn: (date: string) => `عولج في ${date}`,
+    handledWindow: 'تظهر هنا الطلبات المعالَجة في آخر 90 يومًا.',
+    empty: {
+      open: { title: 'لا طلبات مفتوحة', body: 'تظهر هنا طلبات الدعم التي يكتبها الطلاب في مراجعاتهم الأسبوعية.' },
+      handled: { title: 'لا طلبات معالَجة', body: 'تظهر هنا الطلبات التي عولجت في آخر 90 يومًا.' },
+      deletion: {
+        title: 'لا طلبات حذف',
+        body: 'يطلب الطالب حذف حسابه من إعدادات التطبيق، ويُنفَّذ الطلب من هنا خلال 30 يومًا.',
+      },
+    },
+    /** a05 */
+    handle: {
+      open: 'تمّت المعالجة',
+      title: 'معالجة طلب الدعم',
+      student: 'الطالب',
+      week: 'الأسبوع',
+      note: 'ملاحظة داخلية (اختياري)',
+      noteHint: 'لا يراها الطالب؛ تظهر للمدير ولمشرف المجموعة.',
+      cancel: 'إلغاء',
+      submit: 'تمّت المعالجة',
+      submitting: 'جارٍ الحفظ…',
+    },
+    deletion: {
+      /** «طُلب في 27 نوفمبر 2026» */
+      requestedOn: (date: string) => `طُلب في ${date}`,
+      /** «آخر موعد للتنفيذ: 27 ديسمبر 2026» */
+      deadline: (date: string) => `آخر موعد للتنفيذ: ${date}`,
+      overdue: 'متأخّر',
+      delete: 'حذف نهائي',
+      dismiss: 'رفض الطلب',
+      dismissing: 'جارٍ الرفض…',
+      confirmTitle: (name: string) => `حذف حساب ${name} نهائيًا؟`,
+      confirmBody: 'يُحذف الحساب وكل سجلّاته وحضوره، ولا يمكن التراجع.',
+      confirm: 'احذف نهائيًا',
+      deleting: 'جارٍ الحذف…',
+      cancel: 'إلغاء',
+    },
+    loadFailed: 'تعذّر تحميل طلبات الدعم. تحقّق من الاتصال وأعد تحميل الصفحة.',
+    /** Display text for each code a support Server Action returns. */
+    errors: {
+      FORBIDDEN: 'لا تملك صلاحية معالجة هذا الطلب.',
+      INVALID_INPUT: 'الملاحظة طويلة؛ اختصرها إلى 2000 حرف.',
+      INVALID_ITEM: 'لم يعد هذا الطلب قائمًا. أعد تحميل الصفحة.',
+      SAVE_FAILED: 'تعذّر الحفظ. تحقّق من الاتصال وحاول مرة أخرى.',
+    },
+  },
   unauthorized: {
     /** a30: a student (or an account without a profile) opened the dashboard. */
     staffOnlyTitle: 'هذه اللوحة للمشرفين',
