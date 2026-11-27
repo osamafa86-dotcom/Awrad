@@ -24,7 +24,18 @@ jest.mock('../src/hooks/SessionProvider', () => ({
 jest.mock('../src/lib/supabase', () => ({ supabase: jest.requireActual('./helpers/today-fixture').fakeSupabase }));
 jest.mock('@awrad/supabase-client', () => ({
   fetchActiveHabits: () => Promise.resolve([]),
-  getStudentSummary: () => Promise.resolve({ currentStreak: 0 }),
+  // A complete summary (the Summary tab renders it) with no habits, so the only buttons are the tabs'.
+  getStudentSummary: () =>
+    Promise.resolve({
+      daysLogged: 3,
+      completionPct: 50,
+      attendancePct: null,
+      longestStreak: 0,
+      currentStreak: 0,
+      perHabit: [],
+      weekly: null,
+    }),
+  getCalendar: () => Promise.resolve([]),
   saveLog: jest.fn(),
   parseRpcError: () => 'UNKNOWN',
 }));
@@ -40,9 +51,9 @@ const routes = {
 
 describe('tab bar', () => {
   it('shows the five Arabic tabs in order: today, weekly, summary, history, settings', async () => {
-    await renderRouter(routes, { initialUrl: '/summary' });
+    await renderRouter(routes, { initialUrl: '/history' });
 
-    // The tab bar's buttons are the only buttons on a placeholder screen.
+    // The tab bar's buttons are the only buttons on a placeholder screen (the History tab).
     const tabs = await screen.findAllByRole('button');
     const expected = [ar.tabs.today, ar.tabs.weekly, ar.tabs.summary, ar.tabs.history, ar.tabs.settings];
     expect(tabs.map((tab) => tab.props.accessibilityLabel)).toEqual(expected);

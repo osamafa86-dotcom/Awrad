@@ -59,7 +59,7 @@ export function WeekHeader({
   );
 }
 
-function NavButton({
+export function NavButton({
   label,
   icon: Icon,
   enabled,

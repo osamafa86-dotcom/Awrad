@@ -1,6 +1,5 @@
-import { PlaceholderScreen } from '../../src/components/PlaceholderScreen';
-import { ar } from '../../src/messages/ar';
+import { SummaryView } from '../../src/components/SummaryView';
 
 export default function SummaryScreen() {
-  return <PlaceholderScreen title={ar.tabs.summary} />;
+  return <SummaryView />;
 }

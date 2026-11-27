@@ -18,6 +18,39 @@ function remainingText(n: number): string {
   return `بقي ${countText(n, 'بند واحد', 'بندان', 'بنود', 'بندًا')}`;
 }
 
+/** Keeps a number (and its «%») in order inside RTL text on every platform. */
+function isolate(text: string): string {
+  return `\u2066${text}\u2069`;
+}
+
+/** «أسبوع واحد» · «أسبوعان» · «5 أسابيع» · «11 أسبوعًا». */
+function weeksText(n: number): string {
+  return n === 0 ? `${n} أسبوع` : countText(n, 'أسبوع واحد', 'أسبوعان', 'أسابيع', 'أسبوعًا');
+}
+
+const gregorianMonths = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'مايو',
+  'يونيو',
+  'يوليو',
+  'أغسطس',
+  'سبتمبر',
+  'أكتوبر',
+  'نوفمبر',
+  'ديسمبر',
+] as const;
+
+const summaryStates = {
+  achieved: 'مُنجَز',
+  failed: 'غير مُنجَز',
+  neutral: 'بلا تكليف',
+  missing: 'غير مسجَّل',
+  future: 'لم يأتِ بعد',
+} as const;
+
 export const ar = {
   app: {
     name: 'أوراد',
@@ -31,6 +64,9 @@ export const ar = {
   },
   common: {
     comingSoon: 'قريبًا',
+    /** A value that is not available (no data yet). */
+    dash: '—',
+    retry: 'إعادة المحاولة',
   },
   auth: {
     loginTitle: 'تسجيل الدخول',
@@ -73,20 +109,7 @@ export const ar = {
     relToday: 'اليوم',
     relYesterday: 'أمس',
     weekdays: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
-    gregorianMonths: [
-      'يناير',
-      'فبراير',
-      'مارس',
-      'أبريل',
-      'مايو',
-      'يونيو',
-      'يوليو',
-      'أغسطس',
-      'سبتمبر',
-      'أكتوبر',
-      'نوفمبر',
-      'ديسمبر',
-    ],
+    gregorianMonths,
     /** «اليوم، الخميس» · «أمس، الأربعاء» · «الثلاثاء» */
     dayLabel: (relative: string | null, weekday: string) =>
       relative ? `${relative}، ${weekday}` : weekday,
@@ -157,6 +180,44 @@ export const ar = {
       achieved: 'حُفظ ✓ — أسبوع مُنجَز',
       failed: (remaining: number) => `حُفظ ✓ — ${remainingText(remaining)}`,
       neutral: 'أسبوع بلا تكليف',
+    },
+  },
+  summary: {
+    loading: 'جارٍ تحميل ملخّصك…',
+    loadFailed: 'تعذّر تحميل ملخّصك. تحقّق من الاتصال وأعد المحاولة.',
+    calendarFailed: 'تعذّر تحميل التقويم.',
+    rangeLabel: 'مدى الملخّص',
+    range: { d30: '30 يومًا', d90: '90 يومًا', all: 'الكل' },
+    stats: {
+      daysLogged: 'أيام مسجَّلة',
+      completion: 'نسبة الإنجاز',
+      attendance: 'نسبة الحضور',
+      longestStreak: 'أطول سلسلة',
+      currentStreak: 'السلسلة الحالية',
+    },
+    /** «91%» with the number kept in order. */
+    pct: (n: number) => isolate(`${n}%`),
+    habitsTitle: 'نسبة كل عادة',
+    /** «الأسبوعي: 11 أسبوعًا · 84%» */
+    weekly: (weeks: number, pct: number | null) =>
+      `الأسبوعي: ${weeksText(weeks)} · ${pct === null ? '—' : isolate(`${pct}%`)}`,
+    prevMonth: 'الشهر السابق',
+    nextMonth: 'الشهر التالي',
+    /** «نوفمبر 2026» for a `YYYY-MM` month. */
+    monthYear: (month: string) => {
+      const [y, m] = month.split('-').map(Number);
+      return `${gregorianMonths[(m ?? 1) - 1] ?? ''} ${y ?? ''}`;
+    },
+    /** One-letter weekday names indexed 0 = Sunday. */
+    weekdayShort: ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'],
+    state: summaryStates,
+    /** «26 نوفمبر: مُنجَز» */
+    cellLabel: (dayLabel: string, stateLabel: string) => `${dayLabel}: ${stateLabel}`,
+    todaySuffix: (stateLabel: string) => `${stateLabel}، اليوم`,
+    empty: {
+      title: 'لم تسجّل بعد',
+      body: 'يظهر ملخّصك بعد أول تسجيل لوردك اليومي',
+      action: 'سجّل يومك',
     },
   },
   errors: {
