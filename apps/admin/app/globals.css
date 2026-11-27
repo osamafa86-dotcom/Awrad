@@ -1,0 +1,103 @@
+/* Tailwind 4, CSS-first. Every colour, space, radius and font utility resolves to a design token from
+   @awrad/design-tokens (DESIGN.md §4–5); Tailwind's default palette and scales are switched off so a
+   literal value cannot slip in through a utility. */
+@import "tailwindcss";
+@import "@awrad/design-tokens/tokens.css";
+
+@theme inline {
+  --color-*: initial;
+  /* bg/* */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-raised: var(--bg-raised);
+  --color-sunken: var(--bg-sunken);
+  --color-brand: var(--bg-brand);
+  --color-brand-active: var(--bg-brand-active);
+  --color-brand-raised: var(--bg-brand-raised);
+  --color-scrim: var(--bg-scrim);
+  /* text/* */
+  --color-fg-primary: var(--text-primary);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-on-brand: var(--text-on-brand);
+  --color-on-primary: var(--text-on-primary);
+  --color-link: var(--text-link);
+  /* border/* */
+  --color-line-subtle: var(--border-subtle);
+  --color-line-default: var(--border-default);
+  --color-line-input: var(--border-input);
+  --color-line-strong: var(--border-strong);
+  --color-line-focus: var(--border-focus);
+  /* action/* */
+  --color-action: var(--action-primary);
+  --color-action-pressed: var(--action-primary-pressed);
+  --color-action-tint: var(--action-primary-tint);
+  /* gold/* — completion only (DESIGN.md §7 rule 1) */
+  --color-gold-gilt: var(--gold-gilt);
+  --color-gold-text: var(--gold-text);
+  --color-gold-tint: var(--gold-tint);
+  --color-gold-on-brand: var(--gold-on-brand);
+  /* status/* */
+  --color-status-done: var(--status-done);
+  --color-status-done-fill: var(--status-done-fill);
+  --color-status-done-tint: var(--status-done-tint);
+  --color-status-done-hatch: var(--status-done-hatch);
+  --color-status-notdone: var(--status-notdone);
+  --color-status-notdone-tint: var(--status-notdone-tint);
+  --color-status-neutral: var(--status-neutral);
+  --color-status-neutral-tint: var(--status-neutral-tint);
+  --color-status-missing: var(--status-missing);
+
+  /* Spacing: the token names are pixel values (space/16 = 16px), so the numeric scale counts pixels
+     too: p-16 is the space/16 token, h-44 a 44px touch target (DESIGN.md §5). */
+  --spacing-*: initial;
+  --spacing: 1px;
+  --spacing-2: var(--space-2);
+  --spacing-4: var(--space-4);
+  --spacing-8: var(--space-8);
+  --spacing-12: var(--space-12);
+  --spacing-16: var(--space-16);
+  --spacing-20: var(--space-20);
+  --spacing-24: var(--space-24);
+  --spacing-32: var(--space-32);
+  --spacing-40: var(--space-40);
+  --spacing-48: var(--space-48);
+  --spacing-64: var(--space-64);
+
+  --radius-*: initial;
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
+
+  --font-*: initial;
+  --font-ui: var(--font-ui);
+  --font-display: var(--font-display);
+}
+
+/* next/font self-hosts the two families (app/layout.tsx) and exposes them as --font-plex-arabic and
+   --font-markazi on <html>; they feed the token stacks so the t-* typography classes use them. Same
+   specificity as tokens.css's :root and declared after it, so this wins. */
+:root {
+  --font-ui: var(--font-plex-arabic), "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif;
+  --font-display: var(--font-markazi), "Markazi Text", "Noto Naskh Arabic", serif;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+/* Sheet (drawer) motion. */
+@keyframes sheet-in {
+  from { translate: -100% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sheet] { animation: none !important; }
+}
