@@ -45,6 +45,7 @@ export function WeekHeader({
   return (
     <View style={{ gap: space.s8, alignItems: 'center' }}>
       <Text
+        testID="week-title"
         accessibilityRole="header"
         style={[type.titleLg, { color: colors.textPrimary, textAlign: 'center' }]}
       >
@@ -80,7 +81,7 @@ export function NavButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !enabled }}
+      aria-disabled={!enabled}
       disabled={!enabled}
       onPress={onPress}
       hitSlop={NAV_SLOP}

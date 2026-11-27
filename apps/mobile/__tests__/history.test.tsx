@@ -131,6 +131,16 @@ describe('history list — daily', () => {
     expect(row('2026-11-23').props.accessibilityHint).toBe(ar.history.readOnlyHint);
   });
 
+  test('a screen reader hears the date, the day state and the editable badge (not just the dates)', async () => {
+    await renderHistory();
+    const hijri = toHijri('2026-11-25').formatted;
+    const gregorian = ar.today.gregorianDate(25, 'نوفمبر', 2026);
+    expect(row('2026-11-25').props.accessibilityLabel).toBe(
+      `${hijri}، ${gregorian}، ${ar.history.chip.failed}، ${ar.history.editable}`,
+    );
+    expect(row('2026-11-26').props.accessibilityLabel).toContain(ar.history.chip.achieved);
+  });
+
   test('tapping a row pushes the detail route', async () => {
     await renderHistory();
     await fireEvent.press(row('2026-11-24'));

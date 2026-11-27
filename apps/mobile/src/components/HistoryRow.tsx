@@ -12,6 +12,8 @@ export interface HistoryRowProps {
   secondary: string;
   /** Trailing state (a StatusChip for days, plain text for weeks). */
   chip?: ReactNode;
+  /** The chip's text, so the row's accessible name carries the state too. */
+  stateLabel?: string;
   /** Still open for editing (BR-05/BR-06): false shows the lock. */
   editable: boolean;
   /** Show the «قابل للتعديل» badge (editable rows other than today). */
@@ -26,6 +28,7 @@ export function HistoryRow({
   primary,
   secondary,
   chip,
+  stateLabel,
   editable,
   showEditableBadge = false,
   onPress,
@@ -33,11 +36,15 @@ export function HistoryRow({
   lockTestID,
 }: HistoryRowProps) {
   const { colors, radius, space, type } = useTheme();
+  // The label replaces the row's children for screen readers, so it repeats everything visible.
+  const label = [primary, secondary, stateLabel, showEditableBadge ? ar.history.editable : null]
+    .filter(Boolean)
+    .join('، ');
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={`${primary}، ${secondary}`}
+      accessibilityLabel={label}
       accessibilityHint={editable ? undefined : ar.history.readOnlyHint}
       onPress={onPress}
       style={({ pressed }) => ({

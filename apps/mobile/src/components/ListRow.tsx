@@ -57,7 +57,7 @@ export function ListRow(props: ListRowProps) {
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={value ? `${title}، ${value}` : title}
-      accessibilityState={{ disabled }}
+      aria-disabled={disabled}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

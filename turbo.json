@@ -1,13 +1,39 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "lint": {},
-    "format": { "cache": false },
-    "typecheck": { "dependsOn": ["^typecheck"] },
-    "test": { "env": ["SUPABASE_DB_URL"] },
+    "lint": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/no-truncation.cjs",
+        "$TURBO_ROOT$/scripts/check-no-truncation.mjs"
+      ]
+    },
+    "format": {
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^typecheck"
+      ]
+    },
+    "test": {
+      "env": [
+        "SUPABASE_DB_URL"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/no-truncation.cjs"
+      ]
+    },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", ".expo/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        ".expo/**"
+      ]
     }
   }
 }

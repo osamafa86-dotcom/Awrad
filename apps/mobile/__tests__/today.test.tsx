@@ -308,7 +308,10 @@ describe('today screen', () => {
     await renderToday();
     await checkItems(4);
     await setAllTristate();
-    await fireEvent.press(screen.getByRole('button', { name: ar.today.notRequiredToday }));
+    const notRequired = screen.getByRole('checkbox', { name: ar.today.notRequiredToday });
+    expect(notRequired).not.toBeChecked();
+    await fireEvent.press(notRequired);
+    expect(screen.getByRole('checkbox', { name: ar.today.notRequiredToday })).toBeChecked();
     await pressSave();
     const checklist = savedInput().entries.find((e) => e.habitId === adhkar.id)!;
     expect(checklist.status).toBe('not_required');

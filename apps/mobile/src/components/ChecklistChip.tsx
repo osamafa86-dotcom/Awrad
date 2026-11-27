@@ -20,7 +20,8 @@ export function ChecklistChip({ label, checked, disabled = false, onToggle }: Ch
     <Pressable
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityState={{ checked, disabled }}
+      aria-checked={checked}
+      aria-disabled={disabled}
       disabled={disabled}
       onPress={onToggle}
       style={({ pressed }) => ({

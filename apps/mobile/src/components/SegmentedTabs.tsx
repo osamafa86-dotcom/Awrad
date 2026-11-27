@@ -32,7 +32,7 @@ export function SegmentedTabs<T extends string>({ options, value, onChange, labe
             key={o.value}
             accessibilityRole="tab"
             accessibilityLabel={o.label}
-            accessibilityState={{ selected }}
+            aria-selected={selected}
             onPress={() => onChange(o.value)}
             style={{
               flex: 1,

@@ -157,6 +157,7 @@ function DailyRow({ row }: { row: DailyLogRow }) {
       primary={row.hijri}
       secondary={row.gregorian}
       chip={row.state === 'unknown' ? undefined : <StatusChip state={row.state} />}
+      stateLabel={row.state === 'unknown' ? undefined : ar.history.chip[row.state]}
       editable={row.editable}
       showEditableBadge={row.editable && !row.isToday}
       onPress={() => router.push(`/log/daily/${row.date}`)}
@@ -173,6 +174,7 @@ function WeeklyRow({ row }: { row: WeeklyLogRow }) {
       primary={row.label}
       secondary={row.hijriRange}
       chip={<Text style={[type.labelSm, { color: colors.textSecondary }]}>{ar.history.weeklyLogged}</Text>}
+      stateLabel={ar.history.weeklyLogged}
       editable={row.editable}
       showEditableBadge={row.editable}
       onPress={() => router.push(`/log/weekly/${row.weekStart}`)}

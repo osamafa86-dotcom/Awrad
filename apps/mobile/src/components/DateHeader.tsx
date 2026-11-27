@@ -66,6 +66,7 @@ export function DateHeader(props: DateHeaderProps) {
         )}
       </View>
       <Text
+        testID="date-header-title"
         accessibilityRole="header"
         style={[type.displayHijri, { color: colors.textPrimary, textAlign: 'center' }]}
       >
@@ -102,7 +103,7 @@ function NavButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !enabled }}
+      aria-disabled={!enabled}
       disabled={!enabled}
       onPress={onPress}
       hitSlop={NAV_SLOP}

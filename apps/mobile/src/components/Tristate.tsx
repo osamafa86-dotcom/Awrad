@@ -74,7 +74,8 @@ export function Tristate({ value, onChange, label, disabled = false }: TristateP
             key={option}
             accessibilityRole="radio"
             accessibilityLabel={optionLabel}
-            accessibilityState={{ checked: selected, disabled }}
+            aria-checked={selected}
+            aria-disabled={disabled}
             disabled={disabled}
             onPress={() => onChange(option)}
             style={{

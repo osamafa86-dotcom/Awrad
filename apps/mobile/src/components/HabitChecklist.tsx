@@ -140,9 +140,11 @@ function ChecklistAction({
   const { colors, radius, space, type } = useTheme();
   return (
     <Pressable
-      accessibilityRole="button"
+      // A toggle («غير مطلوب اليوم») is announced as a checkbox with its state; a one-shot action as a button.
+      accessibilityRole={selected === undefined ? 'button' : 'checkbox'}
       accessibilityLabel={label}
-      accessibilityState={{ disabled, selected }}
+      aria-disabled={disabled}
+      aria-checked={selected}
       disabled={disabled}
       onPress={onPress}
       hitSlop={{ top: 6, bottom: 6 }}
