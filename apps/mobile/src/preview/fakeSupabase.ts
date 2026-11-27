@@ -2,6 +2,13 @@
 // directly, and preview mode (PREVIEW-2, EXPO_PUBLIC_PREVIEW=1) serves it instead of the real client so
 // every screen can be rendered and screenshotted with fixture data. Dev-only: Metro blocks this folder
 // unless preview mode is on (metro.config.js).
+//
+// Intentional divergences from PostgREST (it is a single-student fake, not a query engine):
+// - `user_id` filters on `logs` and `profiles` are recorded but not applied: there is one student.
+// - `push_tokens` `.delete()` removes rows matching the `token` filter when given, else the `user_id` one;
+//   other filters are ignored.
+// - `.limit()` is a no-op (the app only uses `limit(1)` as an existence check).
+// - `.or()` / `.lte()` on `habits` only drive the "active on date" check; other filter strings are ignored.
 import {
   addDays,
   computeDayStatus,
@@ -181,7 +188,9 @@ function builder(table: string) {
           return ok(null);
         }
         if (op === 'delete') {
-          fakeDb.pushTokens = fakeDb.pushTokens.filter((t) => t.user_id !== call.filters.user_id);
+          fakeDb.pushTokens = fakeDb.pushTokens.filter((t) =>
+            'token' in call.filters ? t.token !== call.filters.token : t.user_id !== call.filters.user_id,
+          );
           return ok(null);
         }
         return ok(fakeDb.pushTokens.filter((t) => t.user_id === call.filters.user_id));

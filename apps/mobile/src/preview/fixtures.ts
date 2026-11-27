@@ -128,6 +128,8 @@ export const PREVIEW_NOW = new Date('2026-11-26T09:00:00Z');
 export const PREVIEW_USER_ID = '00000000-0000-4000-8000-0000000000c1';
 export const PREVIEW_GROUP_ID = '00000000-0000-4000-8000-0000000000b1';
 const PREVIEW_JOINED = '2026-10-12';
+/** The review saved for the current week (2026-11-22), shown on the weekly preview. */
+export const PREVIEW_WEEK_REVIEW = 'أحتاج وقتًا أطول لدروس التزكية.';
 
 export const previewProfile = {
   id: PREVIEW_USER_ID,
@@ -239,7 +241,7 @@ export function seedPreviewDb(db: FakeDb): void {
     ['2026-10-25', ['done', 'not_done', 'done'], 1, null],
     ['2026-11-01', ['done', 'done', 'not_required'], 2, null],
     ['2026-11-15', ['done', 'done', 'done'], 2, 'ثبّتُّ حفظ جزء عمّ.'],
-    ['2026-11-22', ['done', 'done', 'not_done'], 1, 'أحتاج وقتًا أطول لدروس التزكية.'],
+    ['2026-11-22', ['done', 'done', 'not_done'], 1, PREVIEW_WEEK_REVIEW],
   ];
   for (const [start, statuses, items, review] of weeks) db.logs[`weekly:${start}`] = weeklyLog(start, statuses, items, review);
   db.attendance = [

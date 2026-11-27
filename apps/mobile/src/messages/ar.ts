@@ -56,6 +56,8 @@ const summaryStates = {
 export const ar = {
   app: {
     name: 'أوراد',
+    /** The system name under the app name on the sign-in screens (spec §11.1 m01). */
+    tagline: 'نظام متابعة الأوراد',
   },
   tabs: {
     today: 'اليوم',

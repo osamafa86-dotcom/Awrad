@@ -20,6 +20,8 @@ export function Toggle({ value, onValueChange, label, disabled = false }: Toggle
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={label}
+      // Native screen readers read accessibilityState; react-native-web only maps the aria-* props.
+      accessibilityState={{ checked: value, disabled }}
       aria-checked={value}
       aria-disabled={disabled}
       trackColor={{ false: colors.borderInput, true: colors.actionPrimary }}

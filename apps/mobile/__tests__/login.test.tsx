@@ -22,6 +22,12 @@ async function submit(email: string) {
 describe('login screen', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('shows the app name with the system name under it (LOGIN-1, spec §11.1 m01)', async () => {
+    await render(<Login />);
+    expect(screen.getByText(ar.app.name)).toBeTruthy();
+    expect(screen.getByText(ar.app.tagline)).toBeTruthy();
+  });
+
   it('requests an OTP without creating users, then opens the verify screen with the email', async () => {
     mockSignInWithOtp.mockResolvedValue({ data: {}, error: null });
     await submit('student@example.com');

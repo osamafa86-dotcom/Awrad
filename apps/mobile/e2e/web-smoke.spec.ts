@@ -1,9 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import path from 'node:path';
 
 import { formatDayMonth } from '../src/lib/format';
 import { ar } from '../src/messages/ar';
+import { PREVIEW_WEEK_REVIEW, previewProfile } from '../src/preview/fixtures';
 
 // Task 2.8 web smoke test, against the preview export (PREVIEW-2: fake data client, fixed "today"
 // 2026-11-26, student «أحمد محمد» with a 12-day streak). Screenshots go to e2e/screenshots (git-ignored,
@@ -23,12 +24,32 @@ function trackErrors(page: Page): string[] {
   return errors;
 }
 
+/**
+ * Nothing sticks out sideways. RN-web's ScrollView clips its content (`overflow-x: hidden`), so the
+ * document width alone proves nothing: every visible element must sit inside the viewport, and no
+ * vertical scroll container may hide wider content.
+ */
 async function expectNoHorizontalOverflow(page: Page) {
-  const { scrollWidth, innerWidth } = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-  }));
-  expect(scrollWidth, 'page scrolls sideways').toBeLessThanOrEqual(innerWidth);
+  const problems = await page.evaluate(() => {
+    const out: string[] = [];
+    const vw = window.innerWidth;
+    const describe = (el: Element) =>
+      `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` data-testid=${el.getAttribute('data-testid')}` : ''}> ${(el.textContent ?? '').trim().slice(0, 40)}`;
+    for (const el of Array.from(document.body.querySelectorAll('*'))) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden') continue;
+      if (rect.left < -1 || rect.right > vw + 1) {
+        out.push(`outside viewport [${Math.round(rect.left)}, ${Math.round(rect.right)}] of ${vw}: ${describe(el)}`);
+      }
+      if (/(auto|scroll)/.test(style.overflowY) && el.scrollWidth > el.clientWidth + 1) {
+        out.push(`scroll container wider than its box (${el.scrollWidth} > ${el.clientWidth}): ${describe(el)}`);
+      }
+    }
+    return out;
+  });
+  expect(problems, 'content overflows sideways').toEqual([]);
 }
 
 // expo-router keeps the anchor `(tabs)` stack mounted (hidden) under a /__preview route, so every
@@ -46,14 +67,45 @@ async function expectNotClipped(page: Page, testId: string) {
   expect(scrollWidth, `${testId} is clipped`).toBeLessThanOrEqual(clientWidth);
 }
 
-/** Route, DESIGN.md §8 frame, and a piece of Arabic copy that proves the screen rendered its data. */
-const SCREENS = [
-  { name: 'today', frame: 'm10-today-new', key: (p: Page) => visibleTestId(p, 'date-header-title') },
-  { name: 'weekly', frame: 'm20-weekly', key: (p: Page) => visibleTestId(p, 'week-title').filter({ hasText: WEEK_TITLE }) },
-  { name: 'summary', frame: 'm21-summary', key: (p: Page) => p.getByText(ar.summary.stats.currentStreak, { exact: true }).filter({ visible: true }) },
-  { name: 'history', frame: 'm22-history', key: (p: Page) => p.getByRole('heading', { name: ar.tabs.history }).filter({ visible: true }) },
-  { name: 'settings', frame: 'm24-settings', key: (p: Page) => p.getByText(ar.settings.dailyReminder, { exact: true }).filter({ visible: true }).first() },
-] as const;
+/**
+ * Route, DESIGN.md §8 frame, a piece of Arabic copy proving the screen rendered, and one fixture DATA
+ * value proving the fake client's data arrived (src/preview/fixtures.ts).
+ */
+const SCREENS: ReadonlyArray<{ name: string; frame: string; key(p: Page): Locator; data(p: Page): Promise<void> }> = [
+  {
+    name: 'today',
+    frame: 'm10-today-new',
+    key: (p) => visibleTestId(p, 'date-header-title'),
+    data: (p) => expect(p.getByLabel(ar.today.streak(12), { exact: true }).filter({ visible: true })).toBeVisible(),
+  },
+  {
+    name: 'weekly',
+    frame: 'm20-weekly',
+    key: (p) => visibleTestId(p, 'week-title').filter({ hasText: WEEK_TITLE }),
+    data: (p) => expect(p.getByLabel(ar.weekly.reviewLabel, { exact: true }).filter({ visible: true })).toHaveValue(PREVIEW_WEEK_REVIEW),
+  },
+  {
+    name: 'summary',
+    frame: 'm21-summary',
+    key: (p) => p.getByText(ar.summary.stats.currentStreak, { exact: true }).filter({ visible: true }),
+    data: (p) => expect(visibleTestId(p, 'stat-days')).toHaveAccessibleName(`${ar.summary.stats.daysLogged}: 28`),
+  },
+  {
+    name: 'history',
+    frame: 'm22-history',
+    key: (p) => p.getByRole('heading', { name: ar.tabs.history }).filter({ visible: true }),
+    data: (p) => expect(visibleTestId(p, 'history-row-2026-11-25')).toBeVisible(),
+  },
+  {
+    name: 'settings',
+    frame: 'm24-settings',
+    key: (p) => p.getByText(ar.settings.dailyReminder, { exact: true }).filter({ visible: true }).first(),
+    data: (p) =>
+      expect(p.getByLabel(ar.settings.reminderTime, { exact: true }).filter({ visible: true })).toHaveValue(
+        previewProfile.reminder_time?.slice(0, 5) ?? '',
+      ),
+  },
+];
 
 test.describe('login', () => {
   test('is Arabic (lang=ar, dir=rtl), branded, and logs no errors', async ({ page }) => {
@@ -61,6 +113,7 @@ test.describe('login', () => {
     await page.goto('/__preview/login');
     await expect(page.getByRole('heading', { name: ar.auth.loginTitle }).filter({ visible: true })).toBeVisible();
     await expect(page.getByText(ar.app.name, { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(page.getByText(ar.app.tagline, { exact: true }).filter({ visible: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('ar');
     await expectNoHorizontalOverflow(page);
@@ -74,6 +127,7 @@ for (const screen of SCREENS) {
     const errors = trackErrors(page);
     await page.goto(`/__preview/${screen.name}`);
     await expect(screen.key(page)).toBeVisible();
+    await screen.data(page);
     await expectNoHorizontalOverflow(page);
     const scheme = test.info().project.name.replace('mobile-', '');
     await page.screenshot({ path: path.join(SCREENSHOTS, `${screen.name}-${scheme}.png`), fullPage: true });
@@ -103,6 +157,7 @@ test.describe('smallest phone', () => {
   test('summary: stat cards fit the width (no sideways scroll)', async ({ page }) => {
     await page.goto('/__preview/summary');
     await expect(page.getByText(ar.summary.stats.currentStreak, { exact: true }).filter({ visible: true })).toBeVisible();
+    for (const card of ['stat-days', 'stat-completion', 'stat-attendance']) await expectNotClipped(page, card);
     await expectNoHorizontalOverflow(page);
   });
 });

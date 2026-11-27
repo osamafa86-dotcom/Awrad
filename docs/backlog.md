@@ -1,3 +1,4 @@
 # المؤجَّل (backlog)
 
 - إعادة تسجيل رمز الإشعارات (upsert) عند بدء التطبيق متى وُجد صفّ رمز، تحسّبًا لتدوير الرمز (token rotation). (Task 2.7)
+- Settings: RN-web Switch `nested-interactive` (serious axe) → custom web switch. (Task 2.8)

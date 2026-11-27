@@ -39,6 +39,7 @@ export function AuthScreen({ title, subtitle, children, footer, brand = true }: 
           <View style={{ alignItems: 'center', gap: space.s8 }}>
             <RubMark size={48} color={colors.actionPrimary} />
             <Text style={[type.displayBrand, { color: colors.textPrimary }]}>{ar.app.name}</Text>
+            <Text style={[type.bodyMd, { color: colors.textSecondary, textAlign: 'center' }]}>{ar.app.tagline}</Text>
           </View>
         ) : null}
         <View style={{ gap: space.s8 }}>

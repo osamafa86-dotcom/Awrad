@@ -27,7 +27,9 @@ describe('no-truncation matcher', () => {
   });
 
   it('accepts a one-line clamp that explains itself with `// why:` on the same line', () => {
-    expect(isTruncationViolation('<Text numberOfLines={1}> // why: a tab label that the OS already scales')).toBe(false);
+    // A `// why:` comment sits between JSX attributes (as it would in source), not in the element's text.
+    expect(isTruncationViolation('  numberOfLines={1} // why: a tab label the OS already scales')).toBe(false);
+    expect(isTruncationViolation('  numberOfLines: 1, // why: same, in a style/props object')).toBe(false);
   });
 
   it('reports the 1-based line numbers of the violations in a file', () => {
