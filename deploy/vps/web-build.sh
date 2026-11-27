@@ -26,8 +26,10 @@ cd /app
 rm -rf apps/mobile/dist
 # As CI's production export (no --clear); two Metro workers keep the forks inside the container's memory cap.
 if ! pnpm --filter mobile exec expo export -p web --max-workers 2 >/tmp/export.log 2>&1; then
-  echo "web-build: expo export failed — the whole log ($(wc -l </tmp/export.log) lines):"
-  tail -200 /tmp/export.log
+  n=$(wc -l </tmp/export.log)
+  echo "web-build: expo export failed — log of $n lines; first 40 (the error names its module here):"
+  head -40 /tmp/export.log
+  if [ "$n" -gt 40 ]; then echo "web-build: … last 60:"; tail -60 /tmp/export.log; fi
   diag
   exit 1
 fi
