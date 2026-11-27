@@ -50,10 +50,16 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
 
 الأسرار لا تُولَّد ثانية، والحسابات لا تُمسّ (علامة `secrets/demo-seeded.done`).
 
-## التذكيرات كل ساعة (Task 4.1) — ما تضيفه المهمّة في جولتها التالية
+## التذكيرات كل ساعة (Task 4.1) — مُفعَّلة
+
+**الحال على النسخة التجريبية منذ 2026-11-27** (جولة mahfazapay `e32bbf3`، مقيسة في سجلّها):
+`pg_cron` و`pg_net` مفعّلان على الحجم القائم، و`CRON_SECRET` في `/opt/sites/awrad/.env` وتمرّره الخدمة
+`awrad-functions` للعامل، و`app.functions_url = http://awrad-functions:9000` و`app.cron_secret` على قاعدة
+`postgres`، ومهمّة `send-reminders` مجدولة `0 * * * *` (`ensure_reminder_schedule()` ← `t`). الدالة تردّ 401 بلا
+السرّ و200 به. الفحص والأعطال في [`docs/runbook.md`](../../docs/runbook.md) §7.
 
 الترحيل `0013_reminders.sql` يستدعي `ensure_reminder_schedule()`، وهي لا تجدول شيئًا حتى يوجد `pg_cron` و`pg_net` ويُضبط
-الإعدادان، فيمرّ الترحيل كما هو الآن (notice فقط). على الخادم، مرّةً وبالترتيب:
+الإعدادان (notice فقط). الخطوات أدناه هي ما نُفِّذ، مرّةً وبالترتيب؛ تُعاد كما هي على حجم جديد (بعد `down -v` أو استعادة):
 
 1. ولّد `CRON_SECRET` (مثل `openssl rand -hex 32`) وأضفه إلى `/opt/sites/awrad/.env` دون طباعته، ثم
    `dc up -d awrad-functions` (الخدمة تمرّره للعامل؛ بدونه تجيب `send-reminders` بـ 401 دائمًا).
@@ -61,20 +67,20 @@ WEB_BUILD_MEM=2048m WEB_BUILD_HEAP=1536 dc --profile build run --rm web-build   
    (`docker exec awrad-db-1 psql -U supabase_admin -d postgres -f -` أو السطرين مباشرة):
    `create extension if not exists pg_cron; create extension if not exists pg_net;`
    الصورة تحمّل `pg_cron` مسبقًا (`shared_preload_libraries`) و`cron.database_name = 'postgres'`؛ إن اختلف أحدهما في
-   إصدار الصورة فأوقف هنا وأبلغ.
+   إصدار الصورة فأوقف هنا وأبلغ. (الحجم الجديد يُنشئهما من `db-init/extensions.sql` وحده.)
 3. كـ `supabase_admin` أيضًا. السرّ يُقرأ من `.env` إلى متغيّر psql (`-v`) فلا يُكتب في نصّ SQL ولا في سجلّ الأوامر، و`:'secret'`
-   يقتبسه psql:
+   يقتبسه psql. العنوان المضبوط على الخادم هو الداخلي `http://awrad-functions:9000` (`db` و`awrad-functions` على شبكة
+   المشروع نفسها، والموجّه يتوقّع `/send-reminders` مباشرة، فلا يمرّ الطلب بـ Caddy ولا يحتاج خروجًا إلى الإنترنت):
    ```sh
    CRON_SECRET=$(sudo grep -m1 '^CRON_SECRET=' /opt/sites/awrad/.env | cut -d= -f2-)
    docker exec -i awrad-db-1 psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -v secret="$CRON_SECRET" <<'SQL'
-   alter database postgres set app.functions_url = 'https://awrad-api.emdatra.org/functions/v1';
+   alter database postgres set app.functions_url = 'http://awrad-functions:9000';
    alter database postgres set app.cron_secret = :'secret';
    SQL
    unset CRON_SECRET
    ```
    ثم **في جلسة جديدة** (الإعدادات تسري على الجلسات الجديدة): `select ensure_reminder_schedule();` ← `t`.
-   (بديل لا يمرّ بـ Caddy: `http://awrad-functions:9000` — `db` و`awrad-functions` على شبكة المشروع نفسها، والموجّه
-   يتوقّع `/send-reminders` مباشرة؛ استعمله إن لم يكن للقاعدة خروج إلى الإنترنت.)
+   (بديل عبر Caddy: `https://awrad-api.emdatra.org/functions/v1`.)
 4. القياس (أعداد فقط، لا أسرار ولا رموز):
    `select count(*) from cron.job where jobname = 'send-reminders';` ← 1، وبعد أوّل ساعة كاملة
    `select status, count(*) from cron.job_run_details where jobid = (select jobid from cron.job where jobname = 'send-reminders') group by status;`
