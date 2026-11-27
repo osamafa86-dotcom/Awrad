@@ -40,3 +40,50 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm db:reset
       - run: pnpm test
+
+  mobile-web:
+    # Task 2.8: static web export in preview mode (PREVIEW-2: fake data, no Supabase), Playwright smoke
+    # + axe on it, and proof that a normal export carries no preview code.
+    runs-on: ubuntu-latest
+    env:
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Production export has no preview code
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+          EXPO_PUBLIC_ADMIN_URL: http://127.0.0.1:3000
+        run: |
+          pnpm --filter mobile exec expo export -p web
+          # -w: whole words, so expo-router's own `__internal__previewId` does not count.
+          if grep -rlw "fakeSupabase\|__preview" apps/mobile/dist/; then echo "preview code in production export" && exit 1; fi
+      - name: Preview export
+        env:
+          EXPO_PUBLIC_PREVIEW: '1'
+        run: pnpm --filter mobile exec expo export -p web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/mobile
+      - name: Web smoke test
+        env:
+          EXPO_PUBLIC_PREVIEW: '1'
+          E2E_SKIP_EXPORT: '1'
+        run: pnpm --filter mobile e2e:web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-web-screenshots
+          path: apps/mobile/e2e/screenshots/**
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-web-playwright-report
+          path: apps/mobile/playwright-report/
+          if-no-files-found: ignore
