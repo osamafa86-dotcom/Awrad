@@ -45,8 +45,6 @@ psql "$SUPABASE_DB_URL" -Atc "select auth.uid() is null, auth.role() is null"   
 
 ### توليد الأنواع
 `pnpm db:types` يشغّل `supabase gen types typescript --remote="$SUPABASE_DB_URL" --schema public` (بلا Docker، من مجلد عمل مؤقت فارغ حتى لا يقرأ `supabase/config.jsonc`) ثم ينسّق الناتج بـ prettier، فيُكتب `packages/supabase-client/src/database.types.ts` بشكل حتمي.
-ويكتب `packages/supabase-client/src/database.types.ts`. هذه الحزمة تُنشأ في مهمة لاحقة،
-فيفشل الأمر الآن برسالة واضحة، وهذا متوقّع. قد يتطلب `supabase gen types --db-url` وجود Docker في بعض إصدارات CLI؛ يُحسم القرار في المهمة 1.9.
 
 ## استكشاف الأخطاء
 - **العنقود موجود لكنه متوقّف:** `pnpm db:start` يشغّله؛ وللتشخيص `pg_lsclusters` وسجل
