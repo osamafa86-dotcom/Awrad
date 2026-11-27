@@ -721,6 +721,7 @@ export type Database = {
         Args: { p_from?: string; p_to?: string; p_user_id?: string };
         Returns: Json;
       };
+      handle_support_request: { Args: { p_log_id: string; p_note: string }; Returns: undefined };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_supervisor_of: { Args: { p_group: string }; Returns: boolean };
       is_tracked_member: { Args: { p_user: string }; Returns: boolean };
