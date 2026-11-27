@@ -60,10 +60,17 @@ export const SEEDED_SUPPORT = {
 export const DELETION_REQUESTER = 'p4' as const;
 
 /**
- * The student privacy.spec.ts deletes permanently from the student page, and the one daily log the seed
- * saves for them through save_log (days before today in TEST_TIMEZONE), so the spec can see it go.
+ * The student privacy.spec.ts deletes permanently from the student page. The seed saves one daily log for
+ * them through save_log (days before today in TEST_TIMEZONE) and marks them present, through set_attendance,
+ * in a test-group session of that day with this title (kept apart from attendance.spec.ts's `e2e-مجلس`
+ * sessions, which that spec removes), so the spec can see both go.
  */
-export const PERMANENT_DELETION = { user: 'p5', daysAgo: 2, outcome: 'achieved' } as const;
+export const PERMANENT_DELETION = {
+  user: 'p5',
+  daysAgo: 2,
+  outcome: 'achieved',
+  sessionTitle: 'مجلس اختبار الحذف النهائي',
+} as const;
 
 /** Names of the habits habits.spec.ts creates (and removes); they never belong in a seeded log. */
 export const E2E_HABIT_PREFIX = 'e2e-عادة';

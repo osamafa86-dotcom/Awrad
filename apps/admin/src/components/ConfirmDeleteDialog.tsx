@@ -22,8 +22,11 @@ const t = ar.deleteAccount;
 
 export interface ConfirmDeleteDialogProps {
   studentId: string;
-  /** The name the admin must type, exactly (ignoring spaces around it), before «حذف نهائي» enables. */
-  studentName: string;
+  /**
+   * The name the admin must type, exactly (ignoring spaces around it), before «حذف نهائي» enables. With no
+   * name on record (null), the phrase «حذف نهائي» is typed instead.
+   */
+  studentName: string | null;
   /** Where it opens: from the student page the action redirects to /students; from a deletion request it returns. */
   from: 'student' | 'support';
   /** The button that opens the dialog. */
@@ -42,13 +45,21 @@ export function ConfirmDeleteDialog({ studentId, studentName, from, trigger }: C
   const [result, setResult] = useState<StudentResult | null>(null);
   const [deleting, startDelete] = useTransition();
 
-  const matches = typed.trim() === studentName.trim();
+  const expected = studentName?.trim() || null;
+  const phrase = expected ?? t.confirmPhrase;
+  const matches = typed.trim() === phrase;
   const error = studentErrorText(result);
 
-  function onOpenChange(next: boolean) {
+  function setOpenFresh(next: boolean) {
     setOpen(next);
     setTyped('');
     setResult(null);
+  }
+
+  function onOpenChange(next: boolean) {
+    // While the delete runs, Esc and an outside click do nothing: the outcome must land in this dialog.
+    if (!next && deleting) return;
+    setOpenFresh(next);
   }
 
   function remove() {
@@ -56,7 +67,7 @@ export function ConfirmDeleteDialog({ studentId, studentName, from, trigger }: C
     startDelete(async () => {
       // From the student page a success redirects to /students and this never returns.
       const outcome = await deleteStudent(studentId, from);
-      if (outcome.ok) onOpenChange(false);
+      if (outcome.ok) setOpenFresh(false);
       else setResult(outcome);
     });
   }
@@ -65,7 +76,7 @@ export function ConfirmDeleteDialog({ studentId, studentName, from, trigger }: C
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
-        <DialogTitle className="break-words">{t.title(studentName)}</DialogTitle>
+        <DialogTitle className="break-words">{expected ? t.title(expected) : t.titleUnnamed}</DialogTitle>
         <DialogDescription>{t.body}</DialogDescription>
         <ul className="flex list-disc flex-col gap-4 ps-24 t-body-md text-fg-primary">
           {t.removed.map((item) => (
@@ -82,7 +93,7 @@ export function ConfirmDeleteDialog({ studentId, studentName, from, trigger }: C
         >
           <div className="flex flex-col gap-8">
             <Label htmlFor={fieldId} className="break-words">
-              {t.typeName(studentName)}
+              {expected ? t.typeName(expected) : t.typePhrase(t.confirmPhrase)}
             </Label>
             <Input
               id={fieldId}

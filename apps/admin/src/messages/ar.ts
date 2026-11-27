@@ -239,9 +239,14 @@ export const ar = {
   /** The double confirmation before a permanent account deletion (student page and deletion requests). */
   deleteAccount: {
     title: (name: string) => `حذف حساب «${name}» نهائيًا؟`,
+    /** A deletion request whose student has no name on record. */
+    titleUnnamed: 'حذف هذا الحساب نهائيًا؟',
     body: 'يُحذف ما يلي نهائيًا، ولا يمكن التراجع:',
     removed: ['الحساب', 'السجلّات', 'الحضور', 'طلبات الدعم'],
     typeName: (name: string) => `للتأكيد اكتب الاسم الكامل: ${name}`,
+    /** What to type instead when there is no name: the confirm button's own words. */
+    confirmPhrase: 'حذف نهائي',
+    typePhrase: (phrase: string) => `للتأكيد اكتب: ${phrase}`,
     confirm: 'حذف نهائي',
     deleting: 'جارٍ الحذف…',
     cancel: 'إلغاء',

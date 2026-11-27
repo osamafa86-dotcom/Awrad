@@ -31,7 +31,10 @@ describe('privacy policy (F-80)', () => {
     render(<PrivacyPage />);
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(HEADINGS);
-    expect(screen.getByText(/30 يومًا/)).toBeInTheDocument();
+    expect(screen.getByText(/خلال 30 يومًا من تاريخ الطلب/)).toBeInTheDocument();
+    // Deletion is described honestly: the minimal audit record and the backups are named.
+    expect(screen.getByText(/سجلّ التدقيق/)).toBeInTheDocument();
+    expect(screen.getByText(/النسخ الاحتياطية/)).toBeInTheDocument();
   });
 
   it('the public layout shows the brand and links back to the login page, without the dashboard shell', () => {

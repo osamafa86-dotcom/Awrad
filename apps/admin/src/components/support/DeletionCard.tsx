@@ -77,7 +77,7 @@ export function DeletionCard({ request, today, timezone, hijriAdjustment }: Dele
           </Button>
           <ConfirmDeleteDialog
             studentId={request.userId}
-            studentName={name}
+            studentName={request.studentName}
             from="support"
             trigger={
               <Button variant="danger" size="md" disabled={dismissing}>

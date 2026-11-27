@@ -21,7 +21,7 @@ test.describe('privacy policy, signed out', () => {
     const headings = page.getByRole('heading', { level: 2 });
     await expect(headings).toHaveText(HEADINGS);
     for (const name of HEADINGS) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-    await expect(page.getByText(/30 يومًا/)).toBeVisible();
+    await expect(page.getByText(/خلال 30 يومًا من تاريخ الطلب/)).toBeVisible();
     await expect(page.getByRole('contentinfo').getByRole('link')).toHaveAttribute('href', '/login');
   });
 });
@@ -72,6 +72,7 @@ test.describe('privacy policy and permanent deletion, signed in', () => {
     expect(id).toBeTruthy();
     if (!id) return;
     expect(await countRows('logs', 'user_id', id)).toBeGreaterThan(0);
+    expect(await countRows('attendance', 'user_id', id)).toBeGreaterThan(0);
 
     await page.goto(`/students/${id}`);
     await expect(page.getByRole('heading', { level: 1, name: p5.fullName })).toBeVisible();

@@ -44,6 +44,12 @@ async function ensureInvitation(db: SupabaseClient, row: Record<string, unknown>
   else check(await db.from('invitations').insert(row));
 }
 
+/** GoTrue's "too soon / too many" refusal: HTTP 429 or one of its rate-limit error codes. */
+function isRateLimited(error: { status?: number; code?: string } | null): boolean {
+  if (!error) return false;
+  return error.status === 429 || ['over_request_rate_limit', 'over_email_send_rate_limit'].includes(error.code ?? '');
+}
+
 /**
  * A client signed in as `email`, without the sign-in screens: the service role mints a magic link and its
  * hashed token is verified on a fresh anon client (E2E_SUPABASE_ANON_KEY).
@@ -54,8 +60,9 @@ async function sessionFor(db: SupabaseClient, email: string): Promise<SupabaseCl
   if (!url || !anonKey) throw new Error('E2E_SUPABASE_ANON_KEY is needed to seed logs through save_log');
   let link = await db.auth.admin.generateLink({ type: 'magiclink', email });
   // why: GoTrue may refuse a new link within `max_frequency` (1s) of the previous one for the same user, and
-  // the seed asks for the admin's twice (seedLogs, then resetPermanentDeletionFixture).
-  for (let attempt = 1; link.error && attempt < 5; attempt += 1) {
+  // the seed asks for the admin's twice (seedLogs, then resetPermanentDeletionFixture). Only that refusal is
+  // retried; any other error is thrown at once.
+  for (let attempt = 1; isRateLimited(link.error) && attempt < 5; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     link = await db.auth.admin.generateLink({ type: 'magiclink', email });
   }
@@ -292,7 +299,8 @@ export async function resetSupportFixtures(db: SupabaseClient | null = serviceCl
 
 /**
  * What privacy.spec.ts starts from: PERMANENT_DELETION's student present (re-created after a run deleted it)
- * with its one daily log, saved through save_log as the admin (upsert, so running it again converges).
+ * with its one daily log (save_log) and one attendance row (set_attendance), both written as the admin;
+ * both upsert, so running it again converges.
  */
 export async function resetPermanentDeletionFixture(db: SupabaseClient | null = serviceClient()): Promise<void> {
   if (!db) return;
@@ -308,9 +316,37 @@ export async function resetPermanentDeletionFixture(db: SupabaseClient | null = 
     addDays(todayIn(TEST_TIMEZONE), -30),
     await userIdOf(db, TEST_USERS[key].email),
   );
+  // The session itself is fixture data (service role), found again by its title on later runs.
+  const date = addDays(todayIn(TEST_TIMEZONE), -PERMANENT_DELETION.daysAgo);
+  const found = check(
+    await db
+      .from('sessions')
+      .select('id')
+      .eq('title', PERMANENT_DELETION.sessionTitle)
+      .eq('group_id', groupIds.test)
+      .limit(1)
+      .maybeSingle(),
+  );
+  const sessionId =
+    (found.data?.id as string | undefined) ??
+    (
+      check(
+        await db
+          .from('sessions')
+          .insert({ title: PERMANENT_DELETION.sessionTitle, group_id: groupIds.test, session_date: date })
+          .select('id')
+          .single(),
+      ).data as { id: string }
+    ).id;
+
   const admin = await sessionFor(db, TEST_USERS.admin.email);
   try {
     await saveDailyLog(admin, userId, PERMANENT_DELETION.daysAgo, PERMANENT_DELETION.outcome);
+    const marked = await admin.rpc('set_attendance', {
+      p_session_id: sessionId,
+      p_rows: [{ user_id: userId, status: 'present' }],
+    });
+    if (marked.error) throw marked.error;
   } finally {
     await admin.auth.signOut({ scope: 'local' });
   }

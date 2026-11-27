@@ -157,4 +157,11 @@ describe('SupportList', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: ar.deleteAccount.confirm }));
     expect(deleteStudent).toHaveBeenCalledWith('99999999-9999-4999-8999-999999999993', 'support');
   });
+
+  it('a request with no student name asks for the phrase «حذف نهائي» instead of a name', async () => {
+    renderList({ initialTab: 'deletion', deletions: [{ ...deletions[0]!, studentName: null }] });
+    await userEvent.click(screen.getByRole('button', { name: t.deletion.delete }));
+    const dialog = screen.getByRole('dialog', { name: ar.deleteAccount.titleUnnamed });
+    expect(within(dialog).getByLabelText(ar.deleteAccount.typePhrase(ar.deleteAccount.confirmPhrase))).toBeInTheDocument();
+  });
 });

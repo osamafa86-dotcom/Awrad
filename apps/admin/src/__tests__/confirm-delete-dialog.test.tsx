@@ -86,6 +86,35 @@ describe('ConfirmDeleteDialog (double confirmation)', () => {
     expect(within(reopened).getByRole('button', { name: t.confirm })).toBeDisabled();
   });
 
+  it('ignores Esc while the delete is running', async () => {
+    let finish: (value: unknown) => void = () => {};
+    deleteStudent.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const dialog = await openDialog();
+    await userEvent.type(within(dialog).getByLabelText(t.typeName(NAME)), NAME);
+    await userEvent.click(within(dialog).getByRole('button', { name: t.confirm }));
+    expect(await within(dialog).findByRole('button', { name: t.deleting })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: t.title(NAME) })).toBeInTheDocument();
+    finish({ ok: false, code: 'DELETE_FAILED' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(ar.students.errors.DELETE_FAILED);
+  });
+
+  it('with no name on record, asks for the phrase «حذف نهائي» instead', async () => {
+    deleteStudent.mockResolvedValue({ ok: true });
+    render(<ConfirmDeleteDialog studentId={ID} studentName={null} from="support" trigger={<Button>افتح</Button>} />);
+    await userEvent.click(screen.getByRole('button', { name: 'افتح' }));
+    const dialog = screen.getByRole('dialog', { name: t.titleUnnamed });
+    const field = within(dialog).getByLabelText(t.typePhrase(t.confirmPhrase));
+    const confirm = within(dialog).getByRole('button', { name: t.confirm });
+    await userEvent.type(field, 'طالب');
+    expect(confirm).toBeDisabled();
+    await userEvent.clear(field);
+    await userEvent.type(field, t.confirmPhrase);
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    expect(deleteStudent).toHaveBeenCalledWith(ID, 'support');
+  });
+
   it('«إلغاء» closes the dialog', async () => {
     const dialog = await openDialog();
     await userEvent.click(within(dialog).getByRole('button', { name: t.cancel }));
