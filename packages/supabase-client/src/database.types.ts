@@ -558,6 +558,39 @@ export type Database = {
           },
         ];
       };
+      reminder_log: {
+        Row: {
+          id: string;
+          kind: string;
+          sent_at: string;
+          sent_for: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          kind: string;
+          sent_at?: string;
+          sent_for: string;
+          user_id: string;
+        };
+        Update: {
+          id?: string;
+          kind?: string;
+          sent_at?: string;
+          sent_for?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'reminder_log_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       sessions: {
         Row: {
           created_at: string;
@@ -700,6 +733,16 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Database['public']['Enums']['user_role'];
       };
+      due_reminders: {
+        Args: { p_now: string };
+        Returns: {
+          kind: string;
+          sent_for: string;
+          tokens: string[];
+          user_id: string;
+        }[];
+      };
+      ensure_reminder_schedule: { Args: Record<PropertyKey, never>; Returns: boolean };
       get_calendar: {
         Args: { p_from: string; p_to: string; p_user_id: string };
         Returns: {
