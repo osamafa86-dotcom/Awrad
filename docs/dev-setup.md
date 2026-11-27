@@ -44,7 +44,7 @@ psql "$SUPABASE_DB_URL" -Atc "select auth.uid() is null, auth.role() is null"   
 يجب ألا تعتمد الترحيلات على شيء من المحاكاة غير ما توفّره Supabase نفسها.
 
 ### توليد الأنواع
-`pnpm db:types` يشغّل `supabase gen types typescript --db-url "$SUPABASE_DB_URL" --schema public`
+`pnpm db:types` يشغّل `supabase gen types typescript --remote="$SUPABASE_DB_URL" --schema public` (بلا Docker، من مجلد عمل مؤقت فارغ حتى لا يقرأ `supabase/config.jsonc`) ثم ينسّق الناتج بـ prettier، فيُكتب `packages/supabase-client/src/database.types.ts` بشكل حتمي.
 ويكتب `packages/supabase-client/src/database.types.ts`. هذه الحزمة تُنشأ في مهمة لاحقة،
 فيفشل الأمر الآن برسالة واضحة، وهذا متوقّع. قد يتطلب `supabase gen types --db-url` وجود Docker في بعض إصدارات CLI؛ يُحسم القرار في المهمة 1.9.
 
